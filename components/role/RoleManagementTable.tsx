@@ -76,7 +76,7 @@ export default function RoleManagementTable({ memorialId, planType, inviteHref }
         setMembers(prev => prev.map(m => m.userId === targetUserId ? { ...m, role: newRole } : m));
 
         try {
-            const res = await fetch(`/api/memorials/${memorialId}/members/${targetUserId}/role`, {
+            const res = await fetch(`/api/memorials/${memorialId}/members/${targetUserId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ newRole }),
