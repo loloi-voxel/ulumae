@@ -13,6 +13,7 @@ interface Props {
     invitation: InvitationData;
     token: string;
     currentUserEmail: string | null;
+    onSwitchAccount: () => void;
     onSuccess: (memorialId: string, role: string) => void;
 }
 
@@ -122,6 +123,7 @@ export default function InviteAcceptance({
     invitation,
     token,
     currentUserEmail,
+    onSwitchAccount,
     onSuccess
 }: Props) {
     const [checkedModeration, setCheckedModeration] =
@@ -138,35 +140,15 @@ export default function InviteAcceptance({
     const roleKey = (role === 'reader' ? 'reader' : role) as keyof typeof ROLE_CONFIG;
     const roleConfig = ROLE_CONFIG[roleKey];
     const acknowledgmentCopy = ACKNOWLEDGEMENT_COPY[roleKey];
-    const canJoin = checkedModeration && checkedDignity;
     const signedInAsDifferentUser = !!currentUserEmail
         && currentUserEmail.toLowerCase() !== invitation.inviteeEmail.toLowerCase();
-
-    const anonContributor = (() => {
-        try {
-            const stored = sessionStorage.getItem(
-                'anon_contributor'
-            );
-            return stored ? JSON.parse(stored) : null;
-        } catch {
-            return null;
-        }
-    })();
+    const canJoin = checkedModeration && checkedDignity && !signedInAsDifferentUser;
 
     const handleJoin = async () => {
         setLoading(true);
         setError(null);
 
         try {
-            const body: Record<string, string> = {};
-
-            if (anonContributor) {
-                const storedId = sessionStorage.getItem(
-                    'anon_contribution_id'
-                );
-                if (storedId) body.contributionId = storedId;
-            }
-
             const res = await fetch(
                 `/api/invite/${token}/join`,
                 {
@@ -174,7 +156,7 @@ export default function InviteAcceptance({
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(body)
+                    body: JSON.stringify({})
                 }
             );
 
@@ -186,10 +168,6 @@ export default function InviteAcceptance({
                 );
                 return;
             }
-
-            sessionStorage.removeItem('anon_contributor');
-            sessionStorage.removeItem('anon_contribution_id');
-            sessionStorage.removeItem('pending_invite_token');
 
             onSuccess(data.memorialId, data.role);
         } catch {
@@ -446,30 +424,18 @@ export default function InviteAcceptance({
                         </label>
                     </div>
 
-                    {anonContributor && (
-                        <div className="mx-8 mb-6 p-4
-              bg-warm-border/10 rounded-xl border
-              border-warm-border/30 flex items-start gap-3">
-                            <Shield size={16}
-                                className="text-warm-dark/30
-                  mt-0.5 flex-shrink-0" />
-                            <p className="text-xs
-                text-warm-dark/50 leading-relaxed">
-                                You are joining as{' '}
-                                <strong>{anonContributor.name}</strong>.
-                                Your contributions will be visible
-                                to the archive owner with your name
-                                and verified email.
-                            </p>
-                        </div>
-                    )}
-
                     {signedInAsDifferentUser && (
                         <div className="mx-8 mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4">
                             <p className="text-sm leading-relaxed text-amber-800">
                                 You are signed in as <strong>{currentUserEmail}</strong>, but this invitation was sent to <strong>{invitation.inviteeEmail}</strong>.
-                                Continue only if that is intentional, or sign out and come back with the invited email.
+                                Switch accounts to continue securely with the invited email.
                             </p>
+                            <button
+                                onClick={onSwitchAccount}
+                                className="mt-3 inline-flex items-center rounded-lg border border-amber-300 px-3 py-2 text-sm font-medium text-amber-900 transition-colors hover:bg-amber-100"
+                            >
+                                Sign out and continue
+                            </button>
                         </div>
                     )}
 
@@ -515,8 +481,9 @@ export default function InviteAcceptance({
                         {!canJoin && !loading && (
                             <p className="text-center text-xs
                 text-warm-dark/30 mt-3">
-                                Please confirm both statements above
-                                to continue
+                                {signedInAsDifferentUser
+                                    ? 'Use the invited account before accepting this invitation.'
+                                    : 'Please confirm both statements above to continue'}
                             </p>
                         )}
                     </div>

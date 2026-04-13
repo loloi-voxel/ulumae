@@ -14,15 +14,13 @@ type AuthMode = 'signup' | 'login';
 interface Props {
     invitation: InvitationData;
     token: string;
-    onSuccess: () => void;
-    onBack: () => void;
+    onAuthenticated: () => void;
 }
 
 export default function InviteAuthStep({
     invitation,
     token,
-    onSuccess,
-    onBack
+    onAuthenticated
 }: Props) {
     const [mode, setMode] =
         useState<AuthMode>('signup');
@@ -91,7 +89,7 @@ export default function InviteAuthStep({
                     return;
                 }
 
-                onSuccess();
+                onAuthenticated();
             } else {
                 const { error: signInError } =
                     await supabase.auth.signInWithPassword({
@@ -100,7 +98,7 @@ export default function InviteAuthStep({
                     });
 
                 if (signInError) throw signInError;
-                onSuccess();
+                onAuthenticated();
             }
         } catch (err: any) {
             const msg = err.message || '';
@@ -171,7 +169,7 @@ export default function InviteAuthStep({
                 <div className="max-w-2xl mx-auto px-6
           py-4 flex items-center justify-between">
                     <button
-                        onClick={onBack}
+                        onClick={() => window.history.back()}
                         className="inline-flex items-center
               gap-2 text-warm-dark/40
               hover:text-warm-dark transition-colors
@@ -411,16 +409,9 @@ export default function InviteAuthStep({
 
                 <div className="mt-8 pt-6 border-t
           border-warm-border/20 text-center">
-                    <p className="text-xs text-warm-dark/30 mb-3">
-                        Prefer not to create an account?
+                    <p className="text-xs text-warm-dark/30 mb-3 leading-relaxed">
+                        This invite stays attached to <strong>{invitation.inviteeEmail}</strong> so the archive can resume automatically after login, signup, and email confirmation.
                     </p>
-
-                    <a
-                        href={`/invite/${token}/anonymous`}
-                        className="text-sm text-warm-dark/40 hover:text-warm-dark transition-colors underline underline-offset-4"
-                    >
-                        Continue without an account
-                    </a>
                 </div>
             </div>
         </div>

@@ -4,6 +4,7 @@ import InviteTerminal from './_components/InviteTerminal';
 import { WitnessRole } from '@/types/roles';
 import { createClient } from '@/utils/supabase/server';
 import { getInvitationLookup } from '@/lib/invitations';
+import { getInviteWelcomePath } from '@/lib/inviteFlow';
 
 export interface InvitationData {
     id: string;
@@ -45,7 +46,7 @@ export default async function InvitePage({
     const lookup = await getInvitationLookup(token, user?.id);
 
     if (lookup.state === 'ALREADY_JOINED') {
-        redirect(`/archive/${lookup.memorialId}`);
+        redirect(getInviteWelcomePath(lookup.memorialId, lookup.role));
     }
 
     if (lookup.state !== 'PENDING') {

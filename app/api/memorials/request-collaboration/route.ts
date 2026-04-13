@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser, getSupabaseAdmin } from '@/lib/apiAuth';
 import { safeLogMemorialActivity } from '@/lib/activityLog';
+import { getExistingMemorialMemberByEmail, normalizeInviteEmail } from '@/lib/invitations';
 
 export async function POST(request: NextRequest) {
     try {
-        // AUTH: Derive identity from session — never trust requesterId from body
         const auth = await requireUser();
         if (!auth.ok) return auth.response;
 
@@ -17,7 +17,6 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Missing memorialId' }, { status: 400 });
         }
 
-        // Verify the memorial exists and is a family plan
         const { data: memorial, error: memError } = await admin
             .from('memorials')
             .select('id, user_id, mode')
@@ -29,15 +28,55 @@ export async function POST(request: NextRequest) {
         }
 
         if (memorial.mode !== 'family') {
-            return NextResponse.json({ error: 'Collaboration requests are only available for Family plan archives' }, { status: 400 });
+            return NextResponse.json(
+                { error: 'Collaboration requests are only available for Family plan archives' },
+                { status: 400 }
+            );
         }
 
-        // Don't allow the owner to request collaboration on their own memorial
         if (memorial.user_id === user.id) {
-            return NextResponse.json({ error: 'You are already the owner of this memorial' }, { status: 400 });
+            return NextResponse.json(
+                { error: 'You are already the owner of this memorial' },
+                { status: 400 }
+            );
         }
 
-        // Check for existing pending access request to prevent duplicates
+        const normalizedEmail = normalizeInviteEmail(user.email || '');
+        if (!normalizedEmail) {
+            return NextResponse.json(
+                { error: 'Your account is missing an email address' },
+                { status: 400 }
+            );
+        }
+
+        const existingMember = await getExistingMemorialMemberByEmail(
+            memorialId,
+            normalizedEmail,
+            memorial.user_id
+        );
+
+        if (existingMember) {
+            return NextResponse.json(
+                { error: 'You already have access to this memorial' },
+                { status: 409 }
+            );
+        }
+
+        const { data: existingInvite } = await admin
+            .from('witness_invitations')
+            .select('id')
+            .eq('memorial_id', memorialId)
+            .eq('invitee_email', normalizedEmail)
+            .eq('status', 'pending')
+            .maybeSingle();
+
+        if (existingInvite) {
+            return NextResponse.json(
+                { error: 'You already have a pending invitation for this memorial. Please use the invite link sent to your email.' },
+                { status: 409 }
+            );
+        }
+
         const { data: existingRequest } = await admin
             .from('memorial_access_requests')
             .select('id')
@@ -47,10 +86,12 @@ export async function POST(request: NextRequest) {
             .maybeSingle();
 
         if (existingRequest) {
-            return NextResponse.json({ error: 'You already have a pending request for this memorial' }, { status: 409 });
+            return NextResponse.json(
+                { error: 'You already have a pending request for this memorial' },
+                { status: 409 }
+            );
         }
 
-        // Create a proper access request — not a fake contribution
         const { error: insertError } = await admin
             .from('memorial_access_requests')
             .insert({
