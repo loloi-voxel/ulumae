@@ -63,6 +63,9 @@ export async function PATCH(
         }
 
         let createdMemorialId: string | null = null;
+        const requesterUser = await supabaseAdmin.auth.admin.getUserById(
+            requestRecord.requester_user_id
+        );
 
         if (decision === 'approved') {
             const step1 = requestRecord.proposed_name
@@ -93,7 +96,11 @@ export async function PATCH(
 
             const newMemorialId = createdMemorial.id;
             createdMemorialId = newMemorialId;
-            await syncAllCoGuardiansToMemorial(user.id, newMemorialId);
+            await syncAllCoGuardiansToMemorial(
+                supabaseAdmin,
+                user.id,
+                newMemorialId
+            );
         }
 
         const { error: updateError } = await supabaseAdmin
@@ -117,7 +124,9 @@ export async function PATCH(
             actorUserId: user.id,
             actorEmail: user.email ?? null,
             subjectUserId: requestRecord.requester_user_id,
+            subjectEmail: requesterUser.data.user?.email ?? null,
             details: {
+                requestId,
                 decision,
                 createdMemorialId,
             },

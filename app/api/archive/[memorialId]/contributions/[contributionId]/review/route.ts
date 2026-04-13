@@ -39,7 +39,7 @@ export async function PATCH(
         const [{ data: contribution }, permission] = await Promise.all([
             supabaseAdmin
                 .from('memorial_contributions')
-                .select('id, memorial_id, status')
+                .select('id, memorial_id, user_id, contributor_email, status')
                 .eq('id', contributionId)
                 .maybeSingle(),
             resolveArchivePermissionContext(supabaseAdmin, memorialId, user.id),
@@ -77,12 +77,19 @@ export async function PATCH(
             throw error;
         }
 
+        const contributorUser = contribution.user_id
+            ? await supabaseAdmin.auth.admin.getUserById(contribution.user_id)
+            : null;
+
         await safeLogMemorialActivity(supabaseAdmin, {
             memorialId,
             action: 'contribution_reviewed',
             summary: `A contribution was marked ${decision}.`,
             actorUserId: user.id,
             actorEmail: user.email ?? null,
+            subjectUserId: contribution.user_id || null,
+            subjectEmail:
+                contributorUser?.data.user?.email || contribution.contributor_email || null,
             details: {
                 contributionId,
                 decision,

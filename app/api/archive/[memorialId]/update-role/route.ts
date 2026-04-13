@@ -100,6 +100,8 @@ export async function POST(
       if (error) throw error;
     }
 
+    const targetUser = await admin.auth.admin.getUserById(targetUserId);
+
     await safeLogMemorialActivity(admin, {
       memorialId,
       action: 'member_role_updated',
@@ -107,6 +109,7 @@ export async function POST(
       actorUserId: user.id,
       actorEmail: user.email ?? null,
       subjectUserId: targetUserId,
+      subjectEmail: targetUser.data.user?.email ?? null,
       details: { newRole },
     });
 

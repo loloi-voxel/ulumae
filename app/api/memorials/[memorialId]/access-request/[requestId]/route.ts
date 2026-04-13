@@ -52,6 +52,10 @@ export async function PATCH(
             return NextResponse.json({ error: 'This request has already been handled' }, { status: 400 });
         }
 
+        const requesterUser = await supabaseAdmin.auth.admin.getUserById(
+            requestRecord.requester_user_id
+        );
+
         if (decision === 'approved') {
             const { error: roleError } = await supabaseAdmin
                 .from('user_memorial_roles')
@@ -89,7 +93,9 @@ export async function PATCH(
             actorUserId: user.id,
             actorEmail: user.email ?? null,
             subjectUserId: requestRecord.requester_user_id,
+            subjectEmail: requesterUser.data.user?.email ?? null,
             details: {
+                requestId,
                 decision,
                 requestedRole: requestRecord.requested_role || 'witness',
             },

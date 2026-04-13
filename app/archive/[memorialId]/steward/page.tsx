@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, use, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
     Shield, Check, X, MessageCircle,
     ImageIcon, ArrowLeft, Loader2,
@@ -63,6 +63,7 @@ export default function StewardPage({
 }) {
     const { memorialId } = use(params);
     const router = useRouter();
+    const searchParams = useSearchParams();
     const supabase = createClient();
 
     const [contributions, setContributions] = useState<PendingContribution[]>([]);
@@ -75,7 +76,10 @@ export default function StewardPage({
     const [requestProcessing, setRequestProcessing] = useState<string | null>(null);
     const [creationProcessing, setCreationProcessing] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [tab, setTab] = useState<StewardTab>('contributions');
+    const [tab, setTab] = useState<StewardTab>(
+        (searchParams.get('tab') as StewardTab) || 'contributions'
+    );
+    const highlightedItemId = searchParams.get('item');
 
     const { data: roleData, loading: roleLoading } = useArchiveRole(memorialId);
     useRoleSync(memorialId, roleData?.currentUserId || '', roleData?.userRole || 'witness');
@@ -86,6 +90,13 @@ export default function StewardPage({
             router.push(`/archive/${memorialId}`);
         }
     }, [roleData, roleLoading, memorialId, router]);
+
+    useEffect(() => {
+        const nextTab = searchParams.get('tab') as StewardTab | null;
+        if (nextTab === 'contributions' || nextTab === 'requests' || nextTab === 'creation') {
+            setTab(nextTab);
+        }
+    }, [searchParams]);
 
     const loadPending = async () => {
         setLoading(true);
@@ -345,6 +356,7 @@ export default function StewardPage({
                                 <ContributionCard
                                     key={contribution.id}
                                     contribution={contribution}
+                                    highlighted={highlightedItemId === contribution.id}
                                     processing={processing === contribution.id}
                                     onApprove={() => handleDecision(contribution.id, 'approved')}
                                     onReject={(notes) => handleDecision(contribution.id, 'rejected', notes)}
@@ -365,6 +377,7 @@ export default function StewardPage({
                             <AccessRequestCard
                                 key={request.id}
                                 request={request}
+                                highlighted={highlightedItemId === request.id}
                                 processing={requestProcessing === request.id}
                                 onApprove={() => handleAccessDecision(request.id, 'approved')}
                                 onDeny={() => handleAccessDecision(request.id, 'denied')}
@@ -383,6 +396,7 @@ export default function StewardPage({
                             <CreationRequestCard
                                 key={request.id}
                                 request={request}
+                                highlighted={highlightedItemId === request.id}
                                 processing={creationProcessing === request.id}
                                 onApprove={() => handleCreationDecision(request.id, 'approved')}
                                 onReject={() => handleCreationDecision(request.id, 'rejected')}
@@ -438,12 +452,14 @@ function EmptyState({
 
 function ContributionCard({
     contribution: c,
+    highlighted,
     processing,
     onApprove,
     onReject,
     onNeedsChanges
 }: {
     contribution: PendingContribution;
+    highlighted: boolean;
     processing: boolean;
     onApprove: () => void;
     onReject: (notes: string) => void;
@@ -461,7 +477,9 @@ function ContributionCard({
     })();
 
     return (
-        <div className="bg-white border border-warm-border/30 rounded-2xl overflow-hidden shadow-sm">
+        <div className={`bg-white border rounded-2xl overflow-hidden shadow-sm ${
+            highlighted ? 'border-warm-brown shadow-[0_0_0_2px_rgba(140,95,70,0.12)]' : 'border-warm-border/30'
+        }`}>
             <div className="px-6 pt-6 pb-4 border-b border-warm-border/20">
                 <div className="flex items-start justify-between gap-4">
                     <div>
@@ -604,17 +622,21 @@ function ContributionCard({
 
 function AccessRequestCard({
     request,
+    highlighted,
     processing,
     onApprove,
     onDeny
 }: {
     request: AccessRequestRecord;
+    highlighted: boolean;
     processing: boolean;
     onApprove: () => void;
     onDeny: () => void;
 }) {
     return (
-        <div className="bg-white border border-warm-border/30 rounded-2xl p-6 shadow-sm">
+        <div className={`bg-white border rounded-2xl p-6 shadow-sm ${
+            highlighted ? 'border-warm-brown shadow-[0_0_0_2px_rgba(140,95,70,0.12)]' : 'border-warm-border/30'
+        }`}>
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-2 mb-2">
@@ -656,17 +678,21 @@ function AccessRequestCard({
 
 function CreationRequestCard({
     request,
+    highlighted,
     processing,
     onApprove,
     onReject
 }: {
     request: CreationRequestRecord;
+    highlighted: boolean;
     processing: boolean;
     onApprove: () => void;
     onReject: () => void;
 }) {
     return (
-        <div className="bg-white border border-warm-border/30 rounded-2xl p-6 shadow-sm">
+        <div className={`bg-white border rounded-2xl p-6 shadow-sm ${
+            highlighted ? 'border-warm-brown shadow-[0_0_0_2px_rgba(140,95,70,0.12)]' : 'border-warm-border/30'
+        }`}>
             <div className="flex items-start justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-2 mb-2">

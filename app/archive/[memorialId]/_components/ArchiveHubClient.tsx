@@ -30,7 +30,9 @@ interface ArchiveHubClientProps {
       profilePhotoUrl: string | null;
     };
     pendingCount: number;
-    creationRequestCount?: number;
+    pendingContributionCount?: number;
+    pendingAccessRequestCount?: number;
+    pendingCreationRequestCount?: number;
     myContributions: any[];
   };
   memorialId: string;
@@ -70,10 +72,19 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
   const router = useRouter();
   useRoleSync(memorialId, userId, roleData.userRole, roleData.plan === 'family' ? 'family' : 'personal');
 
-  const { userRole, plan, memorial, myContributions, pendingCount, creationRequestCount = 0 } = roleData;
+  const {
+    userRole,
+    plan,
+    memorial,
+    myContributions,
+    pendingCount,
+    pendingContributionCount = 0,
+    pendingAccessRequestCount = 0,
+    pendingCreationRequestCount = 0,
+  } = roleData;
   const capabilities = getArchiveCapabilities(userRole, plan === 'family' ? 'family' : 'personal');
   const roleLabel = getRoleLabel(userRole);
-  const totalStewardCount = pendingCount + creationRequestCount;
+  const totalStewardCount = pendingCount;
 
   return (
     <div className="min-h-screen bg-surface-low">
@@ -111,30 +122,55 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-10 space-y-8">
-        {capabilities.canReview && totalStewardCount > 0 && (
-          <div
-            onClick={() => router.push(`/archive/${memorialId}/steward`)}
-            className="bg-warm-muted/5 border border-warm-muted/20 rounded-xl p-5 flex items-center justify-between cursor-pointer hover:bg-warm-muted/10 transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-warm-muted/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Shield size={18} className="text-warm-muted" />
+        {capabilities.canReview && (
+          <section className="bg-white border border-warm-border/30 rounded-xl p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-warm-muted/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Shield size={18} className="text-warm-muted" />
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-warm-outline">Pending</p>
+                  <h2 className="mt-1 text-lg font-semibold text-warm-dark">
+                    {totalStewardCount > 0 ? `${totalStewardCount} pending` : 'No pending reviews'}
+                  </h2>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-warm-dark">
-                  {userRole === 'owner' && creationRequestCount > 0
-                    ? `${pendingCount} contribution${pendingCount !== 1 ? 's' : ''} and ${creationRequestCount} memorial request${creationRequestCount !== 1 ? 's' : ''} waiting`
-                    : `${pendingCount} contribution${pendingCount !== 1 ? 's' : ''} awaiting review`}
-                </p>
-                <p className="text-xs text-warm-dark/50">
-                  {userRole === 'owner' && creationRequestCount > 0
-                    ? 'Witnesses and co-guardians are waiting for your decision'
-                    : 'Witnesses are waiting for your decision'}
-                </p>
-              </div>
+              <button
+                onClick={() => router.push(`/archive/${memorialId}/steward`)}
+                className="inline-flex items-center gap-2 rounded-lg border border-warm-border/30 px-4 py-2 text-sm text-warm-dark/70 transition-colors hover:bg-warm-border/10"
+              >
+                Open queue
+                <ChevronRight size={16} />
+              </button>
             </div>
-            <ChevronRight size={18} className="text-warm-dark/30" />
-          </div>
+
+            {totalStewardCount > 0 ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <PendingCard
+                  label="Contributions"
+                  count={pendingContributionCount}
+                  onClick={() => router.push(`/archive/${memorialId}/steward?tab=contributions`)}
+                />
+                <PendingCard
+                  label="Access requests"
+                  count={pendingAccessRequestCount}
+                  onClick={() => router.push(`/archive/${memorialId}/steward?tab=requests`)}
+                />
+                {userRole === 'owner' && (
+                  <PendingCard
+                    label="Memorial requests"
+                    count={pendingCreationRequestCount}
+                    onClick={() => router.push(`/archive/${memorialId}/steward?tab=creation`)}
+                  />
+                )}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-warm-dark/50">
+                New contributions, access requests, and memorial requests will show up here automatically.
+              </p>
+            )}
+          </section>
         )}
 
         <section>
@@ -204,6 +240,27 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
         )}
       </div>
     </div>
+  );
+}
+
+function PendingCard({
+  label,
+  count,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-xl border border-warm-border/20 bg-surface-low/30 px-4 py-4 text-left transition-colors hover:bg-surface-low/60"
+    >
+      <p className="text-xs uppercase tracking-[0.16em] text-warm-outline">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-warm-dark">{count}</p>
+      <p className="mt-1 text-xs text-warm-dark/50">Open exact review queue</p>
+    </button>
   );
 }
 

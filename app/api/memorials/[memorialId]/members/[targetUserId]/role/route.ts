@@ -52,9 +52,10 @@ export async function PATCH(
 
         if (isFamilyWideCoGuardianChange) {
             if (newRole === 'co_guardian') {
-                await syncCoGuardianAcrossOwnerFamily(context.ownerUserId, targetUserId);
+                await syncCoGuardianAcrossOwnerFamily(admin, context.ownerUserId, targetUserId);
             } else {
                 await updateFamilyCoGuardianRole(
+                    admin,
                     context.ownerUserId,
                     targetUserId,
                     newRole as 'witness' | 'reader'

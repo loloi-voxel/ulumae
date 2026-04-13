@@ -26,7 +26,7 @@ import {
     ArrowLeft, User, LayoutTemplate, Save, Trash2,
     X, MapPin, Quote, Settings2, Loader2
 } from 'lucide-react';
-import { useAuth } from '@/components/providers/AuthProvider';
+import { isFamilyPlan, useAuth } from '@/components/providers/AuthProvider';
 import DashboardShell from '@/components/dashboard/DashboardShell';
 
 // ============================================================================
@@ -513,12 +513,16 @@ export default function FamilyTreePage({ params }: { params: Promise<{ userId: s
             router.replace('/login?next=/dashboard');
             return;
         }
-        if (auth.plan !== 'family' && auth.plan !== 'concierge') {
+        if (auth.user && auth.user.id !== unwrappedParams.userId) {
+            router.replace(`/dashboard/family/${auth.user.id}/tree`);
+            return;
+        }
+        if (!isFamilyPlan(auth.plan)) {
             router.replace(`/dashboard`);
         }
-    }, [auth.loading, auth.authenticated, auth.plan, router]);
+    }, [auth.loading, auth.authenticated, auth.user, auth.plan, router, unwrappedParams.userId]);
 
-    if (auth.loading || (auth.plan !== 'family' && auth.plan !== 'concierge')) {
+    if (auth.loading || !isFamilyPlan(auth.plan) || auth.user?.id !== unwrappedParams.userId) {
         return (
             <div className="min-h-screen bg-surface-low flex items-center justify-center">
                 <Loader2 size={28} className="text-warm-muted/40 animate-spin" />
@@ -541,7 +545,7 @@ export default function FamilyTreePage({ params }: { params: Promise<{ userId: s
                             <ArrowLeft size={18} className="text-warm-dark/60" />
                         </Link>
                         <div>
-                            <h1 className="font-serif text-2xl text-warm-dark leading-none">Family Constellation</h1>
+                            <h1 className="font-serif text-2xl text-warm-dark leading-none">Family Tree</h1>
                             <p className="text-xs text-warm-dark/50 mt-1">Drag nodes to organize. Hover over a card to reveal connection points.</p>
                         </div>
                     </div>

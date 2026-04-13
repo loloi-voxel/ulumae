@@ -10,6 +10,7 @@ export type MemorialActivityAction =
   | 'access_request_decided'
   | 'creation_request_created'
   | 'creation_request_decided'
+  | 'contribution_submitted'
   | 'contribution_reviewed'
   | 'contribution_resubmitted'
   | 'memorial_exported'

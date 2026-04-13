@@ -55,7 +55,11 @@ export async function POST(
             return NextResponse.json({ error: 'Only co-guardians can request a new family memorial.' }, { status: 403 });
         }
 
-        const existingPending = await getPendingMemorialCreationRequest(memorial.user_id, user.id);
+        const existingPending = await getPendingMemorialCreationRequest(
+            supabaseAdmin,
+            memorial.user_id,
+            user.id
+        );
         if (existingPending) {
             return NextResponse.json(
                 { error: 'You already have a pending memorial creation request.' },
@@ -63,7 +67,7 @@ export async function POST(
             );
         }
 
-        const { error: insertError } = await supabaseAdmin
+        const { data: insertedRequest, error: insertError } = await supabaseAdmin
             .from('memorial_creation_requests')
             .insert({
                 owner_user_id: memorial.user_id,
@@ -72,7 +76,9 @@ export async function POST(
                 proposed_name: proposedName?.trim() || null,
                 request_message: requestMessage?.trim() || null,
                 status: 'pending',
-            });
+            })
+            .select('id')
+            .single();
 
         if (insertError) {
             throw insertError;
@@ -85,6 +91,7 @@ export async function POST(
             actorUserId: user.id,
             actorEmail: user.email ?? null,
             details: {
+                requestId: insertedRequest.id,
                 proposedName: proposedName?.trim() || null,
             },
         });

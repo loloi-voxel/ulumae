@@ -159,16 +159,7 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
         data: { user },
       } = await supabase.auth.getUser();
 
-      const anonData = (() => {
-        try {
-          const raw = sessionStorage.getItem('anon_contributor');
-          return raw ? JSON.parse(raw) : null;
-        } catch {
-          return null;
-        }
-      })();
-
-      const contributorName = authorName.trim() || anonData?.name || 'Anonymous';
+      const contributorName = authorName.trim() || user?.email || 'Contributor';
       let contributionContent: Record<string, any> = {};
 
       if (type === 'memory') {
@@ -210,35 +201,20 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
         };
       }
 
-      if (isRevision && revisionContext) {
-        const nextStatus = requiresReview ? 'pending_approval' : 'approved';
-        const { error: updateError } = await supabase
-          .from('memorial_contributions')
-          .update({
-            witness_name: contributorName,
-            content: contributionContent,
-            status: nextStatus,
-            admin_notes: null,
-            revision_count: (roleData.myContributions.find((item) => item.id === revisionContext.id)?.revisionCount || 0) + 1,
-            notified_at: null,
-          })
-          .eq('id', revisionContext.id);
-
-        if (updateError) throw updateError;
-      } else {
-        const { error: insertError } = await supabase.from('memorial_contributions').insert({
-          memorial_id: memorialId,
-          user_id: user?.id || null,
-          witness_name: contributorName,
-          contributor_email: anonData?.email || null,
-          contributor_verified: anonData ? true : false,
-          is_anonymous: !user,
+      const response = await fetch(`/api/archive/${memorialId}/contributions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           type,
           content: contributionContent,
-          status: requiresReview ? 'pending_approval' : 'approved',
-        });
+          witnessName: contributorName,
+          revisionId: revisionContext?.id || null,
+        }),
+      });
 
-        if (insertError) throw insertError;
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to submit. Please try again.');
       }
 
       setSubmitted(true);

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Shield, UserCheck, Clock, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import DashboardShell from '@/components/dashboard/DashboardShell';
-import { useAuth } from '@/components/providers/AuthProvider';
+import { isFamilyPlan, useAuth } from '@/components/providers/AuthProvider';
 import SuccessorSettings from '@/components/SuccessorSettings';
 
 export default function DashboardSuccessionPage({ params }: { params: Promise<{ userId: string }> }) {
@@ -21,10 +21,14 @@ export default function DashboardSuccessionPage({ params }: { params: Promise<{ 
         }
         if (auth.user && auth.user.id !== userId) {
             router.replace(`/dashboard/succession/${auth.user.id}`);
+            return;
         }
-    }, [auth.loading, auth.authenticated, auth.user, userId, router]);
+        if (!isFamilyPlan(auth.plan) && auth.user) {
+            router.replace(`/dashboard/${auth.plan === 'personal' ? 'personal' : 'draft'}/${auth.user.id}`);
+        }
+    }, [auth.loading, auth.authenticated, auth.user, auth.plan, userId, router]);
 
-    if (auth.loading || !auth.authenticated || auth.user?.id !== userId) {
+    if (auth.loading || !auth.authenticated || auth.user?.id !== userId || !isFamilyPlan(auth.plan)) {
         return (
             <div className="min-h-screen bg-surface-low flex items-center justify-center">
                 <div className="w-10 h-10 border-2 border-warm-border/30 border-t-olive rounded-full animate-spin" />
@@ -32,40 +36,17 @@ export default function DashboardSuccessionPage({ params }: { params: Promise<{ 
         );
     }
 
-    const isPaidPlan = auth.plan === 'personal' || auth.plan === 'family' || auth.plan === 'concierge';
-
     return (
         <DashboardShell userId={userId}>
             <div className="min-h-screen bg-surface-low">
                 <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
                     <div className="mb-8">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Succession Planning</p>
-                        <h1 className="mt-3 font-serif text-4xl text-warm-dark">Plan who takes care of your archives</h1>
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Family / Succession</p>
+                        <h1 className="mt-3 font-serif text-4xl text-warm-dark">Plan who takes care of the family archives</h1>
                         <p className="mt-3 max-w-3xl text-sm text-warm-muted">
-                            Choose the trusted person who can step in later, review your dead man&apos;s switch status, and keep your archive stewardship clear.
+                            Keep long-term stewardship separate from day-to-day collaboration. This section is only for family-plan succession planning.
                         </p>
                     </div>
-
-                    {!isPaidPlan && (
-                        <div className="mb-6 rounded-3xl border border-warm-brown/25 bg-warm-brown/5 px-6 py-5">
-                            <div className="flex items-start gap-3">
-                                <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-warm-brown">
-                                    <Shield size={18} />
-                                </div>
-                                <div className="flex-1">
-                                    <h2 className="font-serif text-2xl text-warm-dark">Succession is clearer with a preserved plan</h2>
-                                    <p className="mt-2 text-sm text-warm-muted">
-                                        You can review the stewardship flow here now. Personal and Family plans are the clearest fit when you want long-term continuity and preservation.
-                                    </p>
-                                    <div className="mt-4 flex flex-wrap gap-3">
-                                        <Link href="/choice-pricing" className="glass-btn-primary rounded-xl px-4 py-2 text-sm font-medium text-white">
-                                            Review Plans
-                                        </Link>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
 
                     <div className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
                         <section className="glass-card rounded-3xl p-6">

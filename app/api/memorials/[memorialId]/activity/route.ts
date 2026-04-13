@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireMemorialAccess } from '@/lib/apiAuth';
 import { DEFAULT_ACTIVITY_LIMIT } from '@/lib/constants';
+import { buildActivityNotification } from '@/lib/notifications';
 
 export async function GET(
     req: NextRequest,
@@ -21,12 +22,19 @@ export async function GET(
         const rawLimit = Number(req.nextUrl.searchParams.get('limit') || DEFAULT_ACTIVITY_LIMIT);
         const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(rawLimit, 100)) : DEFAULT_ACTIVITY_LIMIT;
 
-        const { data, error } = await admin
+        const [{ data: data, error }, { data: memorial }] = await Promise.all([
+            admin
             .from('memorial_activity_log')
             .select('id, action, summary, actor_email, subject_email, details, created_at')
             .eq('memorial_id', memorialId)
             .order('created_at', { ascending: false })
-            .limit(limit);
+            .limit(limit),
+            admin
+                .from('memorials')
+                .select('id, full_name')
+                .eq('id', memorialId)
+                .maybeSingle(),
+        ]);
 
         if (error) throw error;
 
@@ -34,11 +42,26 @@ export async function GET(
             activity: (data || []).map((item) => ({
                 id: item.id,
                 action: item.action,
+                type: buildActivityNotification({
+                    activity: item,
+                    memorialId,
+                    memorialName: memorial?.full_name || 'Untitled memorial',
+                    userId: access.user.id,
+                    unread: false,
+                })?.type || null,
                 summary: item.summary,
                 actorEmail: item.actor_email,
                 subjectEmail: item.subject_email,
                 details: item.details || {},
                 createdAt: item.created_at,
+                href:
+                    buildActivityNotification({
+                        activity: item,
+                        memorialId,
+                        memorialName: memorial?.full_name || 'Untitled memorial',
+                        userId: access.user.id,
+                        unread: false,
+                    })?.href || `/archive/${memorialId}`,
             })),
         });
     } catch (error: any) {

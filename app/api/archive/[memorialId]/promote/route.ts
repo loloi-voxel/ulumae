@@ -48,7 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ mem
         }
 
         // Promote to co_guardian across all family memorials
-        await syncCoGuardianAcrossOwnerFamily(context.ownerUserId, witnessUserId);
+        await syncCoGuardianAcrossOwnerFamily(admin, context.ownerUserId, witnessUserId);
 
         await safeLogMemorialActivity(admin, {
             memorialId,

@@ -14,6 +14,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import NotificationCenter from './_components/NotificationCenter';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
+import { useNotifications } from '@/hooks/useNotifications';
 
 interface PendingCreationRequest {
     id: string;
@@ -62,6 +63,12 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
     const userId = unwrappedParams.userId;
     const auth = useAuth();
     const router = useRouter();
+    const {
+        data: notificationData,
+        loading: notificationLoading,
+        error: notificationError,
+        refresh: refreshNotifications,
+    } = useNotifications();
     const [memorials, setMemorials] = useState<Memorial[]>([]);
     const [deletedMemorials, setDeletedMemorials] = useState<Memorial[]>([]);
     const [loading, setLoading] = useState(true);
@@ -114,6 +121,28 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
     }, [userId, searchParams]);
 
     useEffect(() => {
+        const section = searchParams.get('section');
+        if (!section) return;
+
+        const target = document.getElementById(section);
+        if (!target) return;
+
+        window.requestAnimationFrame(() => {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }, [searchParams, notificationData.pendingCount, memorials.length]);
+
+    useEffect(() => {
+        const memberMemorialId = searchParams.get('members');
+        if (!memberMemorialId || memorials.length === 0) return;
+
+        const target = memorials.find((memorial) => memorial.id === memberMemorialId);
+        if (target) {
+            setMemberManagerMemorial(target);
+        }
+    }, [searchParams, memorials]);
+
+    useEffect(() => {
         const interval = window.setInterval(() => {
             loadMemorials();
         }, 30000);
@@ -150,7 +179,6 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
             const activeMemorials = data.filter(m => !m.deleted);
             setMemorials(activeMemorials);
             setDeletedMemorials(data.filter(m => m.deleted));
-            await loadFamilySummary(activeMemorials);
         } else {
             setPendingCreationRequests([]);
             setPendingAccessRequests([]);
@@ -418,7 +446,15 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
 
     const firstPaidMemorial = memorials.find(m => m.paid);
 
-    const pendingRequestCount = pendingCreationRequests.length + pendingAccessRequests.length;
+    const pendingRequestCount = notificationData.pendingCount;
+    const activityItems: FamilyActivityItem[] = (notificationData.recentActivity || []).map((item) => ({
+        id: item.id,
+        memorialId: item.memorialId,
+        memorialName: item.memorialName,
+        createdAt: item.createdAt,
+        createdByName: item.actorEmail || 'Someone',
+        changeSummary: item.summary || 'Archive updated',
+    }));
 
     const formatActivityDayLabel = (value: string) =>
         new Intl.DateTimeFormat(undefined, {
@@ -437,7 +473,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
     };
 
     const groupedRecentActivity: ActivityDayGroup[] = Object.values(
-        recentActivity.reduce<Record<string, ActivityDayGroup>>((groups, item) => {
+        activityItems.reduce<Record<string, ActivityDayGroup>>((groups, item) => {
             const dayKey = getActivityDayKey(item.createdAt);
             const existingDay = groups[dayKey];
 
@@ -531,12 +567,12 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                 {pendingRequestCount > 0 && (
                                     <span className="inline-flex items-center gap-1.5 rounded-full border border-warm-brown/20 bg-warm-brown/10 px-3 py-1 text-xs font-semibold text-warm-brown">
                                         <BellDot size={12} />
-                                        {pendingRequestCount} pending request{pendingRequestCount !== 1 ? 's' : ''}
+                                        {pendingRequestCount} pending item{pendingRequestCount !== 1 ? 's' : ''}
                                     </span>
                                 )}
                             </div>
                             <p className="text-warm-muted font-sans text-sm tracking-wide ml-12">
-                                {memorials.length} memorial{memorials.length !== 1 ? 's' : ''} &bull; {pendingRequestCount} pending request{pendingRequestCount !== 1 ? 's' : ''} &bull; 0 devices anchored
+                                {memorials.length} memorial{memorials.length !== 1 ? 's' : ''} &bull; {pendingRequestCount} pending item{pendingRequestCount !== 1 ? 's' : ''} &bull; 0 devices anchored
                             </p>
                         </div>
 
@@ -562,11 +598,9 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
 
             <div className="max-w-7xl mx-auto px-6 py-12">
                 <NotificationCenter
-                    pendingCreationRequests={pendingCreationRequests}
-                    pendingAccessRequests={pendingAccessRequests}
-                    onCreationDecision={handleCreationRequestDecision}
-                    onAccessDecision={handleAccessRequestDecision}
-                    processingId={processingRequestId}
+                    pendingItems={notificationData.pendingItems}
+                    loading={notificationLoading}
+                    error={notificationError}
                 />
                 {/* SEARCH & FILTER TOOLBAR */}
                 {!loading && realMemorials.length > 0 && (
@@ -730,12 +764,16 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                             </p>
                         </div>
 
-                        {summaryLoading ? (
+                        {notificationLoading ? (
                             <div className="py-10 text-center">
                                 <Loader2 size={24} className="mx-auto text-olive animate-spin mb-3" />
                                 <p className="text-sm text-warm-muted font-sans">Loading activity...</p>
                             </div>
-                        ) : recentActivity.length === 0 ? (
+                        ) : notificationError ? (
+                            <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-5 text-sm text-red-700">
+                                {notificationError}
+                            </div>
+                        ) : activityItems.length === 0 ? (
                             <div className="rounded-xl border-2 border-dashed border-warm-border/35 bg-surface-low/40 px-6 py-10 text-center">
                                 <History size={24} className="mx-auto mb-3 text-warm-muted" />
                                 <p className="font-serif text-xl text-warm-dark">No activity yet</p>

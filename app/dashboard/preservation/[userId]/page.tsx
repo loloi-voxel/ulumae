@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import DashboardShell from '@/components/dashboard/DashboardShell';
-import { useAuth } from '@/components/providers/AuthProvider';
+import { isFamilyPlan, isPersonalPlan, useAuth } from '@/components/providers/AuthProvider';
 
 const includedItems = [
     'All structured text fields: biography, life story, chapters, values, sayings, relationships, and witness stories',
@@ -59,14 +59,15 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
         );
     }
 
-    const preservationUnlocked = auth.plan === 'personal' || auth.plan === 'family' || auth.plan === 'concierge';
+    const preservationUnlocked = isPersonalPlan(auth.plan) || isFamilyPlan(auth.plan);
+    const workspaceLabel = isFamilyPlan(auth.plan) ? 'Family / Preserve' : 'Personal / Preserve';
 
     return (
         <DashboardShell userId={userId}>
             <div className="min-h-screen bg-surface-low">
                 <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
                     <div className="mb-8">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Personal / Preservation</p>
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">{workspaceLabel}</p>
                         <h1 className="mt-3 font-serif text-4xl text-warm-dark">The Preservation Layer</h1>
                         <p className="mt-3 max-w-3xl text-sm text-warm-muted">
                             This page defines the preservation package clearly: what is stored directly in the durable layer, what remains metadata-only, and how media is handled under the 50 GB storage ceiling.

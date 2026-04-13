@@ -5,6 +5,7 @@ import {
   getRoleLabel,
 } from '@/lib/archivePermissions';
 import { WitnessRole } from '@/types/roles';
+import { getMemorialCreationRequestCount } from '@/lib/familyWorkspace';
 
 export async function GET(
   req: NextRequest,
@@ -41,14 +42,32 @@ export async function GET(
     const plan = context.plan;
     const capabilities = getArchiveCapabilities(userRole, plan);
 
-    let pendingCount = 0;
+    let pendingContributionCount = 0;
+    let pendingAccessRequestCount = 0;
+    let pendingCreationRequestCount = 0;
     if (capabilities.canReview) {
       const { count } = await admin
         .from('memorial_contributions')
         .select('*', { count: 'exact', head: true })
         .eq('memorial_id', memorialId)
         .eq('status', 'pending_approval');
-      pendingCount = count || 0;
+      pendingContributionCount = count || 0;
+    }
+
+    if (capabilities.canApproveAccessRequests) {
+      const { count } = await admin
+        .from('memorial_access_requests')
+        .select('*', { count: 'exact', head: true })
+        .eq('memorial_id', memorialId)
+        .eq('status', 'pending');
+      pendingAccessRequestCount = count || 0;
+    }
+
+    if (userRole === 'owner' && plan === 'family') {
+      pendingCreationRequestCount = await getMemorialCreationRequestCount(
+        admin,
+        context.ownerUserId
+      );
     }
 
     // Fetch my contributions only for non-readers
@@ -98,7 +117,13 @@ export async function GET(
         userId: memorial.user_id,
       },
       myContributions,
-      pendingCount,
+      pendingCount:
+        pendingContributionCount +
+        pendingAccessRequestCount +
+        pendingCreationRequestCount,
+      pendingContributionCount,
+      pendingAccessRequestCount,
+      pendingCreationRequestCount,
     });
   } catch (err: any) {
     console.error('[role-data]', err);

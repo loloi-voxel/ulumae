@@ -83,10 +83,21 @@ export default async function ArchivePage({
     }
 
     if (userRole === 'co_guardian' && memorial.mode === 'family') {
-        await syncCoGuardianAcrossOwnerFamily(memorial.user_id, user.id);
+        await syncCoGuardianAcrossOwnerFamily(
+            supabaseAdmin,
+            memorial.user_id,
+            user.id
+        );
 
-        const familyMemorials = await getOwnerFamilyMemorials(memorial.user_id);
-        const pendingCreationRequest = await getPendingMemorialCreationRequest(memorial.user_id, user.id);
+        const familyMemorials = await getOwnerFamilyMemorials(
+            supabaseAdmin,
+            memorial.user_id
+        );
+        const pendingCreationRequest = await getPendingMemorialCreationRequest(
+            supabaseAdmin,
+            memorial.user_id,
+            user.id
+        );
 
         const memorialsWithCounts = await Promise.all(
             familyMemorials.map(async (familyMemorial) => {
@@ -123,19 +134,30 @@ export default async function ArchivePage({
         );
     }
 
-    let pendingCount = 0;
+    let pendingContributionCount = 0;
+    let pendingAccessRequestCount = 0;
     if (userRole === 'owner' || userRole === 'co_guardian') {
-        const { count } = await supabase
+      const { count } = await supabase
             .from('memorial_contributions')
             .select('*', { count: 'exact', head: true })
             .eq('memorial_id', memorialId)
             .eq('status', 'pending_approval');
-        pendingCount = count || 0;
+        pendingContributionCount = count || 0;
+
+        const { count: accessCount } = await supabase
+            .from('memorial_access_requests')
+            .select('*', { count: 'exact', head: true })
+            .eq('memorial_id', memorialId)
+            .eq('status', 'pending');
+        pendingAccessRequestCount = accessCount || 0;
     }
 
-    let creationRequestCount = 0;
+    let pendingCreationRequestCount = 0;
     if (userRole === 'owner' && memorial.mode === 'family') {
-        creationRequestCount = await getMemorialCreationRequestCount(memorial.user_id);
+        pendingCreationRequestCount = await getMemorialCreationRequestCount(
+            supabaseAdmin,
+            memorial.user_id
+        );
     }
 
     const { data: myContributions } = await supabase
@@ -153,8 +175,13 @@ export default async function ArchivePage({
             fullName: memorial.full_name,
             profilePhotoUrl: memorial.profile_photo_url
         },
-        pendingCount,
-        creationRequestCount,
+        pendingCount:
+            pendingContributionCount +
+            pendingAccessRequestCount +
+            pendingCreationRequestCount,
+        pendingContributionCount,
+        pendingAccessRequestCount,
+        pendingCreationRequestCount,
         myContributions: (myContributions || []).map(c => ({
             id: c.id,
             type: c.type,

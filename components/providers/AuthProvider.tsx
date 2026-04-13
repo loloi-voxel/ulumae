@@ -33,6 +33,14 @@ export interface AuthState {
     revalidate: () => Promise<void>;
 }
 
+export function isFamilyPlan(plan: UserPlan) {
+    return plan === 'family' || plan === 'concierge';
+}
+
+export function isPersonalPlan(plan: UserPlan) {
+    return plan === 'personal';
+}
+
 const defaultState: AuthState = {
     authenticated: false,
     loading: true,
@@ -180,13 +188,10 @@ export function getDashboardPath(state: AuthState): string {
     if (!state.authenticated || !state.user) return '/login';
 
     // Prioritize the highest plan level from the server-validated plan field
-    if (state.plan === 'concierge') {
-        return `/dashboard/concierge/${state.user.id}`;
-    }
-    if (state.plan === 'family') {
+    if (isFamilyPlan(state.plan)) {
         return `/dashboard/family/${state.user.id}`;
     }
-    if (state.plan === 'personal') {
+    if (isPersonalPlan(state.plan)) {
         return `/dashboard/personal/${state.user.id}`;
     }
 

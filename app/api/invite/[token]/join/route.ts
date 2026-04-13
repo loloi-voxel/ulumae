@@ -65,19 +65,24 @@ export async function POST(
             .eq('memorial_id', result.memorialId);
 
         if (result.joinedNow) {
-            const { data: inviterData } = await supabaseAdmin
+            const { data: invitationData } = await supabaseAdmin
                 .from('witness_invitations')
-                .select('inviter_name')
+                .select('inviter_name, invitee_email, role')
                 .eq('id', token)
                 .single();
 
             await safeLogMemorialActivity(supabaseAdmin, {
                 memorialId: result.memorialId,
                 action: 'invite_accepted',
-                summary: `${inviterData?.inviter_name || 'Someone'} invited this user.`,
+                summary: `${user.email || 'A member'} accepted an invitation.`,
                 actorUserId: user.id,
                 actorEmail: user.email ?? null,
-                details: { role: result.role },
+                subjectEmail: invitationData?.invitee_email || user.email || null,
+                details: {
+                    invitationId: token,
+                    inviterName: invitationData?.inviter_name || null,
+                    role: invitationData?.role || result.role,
+                },
             });
         }
 

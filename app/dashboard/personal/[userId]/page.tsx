@@ -6,13 +6,12 @@ import {
     AlertTriangle, CheckCircle,
     Clock, Shield,
     Archive, Download, Copy, Mail, QrCode, Camera, FileText,
-    ChevronRight, Users
+    ChevronRight
 } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase, Memorial } from '@/lib/supabase';
-import { useAuth } from '@/components/providers/AuthProvider';
+import { isPersonalPlan, useAuth } from '@/components/providers/AuthProvider';
 import PreservationStatus from '@/components/PreservationStatus';
-import ManageWitnessesModal from '@/app/dashboard/[userId]/_components/ManageWitnessesModal';
 import DashboardShell from '@/components/dashboard/DashboardShell';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
 
@@ -84,7 +83,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
             router.replace(`/dashboard/draft/${auth.user.id}`);
             return;
         }
-        if (auth.plan === 'family' && auth.user) {
+        if (!isPersonalPlan(auth.plan) && auth.user && auth.plan !== 'draft' && auth.plan !== 'none') {
             router.replace(`/dashboard/family/${auth.user.id}`);
             return;
         }
@@ -196,7 +195,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
         return Math.max(Math.ceil((expiry.getTime() - Date.now()) / 86400000), 0);
     };
 
-    const hasPersonalAccess = planVerified && !auth.loading && auth.authenticated && auth.plan === 'personal';
+    const hasPersonalAccess = planVerified && !auth.loading && auth.authenticated && isPersonalPlan(auth.plan);
     if (!hasPersonalAccess) {
         return (
             <div className="bg-surface-low min-h-screen flex items-center justify-center">
@@ -232,7 +231,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                     <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Personal Dashboard</p>
                     <h1 className="mt-3 font-serif text-4xl text-warm-dark">Your Personal Archive</h1>
                     <p className="mt-3 max-w-3xl text-sm text-warm-muted">
-                        A clearer home for editing your memorial, checking preservation, managing people around it, and keeping everything ready for the future.
+                        A clear home for viewing your memorial, editing its content, checking preservation, and keeping everything ready for the future.
                     </p>
                 </div>
 
@@ -351,7 +350,6 @@ function ActiveArchiveView({
 }) {
     const stats = computeStats(archive);
     const [linkCopied, setLinkCopied] = useState(false);
-    const [isWitnessModalOpen, setIsWitnessModalOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
 
     const birthYear = archive.birth_date ? new Date(archive.birth_date).getFullYear() : null;
@@ -531,35 +529,8 @@ function ActiveArchiveView({
             </div>
 
             {/* --- ADD THE MODAL HERE --- */}
-            <ManageWitnessesModal 
-                isOpen={isWitnessModalOpen}
-                onClose={() => setIsWitnessModalOpen(false)}
-                memorialId={archive.id}
-                memorialName={archive.full_name || 'Untitled'}
-                planType="personal"
-            />
 
             {/* ── Witnesses ── */}
-            <section className="glass-card p-8">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
-                        <h3 className="font-serif italic text-lg text-warm-dark mb-2">
-                            People around this archive
-                        </h3>
-                        <p className="text-sm text-warm-muted font-sans leading-relaxed max-w-2xl">
-                            Use one member manager for invitations, role changes, pending invites, and access cleanup. This now matches the archive experience instead of sending you through an older dashboard-only flow.
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => setIsWitnessModalOpen(true)}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-warm-border/30 text-warm-dark rounded-lg text-sm font-serif italic hover:bg-surface-mid transition-all"
-                    >
-                        <Users size={14} />
-                        Open member manager
-                    </button>
-                </div>
-            </section>
-
             <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-8">
                 <div className="glass-card p-8 space-y-6">
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
@@ -599,12 +570,12 @@ function ActiveArchiveView({
                                     <ChevronRight size={15} className="text-warm-outline" />
                                 </Link>
                                 <Link
-                                    href={`/dashboard/succession/${userId}`}
+                                    href={`/person/${archive.id}`}
                                     className="flex items-center justify-between gap-3 rounded-xl border border-warm-border/20 px-4 py-3 text-sm text-warm-dark transition-colors hover:bg-surface-mid/50"
                                 >
                                     <div>
-                                        <p className="font-serif">Succession planning</p>
-                                        <p className="text-xs text-warm-outline">Choose who can manage your legacy later</p>
+                                        <p className="font-serif">Live memorial</p>
+                                        <p className="text-xs text-warm-outline">Open the public memorial view</p>
                                     </div>
                                     <ChevronRight size={15} className="text-warm-outline" />
                                 </Link>
@@ -641,10 +612,10 @@ function ActiveArchiveView({
                 <div className="glass-card p-8 space-y-6">
                     <div>
                         <h3 className="font-serif italic text-lg text-warm-brown mb-2">
-                            Share with loved ones
+                            Share the memorial
                         </h3>
                         <p className="text-sm text-warm-muted font-sans leading-relaxed">
-                            Use one place for public sharing, family outreach, and member access instead of splitting those actions across multiple cards.
+                            Personal archives stay single-owner. Use these actions to share the memorial itself without exposing invites, member roles, or collaboration tools.
                         </p>
                     </div>
 
@@ -669,21 +640,6 @@ function ActiveArchiveView({
                         />
                     </div>
 
-                    <div className="rounded-3xl border border-warm-border/25 bg-white p-6">
-                        <h4 className="font-serif italic text-base text-warm-dark mb-2">
-                            People around this archive
-                        </h4>
-                        <p className="text-sm text-warm-muted font-sans leading-relaxed mb-5">
-                            Invite people, review roles, and manage archive access from one member manager.
-                        </p>
-                        <button
-                            onClick={() => setIsWitnessModalOpen(true)}
-                            className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-warm-border/30 text-warm-dark rounded-lg text-sm font-serif italic hover:bg-surface-mid transition-all"
-                        >
-                            <Users size={14} />
-                            Open member manager
-                        </button>
-                    </div>
                 </div>
             </div>
         </div>

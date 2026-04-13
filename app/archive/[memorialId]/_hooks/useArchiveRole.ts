@@ -28,6 +28,9 @@ export interface ArchiveRoleData {
         revisionCount: number;
     }[];
     pendingCount: number;
+    pendingContributionCount: number;
+    pendingAccessRequestCount: number;
+    pendingCreationRequestCount: number;
 }
 
 export function useArchiveRole(memorialId: string) {

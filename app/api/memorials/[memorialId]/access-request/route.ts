@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireMemorialAccess } from '@/lib/apiAuth';
+import { getSupabaseAdmin, requireMemorialAccess, requireUser } from '@/lib/apiAuth';
 import { safeLogMemorialActivity } from '@/lib/activityLog';
 
 export async function POST(
@@ -9,14 +9,28 @@ export async function POST(
     try {
         const { memorialId } = await params;
         const { requestMessage } = await req.json();
-
-        const auth = await requireMemorialAccess({ memorialId });
+        const auth = await requireUser();
         if (!auth.ok) return auth.response;
 
-        const { user, admin, context } = auth;
+        const { user } = auth;
+        const admin = getSupabaseAdmin();
 
-        if (context.plan !== 'family') {
+        const { data: memorial, error: memorialError } = await admin
+            .from('memorials')
+            .select('id, mode, user_id, full_name')
+            .eq('id', memorialId)
+            .maybeSingle();
+
+        if (memorialError || !memorial) {
+            return NextResponse.json({ error: 'Memorial not found' }, { status: 404 });
+        }
+
+        if (memorial.mode !== 'family') {
             return NextResponse.json({ error: 'Access requests are only available for Family Plan archives' }, { status: 400 });
+        }
+
+        if (memorial.user_id === user.id) {
+            return NextResponse.json({ error: 'You already own this archive' }, { status: 400 });
         }
 
         // 3. CHECK IF ALREADY A MEMBER
@@ -45,7 +59,7 @@ export async function POST(
         }
 
         // 5. CREATE THE REQUEST
-        const { error: insertError } = await admin
+        const { data: insertedRequest, error: insertError } = await admin
             .from('memorial_access_requests')
             .insert({
                 memorial_id: memorialId,
@@ -53,7 +67,9 @@ export async function POST(
                 requested_role: 'witness', // Default requested role
                 request_message: requestMessage || '',
                 status: 'pending'
-            });
+            })
+            .select('id')
+            .single();
 
         if (insertError) throw insertError;
         await safeLogMemorialActivity(admin, {
@@ -63,6 +79,8 @@ export async function POST(
             actorUserId: user.id,
             actorEmail: user.email ?? null,
             details: {
+                requestId: insertedRequest.id,
+                requestMessage: requestMessage || '',
                 requestedRole: 'witness',
             },
         });

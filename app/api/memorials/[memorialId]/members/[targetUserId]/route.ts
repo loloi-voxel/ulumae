@@ -118,7 +118,7 @@ export async function PATCH(
 
         await safeLogMemorialActivity(supabaseAdmin, {
             memorialId,
-            action: 'role_changed',
+            action: 'member_role_updated',
             summary: `Role changed from ${oldRole} to ${newRole}.`,
             actorUserId: user.id,
             actorEmail: user.email ?? null,

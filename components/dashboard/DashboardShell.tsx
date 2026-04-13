@@ -1,24 +1,29 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
     Archive,
     ChevronLeft,
     ChevronRight,
-    Crown,
     Edit3,
+    Eye,
     LayoutDashboard,
-    Lock,
     Menu,
-    Network,
+    Settings,
     Shield,
     UserCheck,
     Users,
+    Workflow,
     X,
 } from 'lucide-react';
-import { useAuth } from '@/components/providers/AuthProvider';
+import {
+    getDashboardPath,
+    isFamilyPlan,
+    isPersonalPlan,
+    useAuth,
+} from '@/components/providers/AuthProvider';
 import NotificationCenter from '@/components/NotificationCenter';
 
 interface DashboardShellProps {
@@ -27,24 +32,22 @@ interface DashboardShellProps {
 }
 
 interface NavItem {
-    key: 'overview' | 'edit' | 'preservation' | 'succession' | 'settings' | 'relations' | 'family';
+    key: string;
     label: string;
     description: string;
     href: string;
     icon: typeof Archive;
     active: boolean;
-    locked?: boolean;
-    badge?: string;
 }
 
 function planLabel(plan: string) {
     switch (plan) {
         case 'family':
             return 'Family Plan';
+        case 'concierge':
+            return 'Family Plan';
         case 'personal':
             return 'Personal Plan';
-        case 'concierge':
-            return 'Concierge Plan';
         case 'draft':
             return 'Draft Workspace';
         default:
@@ -52,46 +55,118 @@ function planLabel(plan: string) {
     }
 }
 
-function buildArchivesHref(userId: string, plan: string) {
-    if (plan === 'family' || plan === 'concierge') return `/dashboard/family/${userId}`;
-    if (plan === 'personal') return `/dashboard/personal/${userId}`;
-    return `/dashboard/draft/${userId}`;
+function firstArchiveByMode(
+    archives: Array<{ id: string; mode: string }>,
+    mode: 'personal' | 'family'
+) {
+    return archives.find((archive) => archive.mode === mode)?.id || null;
 }
 
-function buildItems(pathname: string, userId: string, plan: string): NavItem[] {
-    const familyUnlocked = plan === 'family' || plan === 'concierge';
-    const preservationUnlocked = plan === 'personal' || plan === 'family' || plan === 'concierge';
+function isFamilySection(searchParams: URLSearchParams, section: string) {
+    return searchParams.get('section') === section;
+}
 
-    if (plan === 'personal') {
+function buildItems(options: {
+    pathname: string;
+    searchParams: URLSearchParams;
+    userId: string;
+    plan: string;
+    archives: Array<{ id: string; mode: string }>;
+}): NavItem[] {
+    const { pathname, searchParams, userId, plan, archives } = options;
+    const personalArchiveId = firstArchiveByMode(archives, 'personal');
+
+    if (isPersonalPlan(plan as any)) {
         return [
             {
                 key: 'overview',
-                label: 'Dashboard',
-                description: 'Progress, status, and quick actions',
+                label: 'Overview',
+                description: 'Personal dashboard and progress',
                 href: `/dashboard/personal/${userId}`,
                 icon: LayoutDashboard,
-                active: pathname.startsWith(`/dashboard/personal/${userId}`),
+                active: pathname === `/dashboard/personal/${userId}`,
+            },
+            {
+                key: 'memorial',
+                label: 'Memorial',
+                description: 'View your live memorial',
+                href: personalArchiveId ? `/person/${personalArchiveId}` : `/dashboard/personal/${userId}`,
+                icon: Eye,
+                active: pathname.startsWith('/person/'),
             },
             {
                 key: 'edit',
                 label: 'Edit',
                 description: 'Open the memorial editor',
-                href: `/create?mode=personal`,
+                href: personalArchiveId
+                    ? `/create?id=${personalArchiveId}&mode=personal`
+                    : '/create?mode=personal',
                 icon: Edit3,
                 active: pathname.startsWith('/create'),
             },
             {
-                key: 'preservation',
+                key: 'preserve',
                 label: 'Preserve',
-                description: 'Sealing, export, and archive care',
+                description: 'Export and preservation details',
                 href: `/dashboard/preservation/${userId}`,
-                icon: Crown,
+                icon: Shield,
                 active: pathname.startsWith(`/dashboard/preservation/${userId}`),
+            },
+            {
+                key: 'settings',
+                label: 'Settings',
+                description: 'Profile, billing, and security',
+                href: `/dashboard/settings/${userId}`,
+                icon: Settings,
+                active: pathname.startsWith(`/dashboard/settings/${userId}`),
+            },
+        ];
+    }
+
+    if (isFamilyPlan(plan as any)) {
+        return [
+            {
+                key: 'overview',
+                label: 'Overview',
+                description: 'Family dashboard and archive status',
+                href: `/dashboard/family/${userId}`,
+                icon: LayoutDashboard,
+                active:
+                    pathname === `/dashboard/family/${userId}` &&
+                    !searchParams.get('section'),
+            },
+            {
+                key: 'members',
+                label: 'Family Members',
+                description: 'Invites, roles, and access',
+                href: `/dashboard/family/${userId}?section=members`,
+                icon: Users,
+                active:
+                    pathname === `/dashboard/family/${userId}` &&
+                    isFamilySection(searchParams, 'members'),
+            },
+            {
+                key: 'contributions',
+                label: 'Contributions',
+                description: 'Pending requests and review work',
+                href: `/dashboard/family/${userId}?section=pending`,
+                icon: Archive,
+                active:
+                    pathname === `/dashboard/family/${userId}` &&
+                    isFamilySection(searchParams, 'pending'),
+            },
+            {
+                key: 'relations',
+                label: 'Family Tree',
+                description: 'Relations and linked memorials',
+                href: `/dashboard/family/${userId}/tree`,
+                icon: Workflow,
+                active: pathname.startsWith(`/dashboard/family/${userId}/tree`),
             },
             {
                 key: 'succession',
                 label: 'Succession',
-                description: 'Choose who can act later',
+                description: 'Long-term stewardship planning',
                 href: `/dashboard/succession/${userId}`,
                 icon: UserCheck,
                 active: pathname.startsWith(`/dashboard/succession/${userId}`),
@@ -101,44 +176,7 @@ function buildItems(pathname: string, userId: string, plan: string): NavItem[] {
                 label: 'Settings',
                 description: 'Profile, billing, and security',
                 href: `/dashboard/settings/${userId}`,
-                icon: Shield,
-                active: pathname.startsWith(`/dashboard/settings/${userId}`),
-            },
-        ];
-    }
-
-    if (familyUnlocked) {
-        return [
-            {
-                key: 'overview',
-                label: 'Family Dashboard',
-                description: 'Members, contributions, and steward queue',
-                href: `/dashboard/family/${userId}`,
-                icon: LayoutDashboard,
-                active: pathname === `/dashboard/family/${userId}`,
-            },
-            {
-                key: 'relations',
-                label: 'Relations',
-                description: 'Family map and linked memorials',
-                href: `/dashboard/family/${userId}/tree`,
-                icon: Network,
-                active: pathname.startsWith(`/dashboard/family/${userId}/tree`),
-            },
-            {
-                key: 'succession',
-                label: 'Succession',
-                description: 'Transfer and stewardship planning',
-                href: `/dashboard/succession/${userId}`,
-                icon: UserCheck,
-                active: pathname.startsWith(`/dashboard/succession/${userId}`),
-            },
-            {
-                key: 'settings',
-                label: 'Settings',
-                description: 'Security, billing, and family policy',
-                href: `/dashboard/settings/${userId}`,
-                icon: Shield,
+                icon: Settings,
                 active: pathname.startsWith(`/dashboard/settings/${userId}`),
             },
         ];
@@ -147,47 +185,27 @@ function buildItems(pathname: string, userId: string, plan: string): NavItem[] {
     return [
         {
             key: 'overview',
-            label: 'Dashboard',
-            description: 'Your current archive workspace',
-            href: buildArchivesHref(userId, plan),
+            label: 'Overview',
+            description: 'Current workspace and next steps',
+            href: getDashboardPath({
+                authenticated: true,
+                loading: false,
+                user: { id: userId, email: '' },
+                plan: plan as any,
+                hasPaid: false,
+                archives: [],
+                revalidate: async () => {},
+            }),
             icon: LayoutDashboard,
-            active: /^\/dashboard\/(draft|personal|family)\/[^/]+$/.test(pathname),
-        },
-        {
-            key: 'family',
-            label: 'Family Plan',
-            description: familyUnlocked ? 'Tree, roles, and shared workspace' : 'Upgrade to unlock family tools',
-            href: familyUnlocked ? `/dashboard/family/${userId}/tree` : '/family-confirmation',
-            icon: Users,
-            active: pathname.startsWith(`/dashboard/family/${userId}/tree`),
-            locked: !familyUnlocked,
-            badge: familyUnlocked ? undefined : 'Upgrade',
-        },
-        {
-            key: 'succession',
-            label: 'Succession Planning',
-            description: 'Choose who can manage your legacy later',
-            href: `/dashboard/succession/${userId}`,
-            icon: UserCheck,
-            active: pathname.startsWith(`/dashboard/succession/${userId}`),
+            active: pathname.startsWith('/dashboard'),
         },
         {
             key: 'settings',
             label: 'Settings',
-            description: 'Profile, billing, security',
+            description: 'Profile, billing, and security',
             href: `/dashboard/settings/${userId}`,
-            icon: Shield,
+            icon: Settings,
             active: pathname.startsWith(`/dashboard/settings/${userId}`),
-        },
-        {
-            key: 'preservation',
-            label: 'Preserve',
-            description: preservationUnlocked ? 'What is preserved and storage limits' : 'Review preservation before upgrading',
-            href: `/dashboard/preservation/${userId}`,
-            icon: Crown,
-            active: pathname.startsWith(`/dashboard/preservation/${userId}`),
-            locked: !preservationUnlocked,
-            badge: preservationUnlocked ? undefined : 'Upgrade',
         },
     ];
 }
@@ -221,11 +239,9 @@ function SidebarContent({
 
             <div className="px-4 py-5">
                 <div className="rounded-2xl border border-warm-border/30 bg-surface-mid/40 px-4 py-4">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Current Workspace</p>
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Current Plan</p>
                     <p className="mt-2 font-serif text-xl text-warm-dark">{planLabel(plan)}</p>
-                    {email && (
-                        <p className="mt-1 truncate text-xs text-warm-muted">{email}</p>
-                    )}
+                    {email && <p className="mt-1 truncate text-xs text-warm-muted">{email}</p>}
                 </div>
             </div>
 
@@ -235,9 +251,7 @@ function SidebarContent({
                         const Icon = item.icon;
                         const baseClass = item.active
                             ? 'border-olive/30 bg-olive/10 text-warm-dark shadow-sm'
-                            : item.locked
-                                ? 'border-warm-border/20 bg-surface-low text-warm-muted hover:border-warm-border/35 hover:bg-surface-mid/40'
-                                : 'border-transparent bg-transparent text-warm-dark/75 hover:border-warm-border/30 hover:bg-surface-mid/40';
+                            : 'border-transparent bg-transparent text-warm-dark/75 hover:border-warm-border/30 hover:bg-surface-mid/40';
 
                         return (
                             <Link
@@ -251,17 +265,10 @@ function SidebarContent({
                                         item.active ? 'bg-white text-olive' : 'bg-white/80 text-warm-muted'
                                     }`}
                                 >
-                                    {item.locked ? <Lock size={16} /> : <Icon size={16} />}
+                                    <Icon size={16} />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                        <p className="truncate text-sm font-medium">{item.label}</p>
-                                        {item.badge && (
-                                            <span className="rounded-full bg-warm-brown/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-warm-brown">
-                                                {item.badge}
-                                            </span>
-                                        )}
-                                    </div>
+                                    <p className="truncate text-sm font-medium">{item.label}</p>
                                     <p className="mt-0.5 text-xs text-warm-outline">{item.description}</p>
                                 </div>
                                 <ChevronRight
@@ -282,14 +289,25 @@ function SidebarContent({
 export default function DashboardShell({ userId, children }: DashboardShellProps) {
     const auth = useAuth();
     const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [desktopCollapsed, setDesktopCollapsed] = useState(false);
 
     useEffect(() => {
         setMobileOpen(false);
-    }, [pathname]);
+    }, [pathname, searchParams]);
 
-    const items = buildItems(pathname, userId, auth.plan);
+    const items = useMemo(
+        () =>
+            buildItems({
+                pathname,
+                searchParams,
+                userId,
+                plan: auth.plan,
+                archives: auth.archives,
+            }),
+        [pathname, searchParams, userId, auth.plan, auth.archives]
+    );
 
     return (
         <div className="min-h-screen bg-surface-low">
@@ -321,7 +339,7 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
 
                                 <nav className="flex flex-1 flex-col items-center gap-3">
                                     {items.map((item) => {
-                                        const Icon = item.locked ? Lock : item.icon;
+                                        const Icon = item.icon;
 
                                         return (
                                             <Link
@@ -331,9 +349,7 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                                                 className={`flex h-12 w-12 items-center justify-center rounded-2xl border transition-all ${
                                                     item.active
                                                         ? 'border-olive/30 bg-olive/10 text-olive shadow-sm'
-                                                        : item.locked
-                                                            ? 'border-warm-border/20 bg-surface-low text-warm-muted hover:bg-surface-mid/40'
-                                                            : 'border-transparent bg-transparent text-warm-dark/75 hover:border-warm-border/30 hover:bg-surface-mid/40'
+                                                        : 'border-transparent bg-transparent text-warm-dark/75 hover:border-warm-border/30 hover:bg-surface-mid/40'
                                                 }`}
                                             >
                                                 <Icon size={17} />
@@ -387,7 +403,7 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                         className="absolute inset-0 bg-warm-dark/55 backdrop-blur-sm"
                         onClick={() => setMobileOpen(false)}
                     />
-                    <div className="absolute inset-y-0 left-0 w-[88vw] max-w-sm border-r border-warm-border/30 bg-white shadow-2xl overflow-y-auto">
+                    <div className="absolute inset-y-0 left-0 w-[88vw] max-w-sm overflow-y-auto border-r border-warm-border/30 bg-white shadow-2xl">
                         <div className="flex items-center justify-end border-b border-warm-border/30 px-4 py-3">
                             <button
                                 onClick={() => setMobileOpen(false)}
