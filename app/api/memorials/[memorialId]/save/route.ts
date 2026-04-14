@@ -6,6 +6,11 @@ import {
 } from '@/lib/versioningServer';
 import { safeLogMemorialActivity } from '@/lib/activityLog';
 import { requireMemorialAccess } from '@/lib/apiAuth';
+import {
+    collectMemorialMediaAssetIds,
+    normalizeMemorialMediaData,
+    softDeleteMemorialMediaAssets,
+} from '@/lib/mediaManager';
 
 function generateSlug(name: string) {
     return name
@@ -69,29 +74,35 @@ export async function POST(
         const isOwner = context.role === 'owner';
 
         const oldData = buildMemorialData(memorial);
+        const normalizedData = await normalizeMemorialMediaData({
+            admin: supabaseAdmin,
+            memorialId,
+            userId: user.id,
+            data: memorialData,
+        });
         const now = new Date().toISOString();
 
         const updatePayload = {
-            step1: memorialData.step1,
-            step2: memorialData.step2,
-            step3: memorialData.step3,
-            step4: memorialData.step4,
-            step5: memorialData.step5,
-            step6: memorialData.step6,
-            step7: memorialData.step7,
-            step8: memorialData.step8,
-            step9: memorialData.step9,
-            completed_steps: memorialData.completedSteps || [],
-            full_name: memorialData.step1.fullName,
-            birth_date: memorialData.step1.birthDate || null,
-            death_date: memorialData.step1.deathDate || null,
-            profile_photo_url: memorialData.step1.profilePhotoPreview || null,
-            cover_photo_url: memorialData.step8?.coverPhotoPreview || null,
+            step1: normalizedData.step1,
+            step2: normalizedData.step2,
+            step3: normalizedData.step3,
+            step4: normalizedData.step4,
+            step5: normalizedData.step5,
+            step6: normalizedData.step6,
+            step7: normalizedData.step7,
+            step8: normalizedData.step8,
+            step9: normalizedData.step9,
+            completed_steps: normalizedData.completedSteps || [],
+            full_name: normalizedData.step1.fullName,
+            birth_date: normalizedData.step1.birthDate || null,
+            death_date: normalizedData.step1.deathDate || null,
+            profile_photo_url: normalizedData.step1.profilePhotoPreview || null,
+            cover_photo_url: normalizedData.step8?.coverPhotoPreview || null,
             slug: generateSlug(memorialData.step1.fullName) || memorial.slug || memorialId,
             mode: memorial.mode,
             status: memorial.status || 'draft',
             user_id: memorial.user_id,
-            paid: memorialData.paid ?? memorial.paid ?? false,
+            paid: normalizedData.paid ?? memorial.paid ?? false,
             updated_at: now,
         };
 
@@ -104,6 +115,19 @@ export async function POST(
 
         if (updateError) {
             throw updateError;
+        }
+
+        const removedAssetIds = [...collectMemorialMediaAssetIds(oldData)].filter(
+            (assetId) => !collectMemorialMediaAssetIds(normalizedData).has(assetId)
+        );
+
+        if (removedAssetIds.length > 0) {
+            await softDeleteMemorialMediaAssets(
+                supabaseAdmin,
+                memorialId,
+                removedAssetIds,
+                user.id
+            );
         }
 
         let historyRecorded = false;
@@ -119,7 +143,7 @@ export async function POST(
                 supabaseAdmin,
                 memorialId,
                 oldData,
-                newData: memorialData,
+                newData: normalizedData,
                 createdBy: user.id,
                 createdByName: actorName,
                 changeReason: isOwner ? 'owner_edit' : 'co_guardian_edit',

@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { secureUpload } from '@/lib/uploadService';
 import { useArchiveRole } from '../_hooks/useArchiveRole';
 import { useRoleSync } from '../_hooks/useRoleSync';
 
@@ -171,23 +172,30 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
       }
 
       if (type === 'photo' && photoFile) {
-        const ext = photoFile.name.split('.').pop() || 'jpg';
-        const path = `${memorialId}/witness-photos/${Date.now()}.${ext}`;
-
-        const { error: uploadError } = await supabase.storage.from('memorial-media').upload(path, photoFile, {
-          contentType: photoFile.type,
-          upsert: false,
+        const uploadResult = await secureUpload(photoFile, {
+          memorialId,
+          kind: 'contribution_photo',
+          metadata: {
+            caption: photoCaption.trim(),
+            year: photoYear.trim(),
+            relationship: relationship.trim(),
+          },
         });
 
-        if (uploadError) throw uploadError;
+        if (!uploadResult.success || !uploadResult.asset) {
+          throw new Error(uploadResult.error || 'Photo upload failed.');
+        }
 
-        const { data: urlData } = supabase.storage.from('memorial-media').getPublicUrl(path);
         contributionContent = {
           title: photoCaption.trim() || 'Photo',
-          url: urlData.publicUrl,
+          assetId: uploadResult.asset.id,
+          url: uploadResult.asset.publicUrl,
           caption: photoCaption.trim(),
           year: photoYear.trim(),
           relationship: relationship.trim(),
+          bucket: uploadResult.asset.bucket,
+          storagePath: uploadResult.asset.storagePath,
+          sha256_hash: uploadResult.asset.sha256Hash,
         };
       }
 

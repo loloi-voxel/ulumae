@@ -1,9 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
-import { Film, Upload, Trash2, Play, AlertCircle } from 'lucide-react';
-import { VideoContent } from '@/types/memorial';
-import { secureUpload } from '@/lib/uploadService';
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Film,
+  Play,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
+
 import TutorialPopup from '@/components/TutorialPopup';
-import { DRAFT_VIDEO_LIMIT, PAID_VIDEO_LIMIT, MAX_VIDEO_FILE_SIZE_BYTES } from '@/lib/constants';
+import { DRAFT_VIDEO_LIMIT, MAX_VIDEO_FILE_SIZE_BYTES, PAID_VIDEO_LIMIT } from '@/lib/constants';
+import { deleteMediaAssets, secureUpload } from '@/lib/uploadService';
+import type { VideoContent, VideoReference } from '@/types/memorial';
 
 interface Step9Props {
   data: VideoContent;
@@ -15,469 +28,505 @@ interface Step9Props {
   readOnly?: boolean;
 }
 
-export default function Step9Videos({ data, onUpdate, onNext, onBack, memorialId, isPaid = false, readOnly }: Step9Props) {
+type DeletedVideo = { video: VideoReference };
+
+const PAGE_SIZE = 8;
+
+function moveItem<T>(items: T[], from: number, to: number) {
+  const next = [...items];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+function statusLabel(status?: string) {
+  if (status === 'uploading') return 'Uploading';
+  if (status === 'error') return 'Needs retry';
+  if (status === 'deleting') return 'Removing';
+  return 'Ready';
+}
+
+async function getVideoDuration(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      const mins = Math.floor(video.duration / 60);
+      const secs = Math.floor(video.duration % 60);
+      URL.revokeObjectURL(video.src);
+      resolve(`${mins}:${secs.toString().padStart(2, '0')}`);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(video.src);
+      resolve('0:00');
+    };
+    video.src = URL.createObjectURL(file);
+  });
+}
+
+async function createVideoThumbnail(file: File) {
+  return new Promise<Blob>((resolve, reject) => {
+    const video = document.createElement('video');
+    const canvas = document.createElement('canvas');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+
+    video.onloadeddata = () => {
+      video.currentTime = Math.min(1, Math.max(video.duration / 3, 0.2));
+    };
+
+    video.onseeked = () => {
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 360;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        reject(new Error('Could not create a thumbnail.'));
+        return;
+      }
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(video.src);
+        if (!blob) {
+          reject(new Error('Could not create a thumbnail.'));
+          return;
+        }
+        resolve(blob);
+      }, 'image/png');
+    };
+
+    video.onerror = () => {
+      URL.revokeObjectURL(video.src);
+      reject(new Error('Could not load the selected video.'));
+    };
+
+    video.src = URL.createObjectURL(file);
+  });
+}
+
+export default function Step9Videos({
+  data,
+  onUpdate,
+  onNext,
+  onBack,
+  memorialId,
+  isPaid = false,
+  readOnly,
+}: Step9Props) {
   const videoRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<string>('');
+  const replaceRef = useRef<HTMLInputElement>(null);
+  const dataRef = useRef(data);
+
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedDetailId, setSelectedDetailId] = useState<string | null>(null);
+  const [replaceId, setReplaceId] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [recentlyDeleted, setRecentlyDeleted] = useState<DeletedVideo[]>([]);
 
   useEffect(() => {
-    // FIXED: Show tutorial every time user visits Step 9
-    // We check if they have any videos - if not, show tutorial
-    if (data.videos.length === 0 && !readOnly) { // Only show tutorial if not in readOnly mode
-      setTimeout(() => {
-        setShowTutorial(true);
-      }, 500);
-    }
-  }, [data.videos.length, readOnly]); // Added readOnly to dependency array
+    dataRef.current = data;
+  }, [data]);
 
-  const handleTutorialComplete = () => {
-    setShowTutorial(false);
+  useEffect(() => {
+    if (data.videos.length === 0 && !readOnly) {
+      const timer = window.setTimeout(() => setShowTutorial(true), 400);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [data.videos.length, readOnly]);
+
+  const applyUpdate = (updater: (current: VideoContent) => VideoContent) => {
+    const next = updater(dataRef.current);
+    dataRef.current = next;
+    onUpdate(next);
   };
 
-  const handleTutorialSkip = () => {
-    setShowTutorial(false);
+  const detailItem = useMemo(
+    () => data.videos.find((item) => item.id === selectedDetailId) || null,
+    [data.videos, selectedDetailId]
+  );
+
+  const maxVideos = isPaid ? PAID_VIDEO_LIMIT : DRAFT_VIDEO_LIMIT;
+
+  const ensureMemorial = () => {
+    if (!memorialId) {
+      setErrorMessage('Please wait for the memorial draft to finish initializing before adding videos.');
+      return false;
+    }
+    return true;
+  };
+
+  const uploadVideoFiles = async (files: File[]) => {
+    if (!ensureMemorial()) return;
+    const remaining = maxVideos - dataRef.current.videos.length;
+    if (remaining <= 0) {
+      setErrorMessage(`This memorial can hold up to ${maxVideos} video item(s).`);
+      return;
+    }
+
+    const accepted = files.slice(0, remaining);
+    if (accepted.length < files.length) {
+      setErrorMessage(`Only ${remaining} video slot(s) remain right now.`);
+    }
+
+    for (const file of accepted) {
+      if (file.size > MAX_VIDEO_FILE_SIZE_BYTES) {
+        setErrorMessage(`"${file.name}" exceeds the ${Math.round(MAX_VIDEO_FILE_SIZE_BYTES / 1024 / 1024)}MB video limit.`);
+        continue;
+      }
+
+      const tempId = `video-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const localUrl = URL.createObjectURL(file);
+      const duration = await getVideoDuration(file);
+      const pendingVideo: VideoReference = {
+        id: tempId,
+        file,
+        url: localUrl,
+        thumbnail: localUrl,
+        title: file.name.replace(/\.[^/.]+$/, ''),
+        description: '',
+        duration,
+        uploadStatus: 'uploading',
+        uploadError: null,
+      };
+
+      applyUpdate((current) => ({
+        ...current,
+        videos: [...current.videos, pendingVideo],
+      }));
+
+      const videoResult = await secureUpload(file, {
+        memorialId: memorialId!,
+        kind: 'video',
+        metadata: { duration },
+      });
+
+      if (!videoResult.success || !videoResult.asset) {
+        applyUpdate((current) => ({
+          ...current,
+          videos: current.videos.map((item) =>
+            item.id === tempId ? { ...item, uploadStatus: 'error', uploadError: videoResult.error || 'Upload failed.' } : item
+          ),
+        }));
+        setErrorMessage(videoResult.error || `Could not upload ${file.name}.`);
+        continue;
+      }
+
+      let thumbnailAsset = null;
+      try {
+        const thumbnailBlob = await createVideoThumbnail(file);
+        const thumbnailFile = new File([thumbnailBlob], `${tempId}.png`, { type: 'image/png' });
+        const thumbResult = await secureUpload(thumbnailFile, {
+          memorialId: memorialId!,
+          kind: 'video_thumbnail',
+          metadata: { videoAssetId: videoResult.asset.id },
+        });
+        if (thumbResult.success && thumbResult.asset) {
+          thumbnailAsset = thumbResult.asset;
+        }
+      } catch {
+        thumbnailAsset = null;
+      }
+
+      applyUpdate((current) => ({
+        ...current,
+        videos: current.videos.map((item) =>
+          item.id === tempId
+            ? {
+                ...item,
+                file: null,
+                url: videoResult.asset!.publicUrl,
+                thumbnail: thumbnailAsset?.publicUrl || videoResult.asset!.publicUrl,
+                assetId: videoResult.asset!.id,
+                bucket: videoResult.asset!.bucket,
+                storagePath: videoResult.asset!.storagePath,
+                originalFileName: videoResult.asset!.originalFileName,
+                mimeType: videoResult.asset!.mimeType,
+                fileSize: videoResult.asset!.fileSize,
+                uploadedAt: videoResult.asset!.createdAt,
+                uploadStatus: 'ready',
+                uploadError: null,
+                sha256_hash: videoResult.asset!.sha256Hash,
+                thumbnailAssetId: thumbnailAsset?.id || null,
+                thumbnailBucket: thumbnailAsset?.bucket || null,
+                thumbnailStoragePath: thumbnailAsset?.storagePath || null,
+                thumbnailMimeType: thumbnailAsset?.mimeType || null,
+                thumbnailFileSize: thumbnailAsset?.fileSize || null,
+                thumbnailUploadedAt: thumbnailAsset?.createdAt || null,
+              }
+            : item
+        ),
+      }));
+    }
+  };
+
+  const removeVideo = async (id: string) => {
+    if (readOnly) return;
+    const video = dataRef.current.videos.find((item) => item.id === id);
+    if (!video) return;
+    if (!window.confirm('Remove this video? You can restore it while you stay on this page.')) {
+      return;
+    }
+
+    try {
+      const assetIds = [video.assetId, video.thumbnailAssetId].filter(Boolean) as string[];
+      if (memorialId && assetIds.length > 0) {
+        await deleteMediaAssets(memorialId, assetIds, 'soft');
+      }
+      setRecentlyDeleted((current) => [{ video }, ...current]);
+      applyUpdate((current) => ({
+        ...current,
+        videos: current.videos.filter((item) => item.id !== id),
+      }));
+      setSelectedIds((current) => current.filter((value) => value !== id));
+      setSelectedDetailId(null);
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Could not remove this video.');
+    }
+  };
+
+  const restoreVideo = async (entry: DeletedVideo, index: number) => {
+    try {
+      const assetIds = [entry.video.assetId, entry.video.thumbnailAssetId].filter(Boolean) as string[];
+      if (memorialId && assetIds.length > 0) {
+        await deleteMediaAssets(memorialId, assetIds, 'restore');
+      }
+      applyUpdate((current) => ({
+        ...current,
+        videos: [entry.video, ...current.videos],
+      }));
+      setRecentlyDeleted((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Could not restore this video.');
+    }
+  };
+
+  const moveVideo = (id: string, direction: -1 | 1) => {
+    applyUpdate((current) => {
+      const index = current.videos.findIndex((item) => item.id === id);
+      const nextIndex = index + direction;
+      if (index === -1 || nextIndex < 0 || nextIndex >= current.videos.length) return current;
+      return {
+        ...current,
+        videos: moveItem(current.videos, index, nextIndex),
+      };
+    });
+  };
+
+  const updateVideoField = (id: string, field: 'title' | 'description', value: string) => {
+    applyUpdate((current) => ({
+      ...current,
+      videos: current.videos.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
+    }));
+  };
+
+  const bulkDelete = async () => {
+    for (const id of selectedIds) {
+      // eslint-disable-next-line no-await-in-loop
+      await removeVideo(id);
+    }
+    setSelectedIds([]);
   };
 
   const tutorialSteps = [
     {
       target: '[data-tutorial="videos"]',
-      title: 'Add Videos',
-      description: 'Gather videos that capture their voice, spirit, and memorable moments. Please stay on this page until gathering is complete!',
+      title: 'Add videos',
+      description: 'Upload, order, and recover video memories from this single media queue.',
       position: 'bottom' as const,
     },
   ];
 
-  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (readOnly) return; // Prevent upload if in readOnly mode
-
-    const files = Array.from(e.target.files || []);
-
-    if (!files.length) return;
-
-    if (!memorialId) {
-      setUploadError("Please preserve the memorial first (Basic Info step) before gathering videos.");
-      return;
-    }
-
-    // ⚠️ NOUVELLE VÉRIFICATION DE LIMITE
-    const currentCount = data.videos.length;
-    const maxAllowed = isPaid ? PAID_VIDEO_LIMIT : DRAFT_VIDEO_LIMIT;
-    const remaining = maxAllowed - currentCount;
-
-    if (remaining <= 0) {
-      setUploadError(`Maximum ${maxAllowed} videos per archive. You have already gathered ${currentCount} video(s).`);
-      return;
-    }
-
-    const filesToUpload = files.slice(0, remaining);
-
-    if (files.length > remaining) {
-      setUploadError(`You selected ${files.length} videos, but only ${remaining} slot(s) remaining. Will gather ${remaining} video(s).`);
-      // Continue l'upload des fichiers autorisés après 3 secondes
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      setUploadError(null);
-    }
-
-    setUploading(true);
-    setUploadError(null);
-    const newVideos: VideoContent['videos'] = [];
-
-    for (let i = 0; i < filesToUpload.length; i++) { // Use filesToUpload
-      const file = filesToUpload[i];
-      setUploadProgress(`Gathering ${i + 1} of ${filesToUpload.length}...`);
-
-      // Check file size
-      if (file.size > MAX_VIDEO_FILE_SIZE_BYTES) {
-        setUploadError(`File "${file.name}" is too large (max ${Math.round(MAX_VIDEO_FILE_SIZE_BYTES / 1024 / 1024)}MB). Please compress it first.`);
-        continue;
-      }
-
-      try {
-        const fileExt = file.name.split('.').pop() || 'mp4';
-        const videoUuid = crypto.randomUUID();
-        const videoPath = `${memorialId}/${videoUuid}.${fileExt}`;
-
-        // 1. Upload Video via Secure API (Calculates Hash)
-        const uploadResult = await secureUpload(file, 'videos', videoPath);
-
-        if (!uploadResult.success) {
-          throw new Error(`Upload failed: ${uploadResult.error}`);
-        }
-
-        const videoUrl = uploadResult.url!;
-        const videoHash = uploadResult.hash; // We get the SHA-256 hash here
-
-        // 2. Generate thumbnail and upload via secure API
-        let thumbnailUrl = '';
-        try {
-          const thumbnailBlob = await generateThumbnail(file);
-          const thumbnailFile = new File([thumbnailBlob], `${videoUuid}.png`, { type: 'image/png' });
-          const thumbnailPath = `${memorialId}/thumbnails/${videoUuid}.png`;
-
-          const thumbResult = await secureUpload(thumbnailFile, 'videos', thumbnailPath);
-          if (thumbResult.success && thumbResult.url) {
-            thumbnailUrl = thumbResult.url;
-          }
-        } catch (thumbErr) {
-          console.warn('Thumbnail generation failed, using default:', thumbErr);
-        }
-
-        // 3. Get duration
-        const duration = await getVideoDuration(file);
-
-        // 4. Add to list with HASH
-        newVideos.push({
-          id: videoUuid,
-          url: videoUrl, // Use URL from secure upload
-          thumbnail: thumbnailUrl || videoUrl,
-          title: file.name.replace(/\.[^/.]+$/, ''),
-          description: '', // Add description field
-          duration,
-          sha256_hash: videoHash, // <--- STORE THE HASH
-        });
-
-      } catch (error: any) {
-        console.error(`Error uploading ${file.name}:`, error);
-        setUploadError(`Failed to gather "${file.name}": ${error.message}`);
-      }
-    }
-
-    if (newVideos.length > 0) {
-      onUpdate({ videos: [...data.videos, ...newVideos] });
-    }
-
-    setUploading(false);
-    setUploadProgress('');
-
-    // Reset input
-    if (videoRef.current) videoRef.current.value = '';
-  };
-
-  const generateThumbnail = (file: File): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      const video = document.createElement('video');
-      const canvas = document.createElement('canvas');
-
-      video.preload = 'metadata';
-      video.muted = true;
-      video.playsInline = true;
-
-      video.onloadeddata = () => {
-        video.currentTime = Math.min(1, video.duration / 2); // Seek to 1s or middle
-      };
-
-      video.onseeked = () => {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error('Could not get canvas context'));
-          return;
-        }
-
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        canvas.toBlob((blob) => {
-          URL.revokeObjectURL(video.src);
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error('Thumbnail generation failed'));
-          }
-        }, 'image/png');
-      };
-
-      video.onerror = (e) => {
-        URL.revokeObjectURL(video.src);
-        reject(new Error('Video load failed'));
-      };
-
-      video.src = URL.createObjectURL(file);
-    });
-  };
-
-  const getVideoDuration = (file: File): Promise<string> => {
-    return new Promise((resolve) => {
-      const video = document.createElement('video');
-      video.preload = 'metadata';
-      video.muted = true;
-      video.playsInline = true;
-
-      video.onloadedmetadata = () => {
-        const mins = Math.floor(video.duration / 60);
-        const secs = Math.floor(video.duration % 60);
-        URL.revokeObjectURL(video.src);
-        resolve(`${mins}:${secs.toString().padStart(2, '0')}`);
-      };
-
-      video.onerror = () => {
-        URL.revokeObjectURL(video.src);
-        resolve("0:00");
-      };
-
-      video.src = URL.createObjectURL(file);
-    });
-  };
-
-  const removeVideo = async (id: string) => {
-    if (readOnly) return; // Prevent removal if in readOnly mode
-    if (!confirm('Remove this video from the memorial? This change will be saved immediately.')) return;
-
-    // Find the video to get its path
-    const video = data.videos.find(v => v.id === id);
-    if (video && memorialId) {
-      try {
-        const videoPathInStorage = video.url.split('/videos/')[1]; // e.g., memorialId/uuid.mp4
-        const thumbnailPathInStorage = `${memorialId}/thumbnails/${id}.png`;
-
-        const paths = [videoPathInStorage, thumbnailPathInStorage].filter(Boolean);
-
-        await fetch('/api/media/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bucket: 'videos',
-            paths,
-            memorialId,
-          }),
-        });
-      } catch (err) {
-        console.warn('Could not delete video from storage:', err);
-      }
-    }
-
-    onUpdate({ videos: data.videos.filter(v => v.id !== id) });
-  };
-
-  const updateVideo = (id: string, field: 'title' | 'description', value: string) => {
-    if (readOnly) return; // Prevent update if in readOnly mode
-    onUpdate({
-      videos: data.videos.map(v => (v.id === id ? { ...v, [field]: value } : v))
-    });
-  };
-
-  const maxVideos = isPaid ? PAID_VIDEO_LIMIT : DRAFT_VIDEO_LIMIT;
-
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-      <div className="mb-12">
-        <h2 className="font-serif text-4xl text-warm-dark mb-3">
-          Video Memories
-        </h2>
-        <p className="text-warm-dark/60 text-lg">
-          Gather videos that capture their voice, spirit, and memorable moments.
-        </p>
-        <p className="text-xs text-warm-dark/30 italic mt-1 mb-4">
-          Moving images that will let future generations see them as they were.
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+      <div className="mb-10">
+        <h2 className="font-serif text-4xl text-warm-dark">Video memories</h2>
+        <p className="mt-3 text-lg text-warm-dark/60">
+          Secure uploads, ordering, and recovery now work the same way they do for photos.
         </p>
       </div>
 
-      <div className="space-y-8">
-        {/* Error Display */}
-        {uploadError && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-            <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-red-800 mb-1">Could not be gathered</p>
-              <p className="text-sm text-red-700">{uploadError}</p>
-            </div>
-            <button
-              onClick={() => setUploadError(null)}
-              className="text-red-600 hover:text-red-800"
-            >
-              ✕
+      <div className="space-y-6">
+        {errorMessage && (
+          <div className="flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <p>{errorMessage}</p>
+            <button onClick={() => setErrorMessage(null)} className="text-red-500 hover:text-red-700">
+              <X size={16} />
             </button>
           </div>
         )}
 
-        {/* Upload Guidelines */}
-        <div className="p-6 bg-gradient-to-br from-warm-brown/5 to-olive/5 rounded-xl border border-warm-border/30">
-          <h3 className="font-semibold text-warm-dark mb-3 flex items-center gap-2">
-            <Film size={18} className="text-warm-brown" />
-            📹 Video Guidelines
-          </h3>
-          <ul className="space-y-2 text-sm text-warm-dark/70">
-            <li className="flex items-start gap-2">
-              <span className="text-olive mt-0.5">•</span>
-              <span><strong>Best quality:</strong> MP4 format recommended</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-olive mt-0.5">•</span>
-              <span><strong>File size:</strong> Maximum 50MB per video</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-warm-brown mt-0.5">⚠️</span>
-              <span><strong>Important:</strong> Stay on this page until gathering completes!</span>
-            </li>
-          </ul>
+        <div className="rounded-2xl border border-warm-border/30 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-warm-dark">Video gallery</h3>
+              <p className="text-sm text-warm-dark/50">
+                {data.videos.length} of {maxVideos} video slot(s) used.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {!readOnly && selectedIds.length > 0 && (
+                <button onClick={bulkDelete} className="inline-flex items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
+                  <Trash2 size={16} />
+                  Delete selected
+                </button>
+              )}
+              {!readOnly && (
+                <button data-tutorial="videos" onClick={() => videoRef.current?.click()} className="inline-flex items-center gap-2 rounded-xl border border-warm-border/30 px-3 py-2 text-sm text-warm-dark/70 hover:bg-warm-border/10">
+                  <Plus size={16} />
+                  Add videos
+                </button>
+              )}
+            </div>
+          </div>
+
+          {data.videos.length === 0 ? (
+            <div className="mt-5 flex min-h-[16rem] items-center justify-center rounded-2xl border-2 border-dashed border-warm-border/40 bg-warm-border/10 text-center text-warm-dark/40">
+              <div>
+                <Film size={32} className="mx-auto mb-3" />
+                <p>No videos yet.</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                {data.videos.slice(0, visibleCount).map((video, index) => (
+                  <div key={video.id} className="rounded-2xl border border-warm-border/30 p-4 shadow-sm">
+                    <div className="relative overflow-hidden rounded-xl bg-warm-dark/10">
+                      <button type="button" onClick={() => setSelectedDetailId(video.id)} className="block w-full">
+                        <video controls preload="metadata" className="aspect-video w-full object-cover" poster={video.thumbnail}>
+                          <source src={video.url} type={video.mimeType || 'video/mp4'} />
+                        </video>
+                      </button>
+                      {!readOnly && (
+                        <label className="absolute left-3 top-3 inline-flex items-center gap-2 rounded-full bg-white/90 px-2 py-1 text-xs shadow-sm">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(video.id)}
+                            onChange={(event) =>
+                              setSelectedIds((current) =>
+                                event.target.checked ? [...current, video.id] : current.filter((value) => value !== video.id)
+                              )
+                            }
+                          />
+                          Select
+                        </label>
+                      )}
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      <div className="flex items-center justify-between text-xs text-warm-dark/45">
+                        <span>{statusLabel(video.uploadStatus)}</span>
+                        {!readOnly && (
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => moveVideo(video.id, -1)} className="rounded-lg border border-warm-border/30 p-1 hover:bg-warm-border/10" disabled={index === 0}>
+                              <ChevronLeft size={14} />
+                            </button>
+                            <button onClick={() => moveVideo(video.id, 1)} className="rounded-lg border border-warm-border/30 p-1 hover:bg-warm-border/10" disabled={index === data.videos.length - 1}>
+                              <ChevronRight size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <input type="text" value={video.title} onChange={(event) => updateVideoField(video.id, 'title', event.target.value)} disabled={readOnly} placeholder="Title" className="rounded-xl border border-warm-border/30 px-3 py-2 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
+                      <textarea value={video.description || ''} onChange={(event) => updateVideoField(video.id, 'description', event.target.value)} rows={3} disabled={readOnly} placeholder="Description" className="rounded-xl border border-warm-border/30 px-3 py-3 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
+                      <div className="flex items-center justify-between text-xs text-warm-dark/45">
+                        <span className="inline-flex items-center gap-1">
+                          <Play size={12} />
+                          {video.duration || '0:00'}
+                        </span>
+                        {!readOnly && (
+                          <button onClick={() => removeVideo(video.id)} className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {visibleCount < data.videos.length && (
+                <div className="pt-4 text-center">
+                  <button onClick={() => setVisibleCount((current) => current + PAGE_SIZE)} className="rounded-xl border border-warm-border/30 px-4 py-2 text-sm text-warm-dark/70 hover:bg-warm-border/10">
+                    Load more videos
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        {/* Video Grid */}
-        {data.videos.length > 0 && (
-          <div>
-            <h3 className="text-lg font-semibold text-warm-dark mb-4">
-              Gathered Videos ({data.videos.length} / {maxVideos})
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              {data.videos.map((video) => (
-                <div
-                  key={video.id}
-                  className="relative p-4 bg-white border-2 border-warm-border/40 rounded-xl group hover:border-olive/40 transition-all"
-                >
-                  {/* Video Player */}
-                  <div className="relative aspect-video rounded-lg overflow-hidden bg-warm-dark/10 mb-3">
-                    <video
-                      controls
-                      preload="metadata"
-                      className="w-full h-full object-cover"
-                      poster={video.thumbnail}
-                    >
-                      <source src={video.url} type="video/mp4" />
-                      Your browser does not support the video tag.
-                    </video>
-                  </div>
-
-                  {/* Video Title & Description */}
-                  <div className="flex flex-col gap-2">
-                    <input
-                      type="text"
-                      value={video.title}
-                      onChange={(e) => updateVideo(video.id, 'title', e.target.value)}
-                      placeholder="Video Title"
-                      className="w-full px-3 py-2 border border-warm-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive/30 focus:border-olive transition-all text-sm font-medium disabled:opacity-60 disabled:bg-warm-border/10"
-                      disabled={readOnly}
-                    />
-                    <input
-                      type="text"
-                      value={video.description || ''}
-                      onChange={(e) => updateVideo(video.id, 'description', e.target.value)}
-                      placeholder="Description (optional)"
-                      className="w-full px-3 py-2 border border-warm-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-olive/30 focus:border-olive transition-all text-sm disabled:opacity-60 disabled:bg-warm-border/10"
-                      disabled={readOnly}
-                    />
-                  </div>
-
-                  {/* File Info */}
-                  <div className="flex items-center justify-between text-xs text-warm-dark/60 mt-2">
-                    <span className="flex items-center gap-1">
-                      <Film size={12} /> Video
-                    </span>
-                    {video.duration && (
-                      <span className="flex items-center gap-1">
-                        <Play size={12} />
-                        {video.duration}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Remove Button */}
-                  {!readOnly && (
-                    <button
-                      onClick={() => removeVideo(video.id)}
-                      className="absolute top-2 right-2 p-2 bg-warm-dark/80 hover:bg-warm-dark rounded-full transition-all opacity-100 lg:opacity-0 lg:group-hover:opacity-100 shadow-lg"
-                      title="Remove video"
-                    >
-                      <Trash2 size={14} className="text-surface-low" />
-                    </button>
-                  )}
+        {recentlyDeleted.length > 0 && (
+          <div className="rounded-2xl border border-warm-border/30 bg-white p-5 shadow-sm">
+            <h3 className="text-lg font-semibold text-warm-dark">Recently removed</h3>
+            <p className="text-sm text-warm-dark/50">You can restore removed videos while you stay on this page.</p>
+            <div className="mt-4 space-y-3">
+              {recentlyDeleted.map((entry, index) => (
+                <div key={`${entry.video.id}-${index}`} className="flex items-center justify-between rounded-xl border border-warm-border/30 px-4 py-3 text-sm">
+                  <span className="text-warm-dark/70">{entry.video.title || 'Untitled video'}</span>
+                  <button onClick={() => restoreVideo(entry, index)} className="rounded-xl border border-warm-border/30 px-3 py-2 text-sm text-warm-dark/70 hover:bg-warm-border/10">
+                    Restore
+                  </button>
                 </div>
               ))}
             </div>
           </div>
         )}
+      </div>
 
-        {/* Upload Area */}
-        {!readOnly && (
-          <div
-            onClick={() => !uploading && data.videos.length < maxVideos && videoRef.current?.click()}
-            data-tutorial="videos"
-            className={`border-2 border-dashed rounded-xl p-16 text-center transition-all ${uploading
-              ? 'opacity-70 cursor-wait'
-              : data.videos.length >= maxVideos
-                ? 'border-warm-border/20 cursor-not-allowed opacity-50'
-                : 'border-warm-border/40 cursor-pointer hover:border-olive/40 hover:bg-olive/5'
-              }`}
-          >
-            {uploading ? (
-              <div className="flex flex-col items-center justify-center">
-                <div className="w-12 h-12 border-4 border-olive/30 border-t-olive rounded-full animate-spin mb-4" />
-                <p className="text-olive font-medium text-lg">{uploadProgress}</p>
-                <p className="text-warm-dark/60 text-sm mt-2">⚠️ Please stay on this page until gathering completes</p>
+      <input ref={videoRef} type="file" accept="video/*" multiple className="hidden" onChange={(event) => { const files = Array.from(event.target.files || []); if (files.length > 0) uploadVideoFiles(files); event.currentTarget.value = ''; }} disabled={readOnly} />
+      <input ref={replaceRef} type="file" accept="video/*" className="hidden" onChange={() => undefined} />
+
+      <div className="mt-10 flex gap-4">
+        <button onClick={onBack} className="rounded-xl border border-warm-border/30 px-6 py-4 font-medium hover:bg-warm-border/10">
+          Return
+        </button>
+        <button onClick={onNext} className="flex-1 rounded-xl bg-olive px-6 py-4 font-medium text-warm-bg hover:bg-olive/90">
+          Continue to review
+        </button>
+      </div>
+
+      {detailItem && (
+        <div className="fixed inset-0 z-[120] bg-warm-dark/60 p-4 backdrop-blur-sm">
+          <div className="mx-auto flex h-full max-w-4xl items-center justify-center">
+            <div className="w-full rounded-3xl bg-white p-6 shadow-2xl">
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-warm-dark">{detailItem.title || 'Video'}</h3>
+                  <p className="text-sm text-warm-dark/50">{detailItem.duration || '0:00'}</p>
+                </div>
+                <button onClick={() => setSelectedDetailId(null)} className="rounded-full p-2 hover:bg-warm-border/10">
+                  <X size={18} />
+                </button>
               </div>
-            ) : data.videos.length >= maxVideos ? (
-              <>
-                <div className="mb-6 relative inline-block">
-                  <div className="w-24 h-24 bg-warm-border/20 rounded-full flex items-center justify-center">
-                    <Film size={48} className="text-warm-dark/30" />
-                  </div>
+              <video controls preload="metadata" className="aspect-video w-full rounded-2xl bg-warm-dark/10" poster={detailItem.thumbnail}>
+                <source src={detailItem.url} type={detailItem.mimeType || 'video/mp4'} />
+              </video>
+              {!readOnly && (
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <button onClick={() => moveVideo(detailItem.id, -1)} className="rounded-xl border border-warm-border/30 px-4 py-2 text-sm text-warm-dark/70 hover:bg-warm-border/10">
+                    Move earlier
+                  </button>
+                  <button onClick={() => moveVideo(detailItem.id, 1)} className="rounded-xl border border-warm-border/30 px-4 py-2 text-sm text-warm-dark/70 hover:bg-warm-border/10">
+                    Move later
+                  </button>
+                  <button onClick={() => removeVideo(detailItem.id)} className="rounded-xl border border-red-200 px-4 py-2 text-sm text-red-700 hover:bg-red-50">
+                    Delete
+                  </button>
                 </div>
-                <h3 className="text-xl font-semibold text-warm-dark/40 mb-2">
-                  Maximum Videos Reached
-                </h3>
-                <p className="text-warm-dark/40 mb-6 max-w-md mx-auto">
-                  You have gathered the maximum of {maxVideos} videos for this archive.
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="mb-6 relative inline-block">
-                  <div className="w-24 h-24 bg-gradient-to-br from-warm-brown/20 to-olive/20 rounded-full flex items-center justify-center">
-                    <Film size={48} className="text-warm-dark/40" />
-                  </div>
-                </div>
-                <h3 className="text-xl font-semibold text-warm-dark mb-2">
-                  {data.videos.length === 0 ? "Gather Your First Video" : "Gather More Videos"}
-                </h3>
-                <p className="text-warm-dark/60 mb-6 max-w-md mx-auto">
-                  Select video files to gather. You can select multiple videos at once.
-                </p>
-                <div className="inline-flex items-center gap-2 px-6 py-3 bg-olive hover:bg-olive/90 text-surface-low rounded-xl font-medium transition-all">
-                  <Upload size={20} />
-                  Select Video Files
-                </div>
-              </>
-            )}
+              )}
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
-        <input
-          ref={videoRef}
-          type="file"
-          accept="video/*"
-          multiple
-          onChange={handleVideoUpload}
-          className="hidden"
-          disabled={uploading || readOnly}
-        />
-      </div>
-
-      {/* Navigation */}
-      <div className="mt-12 flex gap-4">
-        <button
-          onClick={onBack}
-          disabled={uploading}
-          className="px-6 py-4 border border-warm-border/40 rounded-xl hover:bg-warm-border/10 transition-all font-medium disabled:opacity-50"
-        >
-          ← Return
-        </button>
-        <button
-          onClick={onNext}
-          disabled={uploading}
-          className="flex-1 bg-olive hover:bg-olive/90 text-warm-bg py-4 px-6 rounded-xl font-medium transition-all disabled:opacity-50"
-        >
-          {data.videos.length > 0 ? 'Preserve & continue to Review →' : 'Continue without — their presence awaits →'}
-        </button>
-      </div>
-
-      {/* Tutorial Popup */}
       {showTutorial && (
         <TutorialPopup
           steps={tutorialSteps}
-          onComplete={handleTutorialComplete}
-          onSkip={handleTutorialSkip}
+          onComplete={() => setShowTutorial(false)}
+          onSkip={() => setShowTutorial(false)}
         />
       )}
     </div>

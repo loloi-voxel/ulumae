@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { Upload, X, Calendar, MapPin, Quote, User, AlertTriangle, Users, Eye, ArrowRight, Loader2, Lock } from 'lucide-react';
 import { BasicInfo } from '@/types/memorial';
+import { deleteMediaAssets, secureUpload } from '@/lib/uploadService';
 
 interface Step1Props {
     data: BasicInfo;
@@ -16,36 +17,96 @@ export default function Step1BasicInfo({ data, onUpdate, onNext, readOnly, memor
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [potentialDuplicates, setPotentialDuplicates] = useState<any[]>([]);
     const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+    const [photoError, setPhotoError] = useState<string | null>(null);
 
 
     const handleChange = (field: keyof BasicInfo, value: any) => {
         onUpdate({ ...data, [field]: value });
     };
 
-    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
+        if (!file) return;
+        if (!memorialId) {
+            setPhotoError('Please wait for the memorial draft to finish initializing before adding a profile photo.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+            const preview = reader.result as string;
+            onUpdate({
+                ...data,
+                profilePhoto: file,
+                profilePhotoPreview: preview,
+                profilePhotoUploadStatus: 'uploading',
+                profilePhotoUploadError: null,
+            });
+            setPhotoError(null);
+
+            const result = await secureUpload(file, {
+                memorialId,
+                kind: 'profile_photo',
+            });
+
+            if (!result.success || !result.asset) {
+                const errorMessage = result.error || 'Could not upload the profile photo.';
+                setPhotoError(errorMessage);
                 onUpdate({
                     ...data,
                     profilePhoto: file,
-                    profilePhotoPreview: reader.result as string,
+                    profilePhotoPreview: preview,
+                    profilePhotoUploadStatus: 'error',
+                    profilePhotoUploadError: errorMessage,
                 });
-            };
-            reader.readAsDataURL(file);
-        }
+                return;
+            }
+
+            onUpdate({
+                ...data,
+                profilePhoto: null,
+                profilePhotoPreview: result.asset.publicUrl,
+                profilePhotoAssetId: result.asset.id,
+                profilePhotoBucket: result.asset.bucket,
+                profilePhotoStoragePath: result.asset.storagePath,
+                profilePhotoMimeType: result.asset.mimeType,
+                profilePhotoFileSize: result.asset.fileSize,
+                profilePhotoUploadedAt: result.asset.createdAt,
+                profilePhotoUploadStatus: 'ready',
+                profilePhotoUploadError: null,
+                profilePhotoHash: result.asset.sha256Hash,
+            });
+        };
+        reader.readAsDataURL(file);
     };
 
-    const removePhoto = () => {
+    const removePhoto = async () => {
         if (!window.confirm('Remove the profile photo? This change will be saved to the memorial.')) {
             return;
+        }
+        if (memorialId && data.profilePhotoAssetId) {
+            try {
+                await deleteMediaAssets(memorialId, [data.profilePhotoAssetId], 'soft');
+            } catch (error: any) {
+                setPhotoError(error.message || 'Could not remove the profile photo.');
+                return;
+            }
         }
         onUpdate({
             ...data,
             profilePhoto: null,
             profilePhotoPreview: null,
+            profilePhotoAssetId: null,
+            profilePhotoBucket: null,
+            profilePhotoStoragePath: null,
+            profilePhotoMimeType: null,
+            profilePhotoFileSize: null,
+            profilePhotoUploadedAt: null,
+            profilePhotoUploadStatus: 'idle',
+            profilePhotoUploadError: null,
+            profilePhotoHash: undefined,
         });
+        setPhotoError(null);
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
         }
@@ -387,6 +448,16 @@ export default function Step1BasicInfo({ data, onUpdate, onNext, readOnly, memor
                             onChange={handlePhotoUpload}
                             className="hidden"
                         />
+                        {(photoError || data.profilePhotoUploadError) && (
+                            <p className="text-xs text-red-600 mt-2 text-center">
+                                {photoError || data.profilePhotoUploadError}
+                            </p>
+                        )}
+                        {data.profilePhotoUploadStatus === 'uploading' && (
+                            <p className="text-xs text-olive mt-2 text-center">
+                                Uploading profile photo...
+                            </p>
+                        )}
                         <p className="text-xs text-warm-outline mt-2 text-center">
                             You can add more photos later in the gallery
                         </p>

@@ -1,5 +1,50 @@
 // types/memorial.ts - UPDATED with Step 9 for Videos
 
+import type { MediaBucket, MediaReferenceFields } from '@/types/media';
+
+export interface MediaImageReference extends MediaReferenceFields {
+  id: string;
+  file?: File | null;
+  preview: string;
+  caption: string;
+  year: string;
+  type: 'photo' | 'video';
+  sha256_hash?: string;
+}
+
+export interface InteractiveMediaReference extends MediaReferenceFields {
+  id: string;
+  file?: File | null;
+  preview: string;
+  description: string;
+  sha256_hash?: string;
+}
+
+export interface VoiceRecordingReference extends MediaReferenceFields {
+  id: string;
+  file?: File | null;
+  title: string;
+  url?: string | null;
+  sha256_hash?: string;
+}
+
+export interface VideoReference extends MediaReferenceFields {
+  id: string;
+  file?: File | null;
+  url: string;
+  thumbnail: string;
+  thumbnailAssetId?: string | null;
+  thumbnailBucket?: MediaBucket | null;
+  thumbnailStoragePath?: string | null;
+  thumbnailMimeType?: string | null;
+  thumbnailFileSize?: number | null;
+  thumbnailUploadedAt?: string | null;
+  title: string;
+  duration?: string;
+  description?: string;
+  sha256_hash?: string;
+}
+
 export interface BasicInfo {
   fullName: string;
   birthDate: string;
@@ -11,6 +56,14 @@ export interface BasicInfo {
   deathPlace: string;
   profilePhoto: File | null;
   profilePhotoPreview: string | null;
+  profilePhotoAssetId?: string | null;
+  profilePhotoBucket?: MediaBucket | null;
+  profilePhotoStoragePath?: string | null;
+  profilePhotoMimeType?: string | null;
+  profilePhotoFileSize?: number | null;
+  profilePhotoUploadedAt?: string | null;
+  profilePhotoUploadStatus?: MediaReferenceFields['uploadStatus'];
+  profilePhotoUploadError?: string | null;
   profilePhotoHash?: string; // NEW: Store hash for profile photo
   epitaph: string;
 }
@@ -139,43 +192,24 @@ export interface MemoriesStories {
 export interface MediaLegacy {
   coverPhoto: File | null;
   coverPhotoPreview: string | null;
+  coverPhotoAssetId?: string | null;
+  coverPhotoBucket?: MediaBucket | null;
+  coverPhotoStoragePath?: string | null;
+  coverPhotoMimeType?: string | null;
+  coverPhotoFileSize?: number | null;
+  coverPhotoUploadedAt?: string | null;
+  coverPhotoUploadStatus?: MediaReferenceFields['uploadStatus'];
+  coverPhotoUploadError?: string | null;
   coverPhotoHash?: string; // NEW: Store hash for cover photo
-  gallery: Array<{
-    id: string;
-    file: File;
-    preview: string;
-    caption: string;
-    year: string;
-    type: 'photo' | 'video';
-    sha256_hash?: string; // NEW: Store hash for gallery items
-  }>;
-  interactiveGallery: Array<{
-    id: string;
-    file: File;
-    preview: string;
-    description: string;
-    sha256_hash?: string; // NEW: Store hash for interactive items
-  }>;
-  voiceRecordings: Array<{
-    id: string;
-    file: File;
-    title: string;
-    sha256_hash?: string; // NEW: Store hash for voice recordings
-  }>;
+  gallery: MediaImageReference[];
+  interactiveGallery: InteractiveMediaReference[];
+  voiceRecordings: VoiceRecordingReference[];
   legacyStatement: string;
 }
 
 // NEW: Step 9 for Videos only
 export interface VideoContent {
-  videos: Array<{
-    id: string;
-    url: string; // Public URL from Supabase Storage
-    thumbnail: string; // Public URL of thumbnail image
-    title: string;
-    duration?: string;
-    description?: string; // NEW: Description for video
-    sha256_hash?: string; // NEW: Store hash for videos
-  }>;
+  videos: VideoReference[];
 }
 
 

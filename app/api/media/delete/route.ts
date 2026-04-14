@@ -1,66 +1,89 @@
-// app/api/media/delete/route.ts
-// Server-side storage object deletion with proper auth.
-// Replaces direct client-side supabase.storage.remove() calls.
 import { NextRequest, NextResponse } from 'next/server';
-import { requireMemorialAccess } from '@/lib/apiAuth';
 
-const ALLOWED_BUCKETS = ['memorial-media', 'profile-photos', 'gallery', 'videos'];
+import { requireMemorialAccess } from '@/lib/apiAuth';
+import {
+  hardDeleteMemorialMediaAssets,
+  restoreMemorialMediaAssets,
+  softDeleteMemorialMediaAssets,
+} from '@/lib/mediaManager';
+import type { MediaDeleteResponse } from '@/types/media';
+
+type DeleteMode = 'soft' | 'restore' | 'hard';
+
+function buildErrorResponse(
+  status: number,
+  code: string,
+  message: string,
+  retryable = false
+) {
+  const payload: MediaDeleteResponse = {
+    success: false,
+    error: {
+      code,
+      message,
+      retryable,
+    },
+  };
+
+  return NextResponse.json(payload, { status });
+}
 
 export async function POST(request: NextRequest) {
-    try {
-        const { bucket, paths, memorialId } = await request.json();
+  try {
+    const body = (await request.json()) as {
+      memorialId?: string;
+      assetIds?: string[];
+      mode?: DeleteMode;
+    };
 
-        if (!bucket || !Array.isArray(paths) || paths.length === 0 || !memorialId) {
-            return NextResponse.json(
-                { error: 'Missing bucket, paths, or memorialId' },
-                { status: 400 }
-            );
-        }
+    const memorialId = String(body.memorialId || '').trim();
+    const assetIds = Array.isArray(body.assetIds)
+      ? body.assetIds.filter((value) => typeof value === 'string' && value.trim())
+      : [];
+    const mode: DeleteMode = body.mode === 'restore' || body.mode === 'hard'
+      ? body.mode
+      : 'soft';
 
-        if (!ALLOWED_BUCKETS.includes(bucket)) {
-            return NextResponse.json(
-                { error: 'Invalid bucket' },
-                { status: 400 }
-            );
-        }
-
-        // Verify every path starts with the claimed memorialId to prevent
-        // deletion of objects belonging to other memorials.
-        const allPathsValid = paths.every(
-            (p: string) => typeof p === 'string' && p.startsWith(`${memorialId}/`)
-        );
-        if (!allPathsValid) {
-            return NextResponse.json(
-                { error: 'All paths must belong to the specified memorial' },
-                { status: 400 }
-            );
-        }
-
-        // Auth: user must have edit_archive permission on this memorial
-        const access = await requireMemorialAccess({
-            memorialId,
-            action: 'edit_archive',
-        });
-        if (!access.ok) return access.response;
-
-        const { admin } = access;
-
-        const { error } = await admin.storage.from(bucket).remove(paths);
-
-        if (error) {
-            console.error('[Media Delete] Storage error:', error);
-            return NextResponse.json(
-                { error: error.message },
-                { status: 500 }
-            );
-        }
-
-        return NextResponse.json({ success: true, deleted: paths.length });
-    } catch (error: any) {
-        console.error('[Media Delete] Error:', error);
-        return NextResponse.json(
-            { error: 'Internal server error' },
-            { status: 500 }
-        );
+    if (!memorialId) {
+      return buildErrorResponse(400, 'missing_memorial', 'A memorial is required.');
     }
+
+    if (assetIds.length === 0) {
+      return buildErrorResponse(400, 'missing_assets', 'Select at least one media item.');
+    }
+
+    const access = await requireMemorialAccess({
+      memorialId,
+      action: 'edit_archive',
+    });
+    if (!access.ok) return access.response;
+
+    const { admin, user } = access;
+
+    if (mode === 'restore') {
+      await restoreMemorialMediaAssets(admin, memorialId, assetIds);
+    } else if (mode === 'hard') {
+      await hardDeleteMemorialMediaAssets(admin, memorialId, assetIds);
+    } else {
+      await softDeleteMemorialMediaAssets(admin, memorialId, assetIds, user.id);
+    }
+
+    const response: MediaDeleteResponse = {
+      success: true,
+      data: {
+        assetIds,
+        mode,
+      },
+    };
+
+    return NextResponse.json(response);
+  } catch (error: any) {
+    console.error('[media-delete]', error);
+    return buildErrorResponse(
+      500,
+      'delete_failed',
+      error?.message || 'The media change could not be saved.',
+      true
+    );
+  }
 }
