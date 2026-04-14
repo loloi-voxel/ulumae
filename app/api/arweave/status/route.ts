@@ -4,6 +4,7 @@ import { hasPermission, resolveArchivePermissionContext } from '@/lib/archivePer
 import { getSupabaseAdmin } from '@/lib/apiAuth';
 
 export async function GET(req: NextRequest) {
+    const supabaseAdmin = getSupabaseAdmin();
     const txId = req.nextUrl.searchParams.get('txId');
     const memorialId = req.nextUrl.searchParams.get('memorialId');
 
@@ -90,6 +91,7 @@ export async function GET(req: NextRequest) {
             fileCount: data.file_count,
             totalBytes: data.total_bytes,
             confirmedAt: data.confirmed_at,
+            createdAt: data.created_at,
         });
     } catch (error: any) {
         console.error('[arweave-status]', error);

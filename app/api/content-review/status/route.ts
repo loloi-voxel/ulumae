@@ -4,6 +4,7 @@ import { hasPermission, resolveArchivePermissionContext } from '@/lib/archivePer
 import { getSupabaseAdmin } from '@/lib/apiAuth';
 
 export async function GET(req: NextRequest) {
+    const supabaseAdmin = getSupabaseAdmin();
     const memorialId = req.nextUrl.searchParams.get('memorialId');
 
     if (!memorialId) {

@@ -41,6 +41,18 @@ export function isPersonalPlan(plan: UserPlan) {
     return plan === 'personal';
 }
 
+export function getPlanDashboardPath(plan: UserPlan | string, userId: string) {
+    if (plan === 'family' || plan === 'concierge') {
+        return `/dashboard/family/${userId}`;
+    }
+
+    if (plan === 'personal') {
+        return `/dashboard/personal/${userId}`;
+    }
+
+    return `/dashboard/draft/${userId}`;
+}
+
 const defaultState: AuthState = {
     authenticated: false,
     loading: true,
@@ -186,6 +198,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => document.removeEventListener('visibilitychange', handleVisibility);
     }, [fetchState]);
 
+    useEffect(() => {
+        const handleStorage = (event: StorageEvent) => {
+            if (!event.key || event.key.startsWith('sb-') || event.key.startsWith('supabase.')) {
+                fetchState(true);
+            }
+        };
+
+        const handlePageShow = (event: PageTransitionEvent) => {
+            if (event.persisted) {
+                fetchState(true);
+            }
+        };
+
+        window.addEventListener('storage', handleStorage);
+        window.addEventListener('pageshow', handlePageShow);
+
+        return () => {
+            window.removeEventListener('storage', handleStorage);
+            window.removeEventListener('pageshow', handlePageShow);
+        };
+    }, [fetchState]);
+
     const contextValue: AuthState = {
         ...state,
         revalidate: () => fetchState(true),
@@ -208,16 +242,13 @@ export function getDashboardPath(state: AuthState): string {
     if (!state.authenticated || !state.user) return '/login';
 
     // Prioritize the highest plan level from the server-validated plan field
-    if (isFamilyPlan(state.plan)) {
-        return `/dashboard/family/${state.user.id}`;
-    }
-    if (isPersonalPlan(state.plan)) {
-        return `/dashboard/personal/${state.user.id}`;
+    if (isFamilyPlan(state.plan) || isPersonalPlan(state.plan)) {
+        return getPlanDashboardPath(state.plan, state.user.id);
     }
 
     const draftArchive = state.archives.find(a => !a.paid);
     if (draftArchive) {
-        return `/dashboard/draft/${state.user.id}`;
+        return getPlanDashboardPath('draft', state.user.id);
     }
 
     return '/choice-pricing';

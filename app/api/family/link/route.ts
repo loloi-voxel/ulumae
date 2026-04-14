@@ -2,6 +2,29 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedClient } from '@/utils/supabase/api';
 import { getSupabaseAdmin } from '@/lib/apiAuth';
 
+async function assertOwnedFamilyMemorials(
+    memorialIds: string[],
+    userId: string
+) {
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: memorials, error } = await supabaseAdmin
+        .from('memorials')
+        .select('id, user_id, mode')
+        .in('id', memorialIds);
+
+    if (error || !memorials || memorials.length !== memorialIds.length) {
+        throw new Error('One or more memorials could not be found.');
+    }
+
+    const unauthorized = memorials.find(
+        (memorial) => memorial.user_id !== userId || memorial.mode !== 'family'
+    );
+
+    if (unauthorized) {
+        throw new Error('Relations are only available for Family plan archives you own.');
+    }
+}
+
 export async function POST(request: NextRequest) {
     try {
         const supabaseAdmin = getSupabaseAdmin();
@@ -105,5 +128,71 @@ export async function POST(request: NextRequest) {
     } catch (error: any) {
         console.error('Link API Error:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+}
+
+export async function PATCH(request: NextRequest) {
+    try {
+        const { user } = await createAuthenticatedClient();
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const { fromId, toId, description } = await request.json();
+
+        if (!fromId || !toId) {
+            return NextResponse.json({ error: 'Missing memorial ids' }, { status: 400 });
+        }
+
+        await assertOwnedFamilyMemorials([fromId, toId], user.id);
+
+        const supabaseAdmin = getSupabaseAdmin();
+        const { error } = await supabaseAdmin
+            .from('memorial_relations')
+            .update({ description: String(description || '').trim() || null })
+            .or(`and(from_memorial_id.eq.${fromId},to_memorial_id.eq.${toId}),and(from_memorial_id.eq.${toId},to_memorial_id.eq.${fromId})`);
+
+        if (error) {
+            throw error;
+        }
+
+        return NextResponse.json({ success: true });
+    } catch (error: any) {
+        console.error('Family relation update error:', error);
+        const status = error.message?.includes('Family plan archives you own') ? 403 : 500;
+        return NextResponse.json({ error: error.message || 'Internal server error' }, { status });
+    }
+}
+
+export async function DELETE(request: NextRequest) {
+    try {
+        const { user } = await createAuthenticatedClient();
+        if (!user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const { fromId, toId } = await request.json();
+
+        if (!fromId || !toId) {
+            return NextResponse.json({ error: 'Missing memorial ids' }, { status: 400 });
+        }
+
+        await assertOwnedFamilyMemorials([fromId, toId], user.id);
+
+        const supabaseAdmin = getSupabaseAdmin();
+        const { error } = await supabaseAdmin
+            .from('memorial_relations')
+            .delete()
+            .or(`and(from_memorial_id.eq.${fromId},to_memorial_id.eq.${toId}),and(from_memorial_id.eq.${toId},to_memorial_id.eq.${fromId})`);
+
+        if (error) {
+            throw error;
+        }
+
+        return NextResponse.json({ success: true });
+    } catch (error: any) {
+        console.error('Family relation delete error:', error);
+        const status = error.message?.includes('Family plan archives you own') ? 403 : 500;
+        return NextResponse.json({ error: error.message || 'Internal server error' }, { status });
     }
 }

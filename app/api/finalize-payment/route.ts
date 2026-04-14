@@ -1,126 +1,176 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createFullSnapshot } from '@/lib/versionService';
-import { PLAN_PRICES_USD } from '@/lib/constants';
-import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { safeLogMemorialActivity } from '@/lib/activityLog';
+import { requireMemorialAccess } from '@/lib/apiAuth';
+import { MEMORIAL_STEP_IDS, PLAN_PRICES_USD } from '@/lib/constants';
+import { getStripeServer, normalizeStripePlan } from '@/lib/stripeServer';
+import { insertVersionSnapshot } from '@/lib/versioningServer';
+
+interface FinalizePaymentBody {
+  memorialId?: string;
+  sessionId?: string;
+  paymentIntentId?: string;
+}
 
 export async function POST(request: NextRequest) {
-    try {
-        const { memorialId } = await request.json();
+  try {
+    const body = (await request.json()) as FinalizePaymentBody;
+    const memorialId = String(body.memorialId || '').trim();
+    const sessionId = String(body.sessionId || '').trim();
+    const paymentIntentId = String(body.paymentIntentId || '').trim();
 
-        if (!memorialId || memorialId === 'null' || memorialId === 'undefined') {
-            console.error('[Finalize Payment] Invalid memorial ID:', memorialId);
-            return NextResponse.json({
-                error: 'Invalid memorial ID. Please create an archive first.'
-            }, { status: 400 });
-        }
-
-        console.log('[Finalize Payment] Starting for memorial:', memorialId);
-
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabaseAdmin = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            {
-                auth: {
-                    autoRefreshToken: false,
-                    persistSession: false
-                }
-            }
-        );
-
-        // Fetch current memorial to check its mode
-        const { data: currentMemorial, error: fetchCurrentError } = await supabaseAdmin
-            .from('memorials')
-            .select('mode, user_id')
-            .eq('id', memorialId)
-            .single();
-
-        if (fetchCurrentError || !currentMemorial) {
-            console.error('Memorial not found:', fetchCurrentError);
-            return NextResponse.json({ error: 'Memorial not found' }, { status: 404 });
-        }
-
-        // Build update payload — always mark paid and confirmed
-        // If memorial was in draft mode, upgrade it to personal
-        const updatePayload: Record<string, any> = {
-            paid: true,
-            payment_confirmed_at: new Date().toISOString(),
-            // Refund eligibility: true by default, becomes false when status = 'published'
-            refund_eligible: true,
-        };
-
-        // Store plan-specific pricing info
-        if (currentMemorial.mode === 'draft' || currentMemorial.mode === 'personal') {
-            updatePayload.plan_type = 'personal';
-            updatePayload.amount_paid = PLAN_PRICES_USD.personal;
-        } else if (currentMemorial.mode === 'family') {
-            updatePayload.plan_type = 'family';
-            updatePayload.amount_paid = PLAN_PRICES_USD.family;
-        }
-
-        if (currentMemorial.mode === 'draft') {
-            updatePayload.mode = 'personal';
-            console.log('[Finalize Payment] Draft upgraded to Personal for memorial:', memorialId);
-        }
-
-        const { error: updateError } = await supabaseAdmin
-            .from('memorials')
-            .update(updatePayload)
-            .eq('id', memorialId);
-
-        if (updateError) {
-            console.error('Update error:', updateError);
-            return NextResponse.json({ error: updateError.message }, { status: 500 });
-        }
-
-        // Fetch full memorial data for snapshot
-        const { data: memorialData, error: fetchError } = await supabaseAdmin
-            .from('memorials')
-            .select('*')
-            .eq('id', memorialId)
-            .single();
-
-        if (fetchError || !memorialData) {
-            console.error('Fetch error after update:', fetchError);
-            return NextResponse.json({ error: 'Memorial not found after update' }, { status: 404 });
-        }
-
-        // Create version snapshot
-        const snapshotData = {
-            memorial_id: memorialId,
-            version_number: 1,
-            snapshot_data: memorialData,
-            is_full_snapshot: true,
-            steps_modified: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            change_type: 'manual',
-            change_summary: currentMemorial.mode === 'draft'
-                ? 'Archive activated — Draft upgraded to Personal plan'
-                : 'Archive activated — payment confirmed',
-            change_reason: null,
-            created_by: memorialData.user_id || null,
-            created_by_name: 'Owner',
-            created_at: new Date().toISOString()
-        };
-
-        const { error: snapshotError } = await supabaseAdmin
-            .from('memorial_versions')
-            .insert(snapshotData);
-
-        if (snapshotError) {
-            console.error('Snapshot creation failed:', snapshotError);
-            // Don't block payment finalization if snapshot fails
-        }
-
-        return NextResponse.json({
-            success: true,
-            message: 'Payment finalized and snapshot created',
-            upgradedFromDraft: currentMemorial.mode === 'draft',
-        });
-
-    } catch (error: any) {
-        console.error('Finalize payment error:', error);
-        return NextResponse.json({
-            error: error.message || 'Internal server error'
-        }, { status: 500 });
+    if (!memorialId) {
+      return NextResponse.json({ error: 'Missing memorialId' }, { status: 400 });
     }
+
+    if (!sessionId && !paymentIntentId) {
+      return NextResponse.json(
+        { error: 'Missing verified Stripe session or payment intent.' },
+        { status: 400 }
+      );
+    }
+
+    const access = await requireMemorialAccess({ memorialId });
+    if (!access.ok) return access.response;
+
+    const { user, admin, context } = access;
+
+    if (!context.isOwner) {
+      return NextResponse.json({ error: 'Only the archive owner can finalize payment.' }, { status: 403 });
+    }
+
+    const stripe = getStripeServer();
+    let verifiedPlan: 'personal' | 'family' | 'concierge' | null = null;
+
+    if (sessionId) {
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      if (session.payment_status !== 'paid') {
+        return NextResponse.json({ error: 'Checkout session is not fully paid yet.' }, { status: 400 });
+      }
+      if (session.metadata?.memorialId !== memorialId) {
+        return NextResponse.json({ error: 'Stripe session does not match this archive.' }, { status: 403 });
+      }
+      verifiedPlan = normalizeStripePlan(session.metadata?.plan);
+    } else {
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+      if (paymentIntent.status !== 'succeeded') {
+        return NextResponse.json({ error: 'Payment intent has not succeeded yet.' }, { status: 400 });
+      }
+      if (paymentIntent.metadata?.memorialId !== memorialId) {
+        return NextResponse.json({ error: 'Stripe payment does not match this archive.' }, { status: 403 });
+      }
+      verifiedPlan = normalizeStripePlan(paymentIntent.metadata?.plan);
+    }
+
+    if (!verifiedPlan) {
+      return NextResponse.json({ error: 'Could not resolve a valid paid plan.' }, { status: 400 });
+    }
+
+    const { data: currentMemorial, error: fetchError } = await admin
+      .from('memorials')
+      .select('*')
+      .eq('id', memorialId)
+      .single();
+
+    if (fetchError || !currentMemorial) {
+      return NextResponse.json({ error: 'Memorial not found' }, { status: 404 });
+    }
+
+    if (verifiedPlan === 'family' && currentMemorial.mode !== 'family') {
+      return NextResponse.json({ error: 'Family payment must be finalized from a Family workspace.' }, { status: 400 });
+    }
+
+    if (verifiedPlan === 'personal' && currentMemorial.mode === 'family') {
+      return NextResponse.json({ error: 'Use the upgrade flow for Family workspaces.' }, { status: 400 });
+    }
+
+    if (
+      currentMemorial.paid &&
+      currentMemorial.plan_type === verifiedPlan &&
+      !(currentMemorial.mode === 'draft' && verifiedPlan === 'personal')
+    ) {
+      return NextResponse.json({
+        success: true,
+        message: 'Payment already finalized.',
+        newMode: currentMemorial.mode,
+        plan: verifiedPlan,
+        upgradedFromDraft: false,
+      });
+    }
+
+    const now = new Date().toISOString();
+    const updatePayload: Record<string, any> = {
+      paid: true,
+      payment_confirmed_at: currentMemorial.payment_confirmed_at || now,
+      refund_eligible: true,
+      plan_type: verifiedPlan,
+      amount_paid: PLAN_PRICES_USD[verifiedPlan],
+    };
+
+    if (currentMemorial.mode === 'draft' && verifiedPlan === 'personal') {
+      updatePayload.mode = 'personal';
+    }
+
+    const { error: updateError } = await admin
+      .from('memorials')
+      .update(updatePayload)
+      .eq('id', memorialId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    const { data: updatedMemorial, error: refetchError } = await admin
+      .from('memorials')
+      .select('*')
+      .eq('id', memorialId)
+      .single();
+
+    if (refetchError || !updatedMemorial) {
+      return NextResponse.json({ error: 'Memorial not found after update' }, { status: 404 });
+    }
+
+    try {
+      await insertVersionSnapshot({
+        supabaseAdmin: admin,
+        memorialId,
+        snapshotData: updatedMemorial,
+        stepsModified: [...MEMORIAL_STEP_IDS],
+        createdBy: user.id,
+        createdByName: 'Owner',
+        changeSummary:
+          currentMemorial.mode === 'draft'
+            ? 'Archive activated and moved from Draft to Personal.'
+            : 'Archive payment was confirmed and access was activated.',
+        changeReason: 'stripe_payment_success',
+      });
+    } catch (snapshotError) {
+      console.error('[finalize-payment][snapshot]', snapshotError);
+    }
+
+    await safeLogMemorialActivity(admin, {
+      memorialId,
+      action: 'plan_upgraded',
+      summary:
+        currentMemorial.mode === 'draft'
+          ? 'Archive activated and upgraded from Draft to Personal.'
+          : `Archive payment was confirmed for the ${verifiedPlan} plan.`,
+      actorUserId: user.id,
+      actorEmail: user.email ?? null,
+      details: {
+        previousMode: currentMemorial.mode,
+        verifiedPlan,
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Payment finalized successfully.',
+      newMode: updatedMemorial.mode,
+      plan: verifiedPlan,
+      upgradedFromDraft: currentMemorial.mode === 'draft' && updatedMemorial.mode === 'personal',
+    });
+  } catch (error: any) {
+    console.error('[finalize-payment]', error);
+    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+  }
 }

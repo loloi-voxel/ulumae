@@ -1,114 +1,148 @@
-// app/api/webhooks/stripe/route.ts
-// Stripe sends payment events here to guarantee DB updates even if the user's browser closes.
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { PLAN_PRICES_USD } from '@/lib/constants';
+import { safeLogMemorialActivity } from '@/lib/activityLog';
 import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { MEMORIAL_STEP_IDS, PLAN_PRICES_USD } from '@/lib/constants';
+import { getStripeServer, normalizeStripePlan } from '@/lib/stripeServer';
+import { insertVersionSnapshot } from '@/lib/versioningServer';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2024-12-18.acacia' as any,
-});
-
+const stripe = getStripeServer();
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
 export async function POST(request: NextRequest) {
-    const body = await request.text();
-    const signature = request.headers.get('stripe-signature');
+  const body = await request.text();
+  const signature = request.headers.get('stripe-signature');
 
-    if (!signature || !webhookSecret) {
-        return NextResponse.json({ error: 'Missing stripe signature or webhook secret' }, { status: 400 });
+  if (!signature || !webhookSecret) {
+    return NextResponse.json({ error: 'Missing stripe signature or webhook secret' }, { status: 400 });
+  }
+
+  let event: Stripe.Event;
+
+  try {
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+  } catch (error: any) {
+    console.error('[stripe-webhook][signature]', error);
+    return NextResponse.json({ error: `Webhook Error: ${error.message}` }, { status: 400 });
+  }
+
+  if (event.type !== 'checkout.session.completed' && event.type !== 'payment_intent.succeeded') {
+    return NextResponse.json({ received: true });
+  }
+
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const source = event.data.object as Stripe.Checkout.Session | Stripe.PaymentIntent;
+    const memorialId = source.metadata?.memorialId;
+    const targetPlan = normalizeStripePlan(source.metadata?.upgradeTo || source.metadata?.plan);
+
+    if (!memorialId || !targetPlan) {
+      console.warn('[stripe-webhook] skipped event without memorial metadata', event.id);
+      return NextResponse.json({ received: true });
     }
 
-    let event: Stripe.Event;
+    const { data: currentMemorial, error: memorialError } = await supabaseAdmin
+      .from('memorials')
+      .select('*')
+      .eq('id', memorialId)
+      .single();
+
+    if (memorialError || !currentMemorial) {
+      console.error('[stripe-webhook] memorial not found', memorialId, memorialError);
+      return NextResponse.json({ received: true });
+    }
+
+    const isUpgrade = Boolean(source.metadata?.upgradeTo);
+    const alreadyApplied =
+      currentMemorial.paid &&
+      currentMemorial.plan_type === targetPlan &&
+      currentMemorial.mode === targetPlan;
+
+    if (alreadyApplied) {
+      return NextResponse.json({ received: true });
+    }
+
+    const now = new Date().toISOString();
+    const updatePayload: Record<string, any> = {
+      paid: true,
+      payment_confirmed_at: currentMemorial.payment_confirmed_at || now,
+      refund_eligible: true,
+      plan_type: targetPlan,
+      amount_paid: PLAN_PRICES_USD[targetPlan],
+    };
+
+    if (isUpgrade) {
+      updatePayload.mode = targetPlan;
+      updatePayload.upgraded_from = currentMemorial.mode;
+      updatePayload.upgraded_at = now;
+    } else if (targetPlan === 'family') {
+      updatePayload.mode = 'family';
+      if (currentMemorial.mode === 'personal') {
+        updatePayload.upgraded_from = 'personal';
+        updatePayload.upgraded_at = now;
+      }
+    } else if (currentMemorial.mode === 'draft') {
+      updatePayload.mode = 'personal';
+    } else {
+      updatePayload.mode = 'personal';
+    }
+
+    const { error: updateError } = await supabaseAdmin
+      .from('memorials')
+      .update(updatePayload)
+      .eq('id', memorialId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    const { data: updatedMemorial, error: refetchError } = await supabaseAdmin
+      .from('memorials')
+      .select('*')
+      .eq('id', memorialId)
+      .single();
+
+    if (refetchError || !updatedMemorial) {
+      throw refetchError || new Error('Memorial not found after webhook update.');
+    }
 
     try {
-        // This verifies the request 100% came from Stripe
-        event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-    } catch (err: any) {
-        console.error(`[Stripe Webhook] Signature verification failed: ${err.message}`);
-        return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 });
+      await insertVersionSnapshot({
+        supabaseAdmin,
+        memorialId,
+        snapshotData: updatedMemorial,
+        stepsModified: [...MEMORIAL_STEP_IDS],
+        createdBy: currentMemorial.user_id || null,
+        createdByName: 'System (Stripe)',
+        changeSummary: isUpgrade
+          ? `Plan upgraded from ${currentMemorial.mode} to ${targetPlan}.`
+          : currentMemorial.mode === 'draft'
+            ? 'Archive activated and moved from Draft to Personal.'
+            : `Archive payment was confirmed for the ${targetPlan} plan.`,
+        changeReason: 'stripe_payment_success',
+      });
+    } catch (snapshotError) {
+      console.error('[stripe-webhook][snapshot]', snapshotError);
     }
 
-    // Handle successful payment events
-    if (event.type === 'checkout.session.completed' || event.type === 'payment_intent.succeeded') {
-        const session = event.data.object as any;
+    await safeLogMemorialActivity(supabaseAdmin, {
+      memorialId,
+      action: 'plan_upgraded',
+      summary: isUpgrade
+        ? `Stripe confirmed an upgrade from ${currentMemorial.mode} to ${targetPlan}.`
+        : `Stripe confirmed payment for the ${targetPlan} plan.`,
+      actorUserId: currentMemorial.user_id || null,
+      actorEmail: null,
+      details: {
+        stripeEventId: event.id,
+        previousMode: currentMemorial.mode,
+        targetPlan,
+      },
+    });
+  } catch (error: any) {
+    console.error('[stripe-webhook]', error);
+    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
+  }
 
-        // Extract the metadata you passed when creating the checkout/payment intent
-        const memorialId = session.metadata?.memorialId;
-        const planLabel = session.metadata?.plan?.toLowerCase() || 'personal';
-
-        if (!memorialId) {
-            console.error('[Stripe Webhook] No memorialId found in metadata');
-            return NextResponse.json({ received: true });
-        }
-
-        console.log(`[Stripe Webhook] Payment succeeded for memorial: ${memorialId}, Plan: ${planLabel}`);
-
-        // 1. Fetch current memorial to check its state
-        const { data: currentMemorial } = await supabaseAdmin
-            .from('memorials')
-            .select('*')
-            .eq('id', memorialId)
-            .single();
-
-        if (!currentMemorial) {
-            console.error(`[Stripe Webhook] Memorial ${memorialId} not found`);
-            return NextResponse.json({ error: 'Memorial not found' }, { status: 404 });
-        }
-
-        // 2. Build the update payload based on the plan
-        const updatePayload: Record<string, any> = {
-            paid: true,
-            payment_confirmed_at: new Date().toISOString(),
-            refund_eligible: true,
-        };
-
-        if (planLabel.includes('family')) {
-            updatePayload.mode = 'family';
-            updatePayload.plan_type = 'family';
-            updatePayload.amount_paid = PLAN_PRICES_USD.family;
-            if (currentMemorial.mode === 'personal') {
-                updatePayload.upgraded_from = 'personal';
-                updatePayload.upgraded_at = new Date().toISOString();
-            }
-        } else if (planLabel.includes('concierge')) {
-            updatePayload.mode = 'concierge';
-            updatePayload.plan_type = 'concierge';
-            updatePayload.amount_paid = PLAN_PRICES_USD.concierge;
-        } else {
-            updatePayload.mode = 'personal';
-            updatePayload.plan_type = 'personal';
-            updatePayload.amount_paid = PLAN_PRICES_USD.personal;
-        }
-
-        // 3. Update the database securely
-        const { error: updateError } = await supabaseAdmin
-            .from('memorials')
-            .update(updatePayload)
-            .eq('id', memorialId);
-
-        if (updateError) {
-            console.error('[Stripe Webhook] DB Update Error:', updateError);
-            return NextResponse.json({ error: 'Database update failed' }, { status: 500 });
-        }
-
-        // 4. Create a Version Snapshot for the audit trail
-        await supabaseAdmin.from('memorial_versions').insert({
-            memorial_id: memorialId,
-            version_number: 1,
-            snapshot_data: { ...currentMemorial, ...updatePayload },
-            is_full_snapshot: true,
-            steps_modified: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            change_type: 'manual',
-            change_summary: `Archive activated via Webhook — ${planLabel.toUpperCase()} plan`,
-            change_reason: 'stripe_payment_success',
-            created_by: currentMemorial.user_id,
-            created_by_name: 'System (Stripe)',
-            created_at: new Date().toISOString(),
-        });
-
-        console.log(`[Stripe Webhook] Successfully updated memorial ${memorialId} to ${planLabel}`);
-    }
-
-    return NextResponse.json({ received: true });
+  return NextResponse.json({ received: true });
 }

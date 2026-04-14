@@ -2,14 +2,12 @@
 // Handles plan upgrades: Personal → Family, Family → Concierge
 // Calculates differential pricing so users only pay the difference.
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
 import { createAuthenticatedClient } from '@/utils/supabase/api';
 import { PLAN_PRICES_USD } from '@/lib/constants';
 import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { getStripeServer } from '@/lib/stripeServer';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2024-12-18.acacia' as any,
-});
+const stripe = getStripeServer();
 
 const PLAN_PRICES = PLAN_PRICES_USD;
 
@@ -99,7 +97,7 @@ export async function POST(request: NextRequest) {
                     totalDifferential: differentialAmount.toString(),
                     paymentPhase: 'deposit_30',
                 },
-                success_url: `${origin}/payment-success?id=${currentMemorial.id}&plan=${targetPlan}&upgrade=true`,
+                success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}&id=${currentMemorial.id}&plan=${targetPlan}&upgrade=true`,
                 cancel_url: `${origin}/dashboard/${currentPlan}/${userId}`,
             });
 
@@ -137,7 +135,7 @@ export async function POST(request: NextRequest) {
                 upgradeTo: targetPlan,
                 differentialAmount: differentialAmount.toString(),
             },
-            success_url: `${origin}/payment-success?id=${currentMemorial.id}&plan=${targetPlan}&upgrade=true`,
+            success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}&id=${currentMemorial.id}&plan=${targetPlan}&upgrade=true`,
             cancel_url: `${origin}/dashboard/${currentPlan}/${userId}`,
         });
 

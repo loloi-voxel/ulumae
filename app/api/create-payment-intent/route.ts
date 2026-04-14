@@ -1,85 +1,100 @@
-// app/api/create-payment-intent/route.ts
-// Step 2.2.1: Create a PaymentIntent for Stripe Elements (on-site payment)
-// This replaces the Checkout Session redirect flow for the seal flow.
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
 import { PLAN_PRICES_USD } from '@/lib/constants';
-import { getSupabaseAdmin } from '@/lib/apiAuth';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    apiVersion: '2024-12-18.acacia' as any,
-});
+import { requireMemorialAccess } from '@/lib/apiAuth';
+import { getStripeServer, normalizeStripePlan } from '@/lib/stripeServer';
 
 export async function POST(request: NextRequest) {
-    try {
-        const supabaseAdmin = getSupabaseAdmin();
-        const { memorialId, plan = 'personal' } = await request.json();
-        // SECURITY: Never trust client-supplied amount. Derive from server-side plan pricing.
-        const amount = PLAN_PRICES_USD[plan];
-        if (!amount) {
-            return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
-        }
+  try {
+    const body = await request.json();
+    const memorialId = String(body?.memorialId || '').trim();
+    const plan = normalizeStripePlan(body?.plan) ?? 'personal';
 
-        if (!memorialId) {
-            return NextResponse.json({ error: 'Missing memorialId' }, { status: 400 });
-        }
-
-        // Determine expected authorization type based on plan
-        const expectedAuthType = plan === 'family' ? 'account' : 'individual';
-
-        // Verify authorization exists
-        const { data: auth } = await supabaseAdmin
-            .from('memorial_authorizations')
-            .select('id, authorization_type')
-            .eq('memorial_id', memorialId)
-            .in('status', ['pending', 'approved'])
-            .maybeSingle();
-
-        if (!auth || auth.authorization_type !== expectedAuthType) {
-            return NextResponse.json({
-                error: 'Authorization required before payment',
-                code: 'LEGAL_AUTH_REQUIRED',
-            }, { status: 403 });
-        }
-
-        // Fetch memorial details for the description
-        const { data: memorial } = await supabaseAdmin
-            .from('memorials')
-            .select('full_name, mode')
-            .eq('id', memorialId)
-            .single();
-
-        const fullName = memorial?.full_name || 'Memorial Archive';
-        const isDraft = memorial?.mode === 'draft';
-
-        const planLabel = plan === 'family' ? 'Family' : (isDraft ? 'Personal (Draft Upgrade)' : 'Personal');
-
-        // Create PaymentIntent
-        const paymentIntent = await stripe.paymentIntents.create({
-            amount: amount * 100, // Stripe expects cents
-            currency: 'usd',
-            description: plan === 'family'
-                ? `ULUMAE — Family Plan for ${fullName}`
-                : isDraft
-                    ? `ULUMAE — Draft → Personal Upgrade for ${fullName}`
-                    : `ULUMAE — Permanent Archive for ${fullName}`,
-            metadata: {
-                memorialId,
-                plan: planLabel,
-                isDraftUpgrade: isDraft ? 'true' : 'false',
-            },
-            automatic_payment_methods: {
-                enabled: true,
-            },
-        });
-
-        return NextResponse.json({
-            clientSecret: paymentIntent.client_secret,
-            amount,
-            fullName,
-        });
-    } catch (error: any) {
-        console.error('PaymentIntent error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!memorialId) {
+      return NextResponse.json({ error: 'Missing memorialId' }, { status: 400 });
     }
+
+    const access = await requireMemorialAccess({ memorialId });
+    if (!access.ok) return access.response;
+
+    const { user, admin, context } = access;
+
+    if (!context.isOwner) {
+      return NextResponse.json({ error: 'Only the archive owner can start payment.' }, { status: 403 });
+    }
+
+    const { data: memorial, error: memorialError } = await admin
+      .from('memorials')
+      .select('id, full_name, mode, paid')
+      .eq('id', memorialId)
+      .single();
+
+    if (memorialError || !memorial) {
+      return NextResponse.json({ error: 'Memorial not found' }, { status: 404 });
+    }
+
+    if (memorial.paid) {
+      return NextResponse.json(
+        { error: 'This archive has already been activated.', code: 'ALREADY_PAID' },
+        { status: 409 }
+      );
+    }
+
+    if ((plan === 'family' && memorial.mode !== 'family') || (plan === 'personal' && memorial.mode === 'family')) {
+      return NextResponse.json({ error: 'Plan does not match the memorial workspace.' }, { status: 400 });
+    }
+
+    const expectedAuthType = plan === 'family' ? 'account' : 'individual';
+    const { data: authorization } = await admin
+      .from('memorial_authorizations')
+      .select('id, authorization_type')
+      .eq('memorial_id', memorialId)
+      .in('status', ['pending', 'approved'])
+      .maybeSingle();
+
+    if (!authorization || authorization.authorization_type !== expectedAuthType) {
+      return NextResponse.json(
+        {
+          error: 'Authorization required before payment',
+          code: 'LEGAL_AUTH_REQUIRED',
+        },
+        { status: 403 }
+      );
+    }
+
+    const amount = PLAN_PRICES_USD[plan];
+    if (!amount) {
+      return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
+    }
+
+    const stripe = getStripeServer();
+    const isDraft = memorial.mode === 'draft';
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount * 100,
+      currency: 'usd',
+      description:
+        plan === 'family'
+          ? `ULUMAE - Family Plan for ${memorial.full_name || 'Memorial Archive'}`
+          : isDraft
+            ? `ULUMAE - Draft to Personal Upgrade for ${memorial.full_name || 'Memorial Archive'}`
+            : `ULUMAE - Permanent Archive for ${memorial.full_name || 'Memorial Archive'}`,
+      metadata: {
+        memorialId,
+        userId: user.id,
+        plan,
+        isDraftUpgrade: isDraft ? 'true' : 'false',
+      },
+      automatic_payment_methods: {
+        enabled: true,
+      },
+    });
+
+    return NextResponse.json({
+      clientSecret: paymentIntent.client_secret,
+      amount,
+      fullName: memorial.full_name || 'Memorial Archive',
+    });
+  } catch (error: any) {
+    console.error('[create-payment-intent]', error);
+    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+  }
 }
