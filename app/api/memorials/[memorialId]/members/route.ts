@@ -1,59 +1,51 @@
-// app/api/memorials/[memorialId]/members/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedClient } from '@/utils/supabase/api';
-import { getSupabaseAdmin } from '@/lib/apiAuth';
-import {
-    hasPermission,
-    resolveArchivePermissionContext,
-} from '@/lib/archivePermissions';
+import { requireMemorialAccess } from '@/lib/apiAuth';
 
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ memorialId: string }> }
 ) {
     try {
-        const supabaseAdmin = getSupabaseAdmin();
         const { memorialId } = await params;
-        const { user } = await createAuthenticatedClient();
-
-        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-        const permission = await resolveArchivePermissionContext(
-            supabaseAdmin,
+        const access = await requireMemorialAccess({
             memorialId,
-            user.id
-        );
+            action: 'view_members',
+        });
+        if (!access.ok) return access.response;
 
-        if (!permission.memorialExists) {
-            return NextResponse.json({ error: 'Memorial not found' }, { status: 404 });
-        }
+        const { admin, context } = access;
 
-        if (!permission.context || !hasPermission(permission.context, 'view_members')) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-
-        // 2. Fetch Active Members
-        const { data: roles, error: rolesError } = await supabaseAdmin
+        const { data: roles, error: rolesError } = await admin
             .from('user_memorial_roles')
             .select('user_id, role, joined_at')
             .eq('memorial_id', memorialId);
 
         if (rolesError) throw rolesError;
 
-        // 3. Enrich with Auth Data (Email)
-        const enrichedMembers = await Promise.all((roles || []).map(async (member) => {
-            const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(member.user_id);
-            return {
+        const members = [];
+
+        const { data: ownerData } = await admin.auth.admin.getUserById(context.ownerUserId);
+        members.push({
+            userId: context.ownerUserId,
+            email: ownerData?.user?.email || 'Owner',
+            role: 'owner',
+            status: 'active',
+            joinedAt: null,
+        });
+
+        for (const member of roles || []) {
+            if (member.user_id === context.ownerUserId) continue;
+            const { data: authUser } = await admin.auth.admin.getUserById(member.user_id);
+            members.push({
                 userId: member.user_id,
                 email: authUser?.user?.email || 'Unknown',
                 role: member.role,
                 status: 'active',
-                joinedAt: member.joined_at
-            };
-        }));
+                joinedAt: member.joined_at,
+            });
+        }
 
-        // 4. Fetch Pending Invitations
-        const { data: pending, error: pendingError } = await supabaseAdmin
+        const { data: pending, error: pendingError } = await admin
             .from('witness_invitations')
             .select('id, invitee_email, role, created_at')
             .eq('memorial_id', memorialId)
@@ -61,20 +53,22 @@ export async function GET(
 
         if (pendingError) throw pendingError;
 
-        const pendingMembers = (pending || []).map(inv => ({
-            invitationId: inv.id,
-            userId: null,
-            email: inv.invitee_email,
-            role: inv.role,
-            status: 'pending',
-            joinedAt: inv.created_at
-        }));
+        for (const invite of pending || []) {
+            members.push({
+                invitationId: invite.id,
+                userId: null,
+                email: invite.invitee_email,
+                role: invite.role,
+                status: 'pending',
+                joinedAt: invite.created_at,
+            });
+        }
 
         return NextResponse.json({
-            members: [...enrichedMembers, ...pendingMembers],
-            callerRole: permission.context.role,
+            members,
+            callerRole: context.role,
+            planType: context.plan,
         });
-
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }

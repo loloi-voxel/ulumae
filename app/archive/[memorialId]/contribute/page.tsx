@@ -23,8 +23,8 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
   const searchParams = useSearchParams();
   const typeFromUrl = searchParams.get('type') as ContributionType | null;
   const reviseId = searchParams.get('revise');
-  const { data: roleData, loading: roleLoading } = useArchiveRole(memorialId);
-  useRoleSync(memorialId, roleData?.currentUserId || '', roleData?.userRole || 'witness');
+  const { data: roleData, loading: roleLoading, status: roleStatus } = useArchiveRole(memorialId);
+  useRoleSync(memorialId, roleData, roleStatus);
 
   const [type, setType] = useState<ContributionType>(typeFromUrl || 'memory');
   const [title, setTitle] = useState('');

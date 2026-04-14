@@ -13,8 +13,8 @@ import ContributionDrawer from './_components/ContributionDrawer';
 function ArchiveViewContent({ memorialId }: { memorialId: string }) {
   const router = useRouter();
   const supabase = createClient();
-  const { data: roleData, loading: roleLoading } = useArchiveRole(memorialId);
-  useRoleSync(memorialId, roleData?.currentUserId || '', roleData?.userRole || 'witness');
+  const { data: roleData, loading: roleLoading, status: roleStatus } = useArchiveRole(memorialId);
+  useRoleSync(memorialId, roleData, roleStatus);
   const { openDrawer, setContributions } = useDrawer();
 
   const [viewData, setViewData] = useState<{ memorialData: any; relations: any[] } | null>(null);

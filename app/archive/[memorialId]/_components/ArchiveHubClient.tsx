@@ -17,24 +17,10 @@ import {
 } from 'lucide-react';
 import { useRoleSync } from '../_hooks/useRoleSync';
 import RoleBanner from './RoleBanner';
-import type { WitnessRole } from '@/types/roles';
-import { getArchiveCapabilities, getRoleLabel } from '@/lib/archivePermissions';
+import type { ArchiveRoleSnapshot } from '@/lib/archivePermissions';
 
 interface ArchiveHubClientProps {
-  roleData: {
-    userRole: WitnessRole;
-    plan: string;
-    memorial: {
-      id: string;
-      fullName: string;
-      profilePhotoUrl: string | null;
-    };
-    pendingCount: number;
-    pendingContributionCount?: number;
-    pendingAccessRequestCount?: number;
-    pendingCreationRequestCount?: number;
-    myContributions: any[];
-  };
+  roleData: ArchiveRoleSnapshot;
   memorialId: string;
   userId: string;
 }
@@ -70,7 +56,7 @@ const TYPE_ICONS = {
 
 export default function ArchiveHubClient({ roleData, memorialId, userId }: ArchiveHubClientProps) {
   const router = useRouter();
-  useRoleSync(memorialId, userId, roleData.userRole, roleData.plan === 'family' ? 'family' : 'personal');
+  useRoleSync(memorialId, roleData, 'ready');
 
   const {
     userRole,
@@ -82,8 +68,8 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
     pendingAccessRequestCount = 0,
     pendingCreationRequestCount = 0,
   } = roleData;
-  const capabilities = getArchiveCapabilities(userRole, plan === 'family' ? 'family' : 'personal');
-  const roleLabel = getRoleLabel(userRole);
+  const capabilities = roleData.capabilities;
+  const roleLabel = roleData.roleLabel;
   const totalStewardCount = pendingCount;
 
   return (

@@ -1,16 +1,10 @@
-// app/api/user/state/route.ts
-// Single source of truth: returns the authenticated user's full state
-// This endpoint is the authoritative server-side state that the UI must reflect.
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedClient } from '@/utils/supabase/api';
-import { decodeSessionIdFromAccessToken } from '@/lib/security/twoFactor';
 import { getRequestIpAddress, trackUserSessionDevice } from '@/lib/sessionDevices';
 import { getSupabaseAdmin } from '@/lib/apiAuth';
 
 export async function GET(request: NextRequest) {
     try {
-        // Create admin client inside handler to avoid module-level crash
-        // when SUPABASE_SERVICE_ROLE_KEY is not set
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
         const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -26,8 +20,13 @@ export async function GET(request: NextRequest) {
         }
 
         const supabaseAdmin = getSupabaseAdmin();
-
-        const { supabase, user, error } = await createAuthenticatedClient();
+        const {
+            user,
+            error,
+            session,
+            sessionId,
+            sessionState,
+        } = await createAuthenticatedClient();
 
         if (error || !user) {
             return NextResponse.json({
@@ -35,24 +34,32 @@ export async function GET(request: NextRequest) {
                 user: null,
                 plan: null,
                 archives: [],
+                session: sessionState,
+                error: error?.message || null,
+            }, {
+                status: sessionState.revoked || sessionState.expired ? 401 : 200,
+                headers: {
+                    'Cache-Control': 'no-store, no-cache, must-revalidate',
+                    'Pragma': 'no-cache',
+                },
             });
         }
 
-        // Session device tracking is non-critical — don't let it block
-        // plan resolution if the table hasn't been created yet.
+        let trackedSession = sessionState;
         try {
-            const { data: sessionData } = await supabase.auth.getSession();
-            await trackUserSessionDevice(supabaseAdmin, {
+            trackedSession = (await trackUserSessionDevice(supabaseAdmin, {
                 userId: user.id,
-                sessionId: decodeSessionIdFromAccessToken(sessionData.session?.access_token),
+                sessionId,
                 ipAddress: getRequestIpAddress(request),
                 userAgent: request.headers.get('user-agent'),
-            });
+                expiresAt: session?.expires_at
+                    ? new Date(session.expires_at * 1000).toISOString()
+                    : null,
+            })) || sessionState;
         } catch (trackErr: any) {
             console.warn('[UserState] session device tracking skipped:', trackErr.message || trackErr);
         }
 
-        // Fetch ALL user's memorials in one query
         const { data: memorials, error: memError } = await supabaseAdmin
             .from('memorials')
             .select('id, mode, paid, payment_confirmed_at, status, full_name, profile_photo_url, deleted, deleted_at, updated_at, created_at')
@@ -65,15 +72,8 @@ export async function GET(request: NextRequest) {
 
         const allMemorials = memorials || [];
         const activeMemorials = allMemorials.filter(m => !m.deleted);
-
-        // For plan determination, consider ALL paid memorials (including soft-deleted).
-        // A payment is permanent — soft-deleting an archive does NOT revoke the plan.
         const allPaidMemorials = allMemorials.filter(m => m.paid);
-        // For display/archive listing, only show active paid memorials
-        const activePaidMemorials = activeMemorials.filter(m => m.paid);
 
-        // Determine the user's current plan from ALL paid memorials (active + deleted)
-        // Priority: concierge > family > personal > draft (free)
         let currentPlan: 'none' | 'draft' | 'personal' | 'family' | 'concierge' = 'none';
         if (allPaidMemorials.some(m => m.mode === 'concierge')) {
             currentPlan = 'concierge';
@@ -85,8 +85,6 @@ export async function GET(request: NextRequest) {
             currentPlan = 'draft';
         }
 
-        // FALLBACK: If no paid memorials exist (all permanently deleted),
-        // check the users.highest_plan column which preserves the plan after permanent deletion.
         if (currentPlan === 'none' || currentPlan === 'draft') {
             const { data: userRow } = await supabaseAdmin
                 .from('users')
@@ -127,9 +125,9 @@ export async function GET(request: NextRequest) {
                 fullName: m.full_name,
                 deletedAt: m.deleted_at,
             })),
+            session: trackedSession,
         }, {
             headers: {
-                // Prevent caching of user state
                 'Cache-Control': 'no-store, no-cache, must-revalidate',
                 'Pragma': 'no-cache',
             },

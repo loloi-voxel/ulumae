@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedClient } from '@/utils/supabase/api';
 import { MemorialData } from '@/types/memorial';
 import {
     buildEditorActorLabel,
     createVersionFromDiff,
 } from '@/lib/versioningServer';
-import {
-    hasArchivePermission,
-    resolveArchivePermissionContext,
-} from '@/lib/archivePermissions';
 import { safeLogMemorialActivity } from '@/lib/activityLog';
-import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { requireMemorialAccess } from '@/lib/apiAuth';
 
 function generateSlug(name: string) {
     return name
@@ -42,13 +37,14 @@ export async function POST(
     { params }: { params: Promise<{ memorialId: string }> }
 ) {
     try {
-        const supabaseAdmin = getSupabaseAdmin();
         const { memorialId } = await params;
-        const { user } = await createAuthenticatedClient();
+        const access = await requireMemorialAccess({
+            memorialId,
+            action: 'edit_archive',
+        });
+        if (!access.ok) return access.response;
 
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const { user, admin: supabaseAdmin, context } = access;
 
         const body = await request.json();
         const memorialData = body?.memorialData as MemorialData | undefined;
@@ -60,26 +56,17 @@ export async function POST(
             );
         }
 
-        const [permission, memorialRes] = await Promise.all([
-            resolveArchivePermissionContext(supabaseAdmin, memorialId, user.id),
-            supabaseAdmin
-                .from('memorials')
-                .select('id, user_id, mode, status, slug, paid, updated_at, completed_steps, step1, step2, step3, step4, step5, step6, step7, step8, step9')
-                .eq('id', memorialId)
-                .single(),
-        ]);
+        const { data: memorial, error: memorialError } = await supabaseAdmin
+            .from('memorials')
+            .select('id, user_id, mode, status, slug, paid, updated_at, completed_steps, step1, step2, step3, step4, step5, step6, step7, step8, step9')
+            .eq('id', memorialId)
+            .single();
 
-        if (!permission.memorialExists || memorialRes.error || !memorialRes.data) {
+        if (memorialError || !memorial) {
             return NextResponse.json({ error: 'Memorial not found.' }, { status: 404 });
         }
 
-        const memorial = memorialRes.data;
-        const isOwner = permission.context?.role === 'owner';
-        const isCoGuardian = permission.context?.role === 'co_guardian';
-
-        if (!permission.context || !hasArchivePermission(permission.context, 'edit_archive')) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
+        const isOwner = context.role === 'owner';
 
         const oldData = buildMemorialData(memorial);
         const now = new Date().toISOString();

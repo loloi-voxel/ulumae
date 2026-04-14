@@ -27,10 +27,10 @@ export default function FamilyMapPage({
 }) {
     const { memorialId } = use(params);
     const router = useRouter();
-    const { data: roleData, loading: roleLoading } =
+    const { data: roleData, loading: roleLoading, status: roleStatus } =
         useArchiveRole(memorialId);
 
-    useRoleSync(memorialId, roleData?.currentUserId || '', roleData?.userRole || 'witness');
+    useRoleSync(memorialId, roleData, roleStatus);
 
     const [linked, setLinked] =
         useState<LinkedMemorial[]>([]);

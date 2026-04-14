@@ -1,5 +1,30 @@
 import { createServerClient } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
+import { decodeSessionIdFromAccessToken } from '@/lib/security/twoFactor';
+import { getSessionIntegrityState } from '@/lib/sessionDevices';
+
+let adminClient: ReturnType<typeof createClient> | null = null;
+
+function getAdminClient() {
+  if (adminClient) return adminClient;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return null;
+  }
+
+  adminClient = createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  return adminClient;
+}
 
 /**
  * Create an authenticated Supabase client for API routes.
@@ -35,5 +60,57 @@ export async function createAuthenticatedClient() {
     error,
   } = await supabase.auth.getUser();
 
-  return { supabase, user, error };
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const sessionId = decodeSessionIdFromAccessToken(session?.access_token);
+  const sessionExpiresAt = session?.expires_at
+    ? new Date(session.expires_at * 1000).toISOString()
+    : null;
+
+  let sessionState = {
+    sessionId,
+    exists: Boolean(sessionId),
+    revoked: false,
+    revokedAt: null as string | null,
+    expired: Boolean(
+      session?.expires_at && session.expires_at * 1000 <= Date.now()
+    ),
+    expiresAt: sessionExpiresAt,
+    deviceLabel: null as string | null,
+    ipAddress: null as string | null,
+    userAgent: null as string | null,
+    lastSeenAt: null as string | null,
+    createdAt: null as string | null,
+  };
+
+  if (user && sessionId) {
+    const admin = getAdminClient();
+    if (admin) {
+      sessionState = await getSessionIntegrityState(admin, {
+        userId: user.id,
+        sessionId,
+        expiresAt: sessionExpiresAt,
+      });
+    }
+  }
+
+  if ((sessionState.revoked || sessionState.expired) && sessionId) {
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+    return {
+      supabase,
+      user: null,
+      error:
+        error ||
+        new Error(
+          sessionState.revoked ? 'Session revoked' : 'Session expired'
+        ),
+      session,
+      sessionId,
+      sessionState,
+    };
+  }
+
+  return { supabase, user, error, session, sessionId, sessionState };
 }

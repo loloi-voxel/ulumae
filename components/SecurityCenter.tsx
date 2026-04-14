@@ -20,8 +20,35 @@ interface SecurityCenterProps {
 
 interface SessionSummary {
     sessionId: string | null;
-    expiresAt: number | null;
+    expiresAt: string | null;
     email: string | null;
+    deviceLabel: string | null;
+    lastSeenAt: string | null;
+    revokedAt: string | null;
+}
+
+interface TrackedSession {
+    id: string;
+    sessionId: string | null;
+    deviceLabel: string | null;
+    ipAddress: string | null;
+    userAgent: string | null;
+    lastSeenAt: string | null;
+    createdAt: string | null;
+    revokedAt: string | null;
+    isCurrent: boolean;
+    isStale: boolean;
+}
+
+interface AnchorDeviceSummary {
+    id: string;
+    memorialId: string;
+    deviceName: string;
+    browser: string | null;
+    os: string | null;
+    lastSyncAt: string | null;
+    status: string;
+    createdAt: string | null;
 }
 
 interface TwoFactorFactorSummary {
@@ -48,26 +75,15 @@ interface PendingEnrollment {
     secret: string;
 }
 
-function decodeSessionId(accessToken?: string | null) {
-    if (!accessToken) return null;
-
-    try {
-        const [, payload] = accessToken.split('.');
-        const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-        const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-        const decoded = JSON.parse(atob(padded));
-        return decoded.session_id || null;
-    } catch {
-        return null;
-    }
-}
-
 export default function SecurityCenter({ userId }: SecurityCenterProps) {
     const auth = useAuth();
+    const supabase = createClient();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [sessionSummary, setSessionSummary] = useState<SessionSummary | null>(null);
+    const [trackedSessions, setTrackedSessions] = useState<TrackedSession[]>([]);
+    const [anchorDevices, setAnchorDevices] = useState<AnchorDeviceSummary[]>([]);
     const [twoFactorState, setTwoFactorState] = useState<TwoFactorState | null>(null);
     const [emailInput, setEmailInput] = useState(auth.user?.email || '');
     const [passwordInput, setPasswordInput] = useState('');
@@ -83,6 +99,8 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
     const [removingFactorId, setRemovingFactorId] = useState<string | null>(null);
     const [regeneratingRecoveryCodes, setRegeneratingRecoveryCodes] = useState(false);
     const [freshRecoveryCodes, setFreshRecoveryCodes] = useState<string[]>([]);
+    const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
+    const [revokingAnchorId, setRevokingAnchorId] = useState<string | null>(null);
 
     const verifiedFactors = useMemo(
         () => (twoFactorState?.factors || []).filter((factor) => factor.status === 'verified'),
@@ -93,20 +111,17 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
         setLoading(true);
         setError(null);
 
-        const supabase = createClient();
-
         try {
             const [
-                { data: sessionData, error: sessionError },
                 { data: userData, error: userError },
                 twoFactorResponse,
+                sessionsResponse,
             ] = await Promise.all([
-                supabase.auth.getSession(),
                 supabase.auth.getUser(),
                 fetch('/api/security/two-factor/state', { cache: 'no-store' }),
+                fetch('/api/security/sessions', { cache: 'no-store' }),
             ]);
 
-            if (sessionError) throw sessionError;
             if (userError) throw userError;
 
             const twoFactorPayload = await twoFactorResponse.json();
@@ -114,11 +129,21 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
                 throw new Error(twoFactorPayload.error || 'Could not load two-factor settings.');
             }
 
+            const sessionsPayload = await sessionsResponse.json();
+            if (!sessionsResponse.ok) {
+                throw new Error(sessionsPayload.error || 'Could not load session history.');
+            }
+
             setSessionSummary({
-                sessionId: decodeSessionId(sessionData.session?.access_token),
-                expiresAt: sessionData.session?.expires_at || null,
+                sessionId: sessionsPayload.currentSession?.sessionId || null,
+                expiresAt: sessionsPayload.currentSession?.expiresAt || null,
                 email: userData.user?.email || auth.user?.email || null,
+                deviceLabel: sessionsPayload.currentSession?.deviceLabel || null,
+                lastSeenAt: sessionsPayload.currentSession?.lastSeenAt || null,
+                revokedAt: sessionsPayload.currentSession?.revokedAt || null,
             });
+            setTrackedSessions(sessionsPayload.sessions || []);
+            setAnchorDevices(sessionsPayload.devices || []);
             setTwoFactorState(twoFactorPayload);
             setEmailInput(userData.user?.email || auth.user?.email || '');
         } catch (loadError: any) {
@@ -135,6 +160,19 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
 
     const clearNoticeSoon = () => {
         window.setTimeout(() => setNotice(null), 5000);
+    };
+
+    const syncSessionScope = async (scope: 'others' | 'global') => {
+        const response = await fetch('/api/security/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'scope', scope }),
+        });
+
+        const payload = await response.json();
+        if (!response.ok) {
+            throw new Error(payload.error || 'Could not sync session state.');
+        }
     };
 
     const handleEmailChange = async () => {
@@ -205,6 +243,8 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
             const { error: signOutError } = await supabase.auth.signOut({ scope: 'others' });
             if (signOutError) throw signOutError;
 
+            await syncSessionScope('others');
+
             setNotice('All other devices were signed out.');
             clearNoticeSoon();
             await auth.revalidate();
@@ -225,6 +265,7 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
         setError(null);
 
         try {
+            await syncSessionScope('global');
             const supabase = createClient();
             const { error: signOutError } = await supabase.auth.signOut({ scope: 'global' });
             if (signOutError) throw signOutError;
@@ -233,6 +274,65 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
             setError(signOutError.message || 'Could not sign out all sessions.');
         } finally {
             setSigningOutEverywhere(false);
+        }
+    };
+
+    const handleRevokeSession = async (sessionId: string, isCurrent: boolean) => {
+        setRevokingSessionId(sessionId);
+        setError(null);
+        setNotice(null);
+
+        try {
+            const response = await fetch('/api/security/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'session', targetId: sessionId }),
+            });
+            const payload = await response.json();
+
+            if (!response.ok) {
+                throw new Error(payload.error || 'Could not revoke that session.');
+            }
+
+            if (isCurrent || payload.signedOutCurrentSession) {
+                window.location.href = '/login';
+                return;
+            }
+
+            setNotice('Session revoked. That device will be blocked on its next verified request.');
+            clearNoticeSoon();
+            await loadSecurityState();
+        } catch (revokeError: any) {
+            setError(revokeError.message || 'Could not revoke that session.');
+        } finally {
+            setRevokingSessionId(null);
+        }
+    };
+
+    const handleRevokeAnchor = async (anchorId: string) => {
+        setRevokingAnchorId(anchorId);
+        setError(null);
+        setNotice(null);
+
+        try {
+            const response = await fetch('/api/security/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'anchor', targetId: anchorId }),
+            });
+            const payload = await response.json();
+
+            if (!response.ok) {
+                throw new Error(payload.error || 'Could not revoke that device.');
+            }
+
+            setNotice('Anchor device revoked.');
+            clearNoticeSoon();
+            await loadSecurityState();
+        } catch (revokeError: any) {
+            setError(revokeError.message || 'Could not revoke that device.');
+        } finally {
+            setRevokingAnchorId(null);
         }
     };
 
@@ -455,14 +555,27 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
                             <div className="space-y-3 text-sm text-warm-muted">
                                 <div className="rounded-xl bg-surface-low/40 px-4 py-3">
                                     <p className="text-[11px] uppercase tracking-[0.16em] text-warm-outline">Current session</p>
+                                    <p className="mt-2 text-sm font-medium text-warm-dark">
+                                        {sessionSummary?.deviceLabel || 'Current browser session'}
+                                    </p>
                                     <p className="mt-2 break-all font-mono text-xs text-warm-dark/70">
                                         {sessionSummary?.sessionId || 'Unavailable'}
                                     </p>
                                     <p className="mt-2">
                                         {sessionSummary?.expiresAt
-                                            ? `Expires ${new Date(sessionSummary.expiresAt * 1000).toLocaleString()}`
+                                            ? `Expires ${new Date(sessionSummary.expiresAt).toLocaleString()}`
                                             : 'Session expiry unavailable'}
                                     </p>
+                                    {sessionSummary?.lastSeenAt && (
+                                        <p className="mt-1 text-xs text-warm-outline">
+                                            Last seen {new Date(sessionSummary.lastSeenAt).toLocaleString()}
+                                        </p>
+                                    )}
+                                    {sessionSummary?.revokedAt && (
+                                        <p className="mt-1 text-xs text-red-600">
+                                            Revoked {new Date(sessionSummary.revokedAt).toLocaleString()}
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="flex flex-col gap-3 sm:flex-row">
                                     <button
@@ -480,6 +593,97 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
                                         {signingOutEverywhere ? 'Signing out everywhere...' : 'Log out all devices'}
                                     </button>
                                 </div>
+
+                                {trackedSessions.length > 0 && (
+                                    <div className="rounded-xl border border-warm-border/20 bg-white/70 px-4 py-4">
+                                        <p className="text-[11px] uppercase tracking-[0.16em] text-warm-outline">Tracked browser sessions</p>
+                                        <div className="mt-3 space-y-3">
+                                            {trackedSessions.map((tracked) => (
+                                                <div key={tracked.id} className="rounded-xl border border-warm-border/20 bg-surface-low/30 px-4 py-3">
+                                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                        <div>
+                                                            <p className="font-medium text-warm-dark">
+                                                                {tracked.deviceLabel || 'Browser session'}
+                                                                {tracked.isCurrent ? ' (Current)' : ''}
+                                                            </p>
+                                                            <p className="mt-1 break-all font-mono text-[11px] text-warm-outline">
+                                                                {tracked.sessionId || 'Unavailable'}
+                                                            </p>
+                                                            <p className="mt-1 text-xs text-warm-outline">
+                                                                Last seen {tracked.lastSeenAt ? new Date(tracked.lastSeenAt).toLocaleString() : 'unknown'}
+                                                            </p>
+                                                            {tracked.ipAddress && (
+                                                                <p className="mt-1 text-xs text-warm-outline">IP {tracked.ipAddress}</p>
+                                                            )}
+                                                            {tracked.revokedAt && (
+                                                                <p className="mt-1 text-xs text-red-600">
+                                                                    Revoked {new Date(tracked.revokedAt).toLocaleString()}
+                                                                </p>
+                                                            )}
+                                                            {!tracked.revokedAt && tracked.isStale && (
+                                                                <p className="mt-1 text-xs text-amber-700">
+                                                                    This session has gone stale and has not checked in recently.
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleRevokeSession(tracked.sessionId || '', tracked.isCurrent)}
+                                                            disabled={!tracked.sessionId || !!tracked.revokedAt || revokingSessionId === tracked.sessionId}
+                                                            className="rounded-xl border border-warm-border/30 px-4 py-2 text-xs text-warm-dark transition-colors hover:bg-surface-low disabled:opacity-50"
+                                                        >
+                                                            {revokingSessionId === tracked.sessionId
+                                                                ? 'Revoking...'
+                                                                : tracked.isCurrent
+                                                                    ? 'Sign out this session'
+                                                                    : tracked.revokedAt
+                                                                        ? 'Already revoked'
+                                                                        : 'Revoke session'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {anchorDevices.length > 0 && (
+                                    <div className="rounded-xl border border-warm-border/20 bg-white/70 px-4 py-4">
+                                        <p className="text-[11px] uppercase tracking-[0.16em] text-warm-outline">Anchor devices</p>
+                                        <div className="mt-3 space-y-3">
+                                            {anchorDevices.map((device) => (
+                                                <div key={device.id} className="rounded-xl border border-warm-border/20 bg-surface-low/30 px-4 py-3">
+                                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                        <div>
+                                                            <p className="font-medium text-warm-dark">{device.deviceName}</p>
+                                                            <p className="mt-1 text-xs text-warm-outline">
+                                                                {(device.browser || 'Unknown browser')}{device.os ? ` on ${device.os}` : ''}
+                                                            </p>
+                                                            <p className="mt-1 text-xs text-warm-outline">
+                                                                Status {device.status}
+                                                            </p>
+                                                            {device.lastSyncAt && (
+                                                                <p className="mt-1 text-xs text-warm-outline">
+                                                                    Last sync {new Date(device.lastSyncAt).toLocaleString()}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleRevokeAnchor(device.id)}
+                                                            disabled={device.status === 'revoked' || revokingAnchorId === device.id}
+                                                            className="rounded-xl border border-warm-border/30 px-4 py-2 text-xs text-warm-dark transition-colors hover:bg-surface-low disabled:opacity-50"
+                                                        >
+                                                            {revokingAnchorId === device.id
+                                                                ? 'Revoking...'
+                                                                : device.status === 'revoked'
+                                                                    ? 'Already revoked'
+                                                                    : 'Revoke device'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

@@ -3,12 +3,9 @@ import { WitnessRole } from '@/types/roles';
 import { requireMemorialAccess } from '@/lib/apiAuth';
 import { safeLogMemorialActivity } from '@/lib/activityLog';
 import {
-  syncCoGuardianAcrossOwnerFamily,
-  updateFamilyCoGuardianRole,
-} from '@/lib/familyWorkspace';
-
-const VALID_ROLES = ['co_guardian', 'witness', 'reader'] as const;
-type AssignableRole = (typeof VALID_ROLES)[number];
+  isAssignableArchiveMemberRole,
+  updateArchiveMemberRole,
+} from '@/lib/archiveMemberAccess';
 
 export async function POST(
   req: NextRequest,
@@ -26,14 +23,13 @@ export async function POST(
       );
     }
 
-    if (!VALID_ROLES.includes(newRole as AssignableRole)) {
+    if (!newRole || !isAssignableArchiveMemberRole(newRole)) {
       return NextResponse.json(
-        { error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` },
+        { error: 'Invalid role. Must be one of: co_guardian, witness, reader' },
         { status: 400 }
       );
     }
 
-    // 1. AUTH + AUTHORIZATION (centralized).
     const access = await requireMemorialAccess({
       memorialId,
       action: 'manage_members',
@@ -41,84 +37,48 @@ export async function POST(
     if (!access.ok) return access.response;
 
     const { user, admin, context } = access;
-
-    // 2. Owner identity invariants.
-    if (targetUserId === user.id || targetUserId === context.ownerUserId) {
-      return NextResponse.json(
-        { error: "Cannot change the owner's role" },
-        { status: 400 }
-      );
-    }
-
-    // 3. Plan constraint: co_guardian only exists on family plans.
-    if (newRole === 'co_guardian' && context.plan !== 'family') {
-      return NextResponse.json(
-        { error: 'Co-Guardian role is only available for Family plan archives' },
-        { status: 403 }
-      );
-    }
-
-    // NEW: Personal plan cannot accept ANY collaboration roles
-    if (context.plan === 'personal' && ['co_guardian', 'witness', 'reader'].includes(newRole as string)) {
-      return NextResponse.json(
-        { error: 'Personal archives cannot have members. Upgrade to Family plan.' },
-        { status: 403 }
-      );
-    }
-
-    // 4. Apply the change.
-    const { data: currentRoleRow } = await admin
-      .from('user_memorial_roles')
-      .select('role')
-      .eq('memorial_id', memorialId)
-      .eq('user_id', targetUserId)
-      .maybeSingle();
-
-    const isFamilyMemorial = context.plan === 'family';
-    const isFamilyWideCoGuardianChange =
-      isFamilyMemorial &&
-      (newRole === 'co_guardian' || currentRoleRow?.role === 'co_guardian');
-
-    if (isFamilyWideCoGuardianChange) {
-      if (newRole === 'co_guardian') {
-        await syncCoGuardianAcrossOwnerFamily(admin, context.ownerUserId, targetUserId);
-      } else {
-        await updateFamilyCoGuardianRole(
-          admin,
-          context.ownerUserId,
-          targetUserId,
-          newRole as 'witness' | 'reader'
-        );
-      }
-    } else {
-      const { error } = await admin
-        .from('user_memorial_roles')
-        .update({ role: newRole })
-        .eq('memorial_id', memorialId)
-        .eq('user_id', targetUserId);
-
-      if (error) throw error;
-    }
-
-    const targetUser = await admin.auth.admin.getUserById(targetUserId);
-
-    await safeLogMemorialActivity(admin, {
-      memorialId,
-      action: 'member_role_updated',
-      summary: `A member role was changed to ${newRole}.`,
-      actorUserId: user.id,
-      actorEmail: user.email ?? null,
-      subjectUserId: targetUserId,
-      subjectEmail: targetUser.data.user?.email ?? null,
-      details: { newRole },
+    const result = await updateArchiveMemberRole(admin, context, {
+      targetUserId,
+      newRole,
     });
 
-    return NextResponse.json({ success: true, newRole: newRole as WitnessRole });
+    if (result.changed) {
+      const targetUser = await admin.auth.admin.getUserById(targetUserId);
+
+      await safeLogMemorialActivity(admin, {
+        memorialId,
+        action: 'member_role_updated',
+        summary: `A member role was changed to ${result.newRole}.`,
+        actorUserId: user.id,
+        actorEmail: user.email ?? null,
+        subjectUserId: targetUserId,
+        subjectEmail: targetUser.data.user?.email ?? null,
+        details: {
+          oldRole: result.oldRole,
+          newRole: result.newRole,
+        },
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      changed: result.changed,
+      oldRole: result.oldRole,
+      newRole: result.newRole as WitnessRole,
+    });
   } catch (err: any) {
     console.error('Update role error:', err);
-    return NextResponse.json(
-      { error: err.message || 'Internal server error' },
-      { status: 500 }
-    );
+
+    const message = err.message || 'Internal server error';
+    const status =
+      message === 'Member not found'
+        ? 404
+        : message.includes('owner')
+          ? 400
+          : message.includes('Family plan') || message.includes('Personal archives')
+            ? 403
+            : 500;
+
+    return NextResponse.json({ error: message }, { status });
   }
 }

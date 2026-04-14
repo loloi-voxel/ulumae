@@ -1,88 +1,115 @@
-// app/archive/[memorialId]/_hooks/useRoleSync.ts
 'use client';
 
-import { useEffect } from 'react';
-import { createClient } from '@/utils/supabase/client';
+import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { getArchiveCapabilities, ArchivePlan } from '@/lib/archivePermissions';
-import { WitnessRole } from '@/types/roles';
+import { createClient } from '@/utils/supabase/client';
+import type { ArchiveRoleData } from './useArchiveRole';
+import { invalidateArchiveRole } from './archiveRoleStore';
 
 export function useRoleSync(
     memorialId: string,
-    userId: string,
-    currentRole: string,
-    plan?: ArchivePlan
+    roleData: ArchiveRoleData | null,
+    status?: 'idle' | 'loading' | 'ready' | 'unauthorized' | 'forbidden' | 'not_found' | 'error'
 ) {
     const router = useRouter();
     const pathname = usePathname();
-    const supabase = createClient();
+    const redirectKeyRef = useRef<string | null>(null);
 
     useEffect(() => {
+        const userId = roleData?.currentUserId;
         if (!memorialId || !userId) return;
+        const supabase = createClient();
 
-        // Use the authoritative plan from server data, not inferred from pathname
-        const resolvedPlan = plan || 'personal';
+        const refresh = (reason: string) =>
+            invalidateArchiveRole(memorialId, {
+                reason,
+                broadcast: true,
+            });
 
-        const channel = supabase
-            .channel(`role-sync:${memorialId}:${userId}`)
+        const membershipChannel = supabase
+            .channel(`role-sync:membership:${memorialId}:${userId}`)
             .on(
                 'postgres_changes',
                 {
-                    event: 'UPDATE',
+                    event: '*',
                     schema: 'public',
                     table: 'user_memorial_roles',
                     filter: `memorial_id=eq.${memorialId}`,
                 },
                 (payload) => {
-                    // Verify it's specifically for this user
-                    if (payload.new.user_id !== userId) return;
+                    const nextUserId =
+                        payload.eventType === 'DELETE'
+                            ? payload.old.user_id
+                            : payload.new.user_id;
 
-                    const newRole = payload.new.role as WitnessRole;
-                    if (newRole !== currentRole) {
-                        // Fire a custom event that the RoleBanner + useArchiveRole listen to
-                        window.dispatchEvent(new CustomEvent('ulumae:role-changed', {
-                            detail: { memorialId, oldRole: currentRole, newRole }
-                        }));
-
-                        // Use the actual plan from server, not pathname-inferred
-                        const nextCapabilities = getArchiveCapabilities(newRole, resolvedPlan);
-                        if (pathname.includes('/steward') && !nextCapabilities.canReview) {
-                            toast.error('Your updated role no longer includes steward access.');
-                            router.replace(`/archive/${memorialId}`);
-                            return;
-                        }
-                        if (pathname.includes('/contribute') && !nextCapabilities.canContribute) {
-                            toast.error('Your updated role no longer includes contribution access.');
-                            router.replace(`/archive/${memorialId}`);
-                        }
-                    }
-                }
-            )
-            .on(
-                'postgres_changes',
-                {
-                    event: 'DELETE',
-                    schema: 'public',
-                    table: 'user_memorial_roles',
-                    filter: `memorial_id=eq.${memorialId}`,
-                },
-                (payload) => {
-                    // If the row is gone, the user no longer has access
-                    if (payload.old.user_id === userId) {
-                        window.dispatchEvent(new CustomEvent('ulumae:access-revoked', {
-                            detail: { memorialId }
-                        }));
-
-                        toast.error('Your access to this archive has been removed.');
-                        router.replace(`/archive/${memorialId}/revoked`);
+                    if (nextUserId === userId) {
+                        refresh(`realtime:user_memorial_roles:${payload.eventType}`);
                     }
                 }
             )
             .subscribe();
 
+        const memorialChannel = supabase
+            .channel(`role-sync:memorial:${memorialId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'memorials',
+                    filter: `id=eq.${memorialId}`,
+                },
+                (payload) => {
+                    refresh(`realtime:memorials:${payload.eventType}`);
+                }
+            )
+            .subscribe();
+
         return () => {
-            supabase.removeChannel(channel);
+            supabase.removeChannel(membershipChannel);
+            supabase.removeChannel(memorialChannel);
         };
-    }, [memorialId, userId, currentRole, plan, pathname, router, supabase]);
+    }, [memorialId, roleData?.currentUserId]);
+
+    useEffect(() => {
+        if (!memorialId) return;
+
+        let redirectKey: string | null = null;
+        let message: string | null = null;
+        let href: string | null = null;
+
+        if (status === 'forbidden' && !pathname.includes('/revoked')) {
+            redirectKey = `revoked:${memorialId}`;
+            message = 'Your access to this archive has been removed.';
+            href = `/archive/${memorialId}/revoked`;
+        } else if (roleData) {
+            if (pathname.includes('/steward') && !roleData.capabilities.canReview) {
+                redirectKey = `steward:${roleData.permissionSignature}`;
+                message = 'Your current permissions no longer allow steward access.';
+                href = `/archive/${memorialId}`;
+            } else if (pathname.includes('/contribute') && !roleData.capabilities.canContribute) {
+                redirectKey = `contribute:${roleData.permissionSignature}`;
+                message = 'Your current permissions no longer allow contributions here.';
+                href = `/archive/${memorialId}`;
+            } else if (pathname.includes('/family') && roleData.plan !== 'family') {
+                redirectKey = `family:${roleData.permissionSignature}`;
+                message = 'This archive no longer has family-vault access.';
+                href = `/archive/${memorialId}`;
+            }
+        }
+
+        if (!redirectKey || !message || !href) {
+            redirectKeyRef.current = null;
+            return;
+        }
+
+        if (redirectKeyRef.current === redirectKey) {
+            return;
+        }
+
+        redirectKeyRef.current = redirectKey;
+        toast.error(message);
+        router.replace(href);
+    }, [memorialId, pathname, roleData, router, status]);
 }

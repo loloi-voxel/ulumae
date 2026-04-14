@@ -1,9 +1,14 @@
 // lib/roles.ts
 import { WitnessRole, RoleConfig } from '@/types/roles';
+import {
+    getAssignableRolesForPlan,
+    getRoleLabel,
+    type ArchivePlan,
+} from '@/lib/archivePermissions';
 
 export const ROLE_CONFIG: Record<WitnessRole, RoleConfig> = {
     owner: {
-        label: 'Owner',
+        label: getRoleLabel('owner'),
         description: 'Full control over the memorial, including members, billing, and permanent sealing.',
         colorClass: 'text-plum',
         bgClass: 'bg-plum/10 border-plum/20',
@@ -21,7 +26,7 @@ export const ROLE_CONFIG: Record<WitnessRole, RoleConfig> = {
         ]
     },
     co_guardian: {
-        label: 'Co-Guardian',
+        label: getRoleLabel('co_guardian'),
         description: 'Trusted family steward for Family plans. Can edit content, invite members, and review witness contributions across the family archive.',
         colorClass: 'text-warm-brown',
         bgClass: 'bg-warm-brown/10 border-warm-brown/20',
@@ -40,7 +45,7 @@ export const ROLE_CONFIG: Record<WitnessRole, RoleConfig> = {
         ]
     },
     witness: {
-        label: 'Witness',
+        label: getRoleLabel('witness'),
         description: 'Can contribute personal stories and photos to be reviewed by the guardians.',
         colorClass: 'text-olive',
         bgClass: 'bg-olive/10 border-olive/20',
@@ -59,7 +64,7 @@ export const ROLE_CONFIG: Record<WitnessRole, RoleConfig> = {
         ]
     },
     reader: {
-        label: 'Reader',
+        label: getRoleLabel('reader'),
         description: 'Can view the published archive content but cannot contribute or edit.',
         colorClass: 'text-warm-dark/50',
         bgClass: 'bg-surface-mid border-warm-border/30',
@@ -77,11 +82,9 @@ export const ROLE_CONFIG: Record<WitnessRole, RoleConfig> = {
 };
 
 /**
- * Helper to get roles assignable by plan
+ * Presentation-only role copy. Permission enforcement comes from
+ * lib/archivePermissions.ts, which is the backend source of truth.
  */
-export const getAssignableRoles = (planType: 'personal' | 'family'): WitnessRole[] => {
-    if (planType === 'family') {
-        return ['co_guardian', 'witness', 'reader'];
-    }
-    return [];
+export const getAssignableRoles = (planType: ArchivePlan): WitnessRole[] => {
+    return getAssignableRolesForPlan(planType);
 };

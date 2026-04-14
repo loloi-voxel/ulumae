@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireMemorialAccess } from '@/lib/apiAuth';
 import {
   getArchiveCapabilities,
+  getPermissionSignature,
   getRoleLabel,
+  type ArchiveRoleSnapshot,
 } from '@/lib/archivePermissions';
 import { WitnessRole } from '@/types/roles';
 import { getMemorialCreationRequestCount } from '@/lib/familyWorkspace';
@@ -102,11 +104,12 @@ export async function GET(
       .eq('memorial_id', memorialId)
       .maybeSingle();
 
-    return NextResponse.json({
+    const response: ArchiveRoleSnapshot = {
       currentUserId: user.id,
       userRole,
       roleLabel: getRoleLabel(userRole),
       plan,
+      permissionSignature: getPermissionSignature(context),
       capabilities,
       memorial: {
         id: memorial.id,
@@ -124,6 +127,14 @@ export async function GET(
       pendingContributionCount,
       pendingAccessRequestCount,
       pendingCreationRequestCount,
+      resolvedAt: new Date().toISOString(),
+    };
+
+    return NextResponse.json(response, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        Pragma: 'no-cache',
+      },
     });
   } catch (err: any) {
     console.error('[role-data]', err);

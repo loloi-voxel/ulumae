@@ -81,8 +81,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 cache: 'no-store',
                 headers: { 'Cache-Control': 'no-cache' },
             });
-            if (!res.ok) throw new Error('State fetch failed');
             const data = await res.json();
+
+            if (
+                res.status === 401 &&
+                (data?.session?.revoked || data?.session?.expired)
+            ) {
+                const supabase = createClient();
+                await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+
+                setState({
+                    authenticated: false,
+                    loading: false,
+                    user: null,
+                    plan: 'none',
+                    hasPaid: false,
+                    archives: [],
+                });
+                lastFetchRef.current = Date.now();
+                return;
+            }
+
+            if (!res.ok) throw new Error(data?.error || 'State fetch failed');
 
             setState({
                 authenticated: data.authenticated,

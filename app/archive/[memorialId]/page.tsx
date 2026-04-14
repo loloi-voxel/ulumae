@@ -11,6 +11,13 @@ import {
     syncCoGuardianAcrossOwnerFamily,
 } from '@/lib/familyWorkspace';
 import { createClient } from '@supabase/supabase-js';
+import {
+    getArchiveCapabilities,
+    getArchivePlan,
+    getPermissionSignature,
+    getRoleLabel,
+    resolveArchivePermissionContext,
+} from '@/lib/archivePermissions';
 
 const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -61,26 +68,17 @@ export default async function ArchivePage({
         redirect('/dashboard');
     }
 
-    let userRole: WitnessRole | 'none' = 'none';
+    const permission = await resolveArchivePermissionContext(
+        supabaseAdmin,
+        memorialId,
+        user.id
+    );
 
-    if (memorial.user_id === user.id) {
-        userRole = 'owner';
-    } else {
-        const { data: roleData } = await supabase
-            .from('user_memorial_roles')
-            .select('role')
-            .eq('memorial_id', memorialId)
-            .eq('user_id', user.id)
-            .single();
-
-        if (roleData) {
-            userRole = roleData.role as WitnessRole;
-        }
-    }
-
-    if (userRole === 'none') {
+    if (!permission.context) {
         redirect('/dashboard');
     }
+
+    const userRole = permission.context.role;
 
     if (userRole === 'co_guardian' && memorial.mode === 'family') {
         await syncCoGuardianAcrossOwnerFamily(
@@ -167,13 +165,31 @@ export default async function ArchivePage({
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
+    const resolvedRole = userRole as WitnessRole;
+    const plan = getArchivePlan(memorial.mode);
+    const permissionContext = {
+        memorialId,
+        userId: user.id,
+        ownerUserId: memorial.user_id,
+        plan,
+        role: resolvedRole,
+        isOwner: resolvedRole === 'owner',
+    } as const;
+
     const roleData = {
-        userRole,
-        plan: memorial.mode,
+        currentUserId: user.id,
+        userRole: resolvedRole,
+        plan,
+        roleLabel: getRoleLabel(resolvedRole),
+        permissionSignature: getPermissionSignature(permissionContext),
+        capabilities: getArchiveCapabilities(resolvedRole, plan),
         memorial: {
             id: memorial.id,
             fullName: memorial.full_name,
-            profilePhotoUrl: memorial.profile_photo_url
+            birthDate: null,
+            deathDate: null,
+            profilePhotoUrl: memorial.profile_photo_url,
+            userId: memorial.user_id,
         },
         pendingCount:
             pendingContributionCount +
@@ -190,7 +206,8 @@ export default async function ArchivePage({
             createdAt: c.created_at,
             adminNotes: c.admin_notes || null,
             revisionCount: c.revision_count || 0,
-        }))
+        })),
+        resolvedAt: new Date().toISOString(),
     };
 
     return (

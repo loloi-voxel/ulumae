@@ -81,8 +81,8 @@ export default function StewardPage({
     );
     const highlightedItemId = searchParams.get('item');
 
-    const { data: roleData, loading: roleLoading } = useArchiveRole(memorialId);
-    useRoleSync(memorialId, roleData?.currentUserId || '', roleData?.userRole || 'witness');
+    const { data: roleData, loading: roleLoading, status: roleStatus } = useArchiveRole(memorialId);
+    useRoleSync(memorialId, roleData, roleStatus);
 
     useEffect(() => {
         if (roleLoading || !roleData) return;

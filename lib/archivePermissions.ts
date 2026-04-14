@@ -52,7 +52,45 @@ export interface ArchivePermissionResolution {
   context: ArchivePermissionContext | null;
 }
 
-const PERSONAL_ROLE_PERMISSIONS: Record<WitnessRole, ArchiveAction[]> = {
+export interface ArchiveRoleSnapshot {
+  currentUserId: string;
+  userRole: WitnessRole;
+  plan: ArchivePlan;
+  roleLabel: string;
+  permissionSignature: string;
+  capabilities: ArchiveCapabilities;
+  memorial: {
+    id: string;
+    fullName: string;
+    birthDate: string | null;
+    deathDate: string | null;
+    profilePhotoUrl: string | null;
+    userId: string;
+  };
+  myContributions: {
+    id: string;
+    type: 'memory' | 'photo' | 'video';
+    status: 'pending_approval' | 'approved' | 'rejected' | 'needs_changes';
+    title: string;
+    createdAt: string;
+    adminNotes: string | null;
+    revisionCount: number;
+  }[];
+  pendingCount: number;
+  pendingContributionCount: number;
+  pendingAccessRequestCount: number;
+  pendingCreationRequestCount: number;
+  resolvedAt: string;
+}
+
+export const ARCHIVE_ROLE_LABELS: Record<WitnessRole, string> = {
+  owner: 'Owner',
+  co_guardian: 'Co-Guardian',
+  witness: 'Witness',
+  reader: 'Reader',
+};
+
+const PERSONAL_ROLE_PERMISSIONS: Record<WitnessRole, readonly ArchiveAction[]> = {
   owner: [
     'view_archive',
     'edit_archive',
@@ -68,7 +106,7 @@ const PERSONAL_ROLE_PERMISSIONS: Record<WitnessRole, ArchiveAction[]> = {
   reader: [],
 };
 
-const FAMILY_ROLE_PERMISSIONS: Record<WitnessRole, ArchiveAction[]> = {
+const FAMILY_ROLE_PERMISSIONS: Record<WitnessRole, readonly ArchiveAction[]> = {
   owner: [
     'view_archive',
     'view_members',
@@ -111,9 +149,17 @@ const FAMILY_ROLE_PERMISSIONS: Record<WitnessRole, ArchiveAction[]> = {
   ],
 };
 
-const PLAN_PERMISSIONS: Record<ArchivePlan, Record<WitnessRole, ArchiveAction[]>> = {
+const PLAN_PERMISSIONS: Record<
+  ArchivePlan,
+  Record<WitnessRole, readonly ArchiveAction[]>
+> = {
   personal: PERSONAL_ROLE_PERMISSIONS,
   family: FAMILY_ROLE_PERMISSIONS,
+};
+
+const ASSIGNABLE_ROLES: Record<ArchivePlan, WitnessRole[]> = {
+  personal: [],
+  family: ['co_guardian', 'witness', 'reader'],
 };
 
 export function getArchivePlan(mode?: string | null): ArchivePlan {
@@ -121,25 +167,17 @@ export function getArchivePlan(mode?: string | null): ArchivePlan {
 }
 
 export function getRoleLabel(role: WitnessRole): string {
-  switch (role) {
-    case 'owner':
-      return 'Owner';
-    case 'co_guardian':
-      return 'Co-Guardian';
-    case 'witness':
-      return 'Witness';
-    case 'reader':
-      return 'Reader';
-    default:
-      return 'Member';
-  }
+  return ARCHIVE_ROLE_LABELS[role] ?? 'Member';
 }
 
-export function hasPermission(
+export function getAssignableRolesForPlan(plan: ArchivePlan): WitnessRole[] {
+  return [...ASSIGNABLE_ROLES[plan]];
+}
+
+export function getPermissionsForRole(
   roleOrContext: WitnessRole | ArchivePermissionContext,
-  action: ArchiveAction,
   planOverride?: ArchivePlan
-): boolean {
+): readonly ArchiveAction[] {
   const role =
     typeof roleOrContext === 'string' ? roleOrContext : roleOrContext.role;
   const plan =
@@ -147,7 +185,31 @@ export function hasPermission(
       ? (planOverride ?? 'personal')
       : roleOrContext.plan;
 
-  return PLAN_PERMISSIONS[plan][role].includes(action);
+  return PLAN_PERMISSIONS[plan][role];
+}
+
+export function getPermissionSignature(
+  roleOrContext: WitnessRole | ArchivePermissionContext,
+  planOverride?: ArchivePlan
+): string {
+  const role =
+    typeof roleOrContext === 'string' ? roleOrContext : roleOrContext.role;
+  const plan =
+    typeof roleOrContext === 'string'
+      ? (planOverride ?? 'personal')
+      : roleOrContext.plan;
+
+  return [plan, role, ...getPermissionsForRole(roleOrContext, planOverride)].join(
+    ':'
+  );
+}
+
+export function hasPermission(
+  roleOrContext: WitnessRole | ArchivePermissionContext,
+  action: ArchiveAction,
+  planOverride?: ArchivePlan
+): boolean {
+  return getPermissionsForRole(roleOrContext, planOverride).includes(action);
 }
 
 export function hasArchivePermission(
