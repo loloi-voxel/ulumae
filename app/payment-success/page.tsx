@@ -7,7 +7,7 @@ import { useEffect, useState, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Camera, BookOpen, Circle } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
-import { useAuth } from '@/components/providers/AuthProvider';
+import { getPlanDashboardPath, useAuth } from '@/components/providers/AuthProvider';
 
 // ─── Memorial data we need for the Threshold Page ────────────────────────────
 interface ThresholdMemorial {
@@ -41,6 +41,8 @@ function PaymentSuccessContent() {
     const memorialId = searchParams.get('id');
     const planParam = searchParams.get('plan') || 'personal';
     const isUpgrade = searchParams.get('upgrade') === 'true';
+    const sessionId = searchParams.get('session_id');
+    const paymentIntentId = searchParams.get('payment_intent');
     const hasFinalized = useRef(false);
 
     // Phases: finalizing → threshold → doors → redirecting
@@ -65,20 +67,31 @@ function PaymentSuccessContent() {
 
             try {
                 if (isUpgrade) {
+                    if (!sessionId) {
+                        throw new Error('Your payment was received, but the upgrade session could not be verified.');
+                    }
+
                     // UPGRADE FLOW: Use finalize-upgrade to preserve data (idempotent)
                     const response = await fetch('/api/finalize-upgrade', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ memorialId, targetPlan: planParam }),
+                        body: JSON.stringify({ memorialId, targetPlan: planParam, sessionId }),
                     });
                     const result = await response.json();
                     if (result.error) throw new Error(result.error);
                 } else {
+                    if (!sessionId && !paymentIntentId) {
+                        throw new Error('Your payment was received, but the payment confirmation could not be verified.');
+                    }
+
                     // NEW PAYMENT FLOW: Standard finalization
                     const response = await fetch('/api/finalize-payment', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ memorialId }),
+                        body: JSON.stringify({
+                            memorialId,
+                            ...(sessionId ? { sessionId } : { paymentIntentId }),
+                        }),
                     });
                     const result = await response.json();
                     if (result.error) throw new Error(result.error);
@@ -95,7 +108,9 @@ function PaymentSuccessContent() {
                     const supabase = createClient();
                     const { data: { user } } = await supabase.auth.getUser();
                     const uid = user?.id || '';
-                    window.location.replace(`/dashboard/${planParam}/${uid}?welcome=true`);
+                    window.location.replace(
+                        uid ? `${getPlanDashboardPath(planParam, uid)}?welcome=true` : '/dashboard'
+                    );
                     return;
                 }
 
@@ -111,8 +126,9 @@ function PaymentSuccessContent() {
                 // This handles the choice-pricing → pay → empty dashboard flow
                 if (!data?.full_name) {
                     const uid = data?.user_id || '';
-                    const dashMode = planParam === 'family' ? 'family' : 'personal';
-                    window.location.replace(`/dashboard/${dashMode}/${uid}?welcome=true`);
+                    window.location.replace(
+                        uid ? `${getPlanDashboardPath(planParam, uid)}?welcome=true` : '/dashboard'
+                    );
                     return;
                 }
 
@@ -140,7 +156,7 @@ function PaymentSuccessContent() {
 
         run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [memorialId]);
+    }, [memorialId, paymentIntentId, planParam, isUpgrade, revalidate, sessionId]);
 
     // ── Derived data ──────────────────────────────────────────────────────────
     const isSelfArchive = memorial?.step1?.isSelfArchive === true;
@@ -152,7 +168,7 @@ function PaymentSuccessContent() {
             ? `${birthFormatted} — ${deathFormatted}`
             : birthFormatted
         : null;
-    const mode = planParam === 'family' ? 'family' : 'personal';
+    const workspaceMode = planParam === 'family' || planParam === 'concierge' ? 'family' : 'personal';
 
     // ── Door action handler ───────────────────────────────────────────────────
     // Uses router.replace to prevent the back button from returning to payment-success
@@ -166,14 +182,14 @@ function PaymentSuccessContent() {
         setTimeout(() => {
             if (door === 'silence') {
                 const dashPath = userId
-                    ? `/dashboard/${mode}/${userId}?welcome=true`
-                    : `/dashboard/${mode}`;
+                    ? `${getPlanDashboardPath(planParam, userId)}?welcome=true`
+                    : '/dashboard';
                 router.replace(dashPath);
             } else if (door === 'photograph') {
-                router.replace(`/create?id=${memorialId}&mode=${mode}&step=8`);
+                router.replace(`/create?id=${memorialId}&mode=${workspaceMode}&step=8`);
             } else {
                 // story
-                router.replace(`/create?id=${memorialId}&mode=${mode}&step=6`);
+                router.replace(`/create?id=${memorialId}&mode=${workspaceMode}&step=6`);
             }
         }, 600);
     };

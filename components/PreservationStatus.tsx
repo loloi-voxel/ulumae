@@ -139,9 +139,21 @@ export default function PreservationStatus({
     }
 
     const usagePercent = Math.min(100, (storageBytesUsed / storageBytesIncluded) * 100);
+    const isConfirmed = txData.status === 'confirmed';
+    const isFailed = txData.status === 'failed';
+    const statusLabel = isConfirmed
+        ? 'Confirmed'
+        : isFailed
+            ? 'Attention needed'
+            : 'In progress';
+    const statusClasses = isConfirmed
+        ? 'bg-green-500/10 text-green-600'
+        : isFailed
+            ? 'bg-red-500/10 text-red-600'
+            : 'bg-amber-500/10 text-amber-700';
     const verifiedAgo = txData.confirmedAt
         ? `${Math.round((Date.now() - new Date(txData.confirmedAt).getTime()) / 3600_000)} hours ago`
-        : 'Pending';
+        : 'Awaiting confirmation';
 
     return (
         <div className="bg-white border border-warm-border/40 p-6 rounded-xl shadow-sm">
@@ -152,11 +164,19 @@ export default function PreservationStatus({
                     </div>
                     <h3 className="text-sm font-semibold text-warm-dark font-sans">Preservation Status</h3>
                 </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 rounded-full">
-                    <CheckCircle size={12} className="text-green-600" />
-                    <span className="text-xs font-sans text-green-600 font-medium">Confirmed</span>
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${statusClasses}`}>
+                    {isConfirmed ? <CheckCircle size={12} /> : isFailed ? <AlertCircle size={12} /> : <Clock size={12} />}
+                    <span className="text-xs font-sans font-medium">{statusLabel}</span>
                 </div>
             </div>
+
+            {!isConfirmed && (
+                <div className={`mb-5 rounded-xl border px-4 py-3 text-sm font-sans ${isFailed ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                    {isFailed
+                        ? 'The latest preservation attempt did not complete. Please retry before treating this archive as permanently sealed.'
+                        : 'Preservation has started, but the network confirmation is still in progress. The certificate becomes available once the transaction is confirmed.'}
+                </div>
+            )}
 
             {/* Transaction ID */}
             <div className="mb-4">
@@ -220,7 +240,12 @@ export default function PreservationStatus({
                 </a>
                 <button
                     onClick={handleDownloadCertificate}
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-sans font-medium text-olive bg-olive/10 rounded-lg hover:bg-olive/20 transition-colors"
+                    disabled={!isConfirmed}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-sans font-medium rounded-lg transition-colors ${
+                        isConfirmed
+                            ? 'text-olive bg-olive/10 hover:bg-olive/20'
+                            : 'text-warm-muted bg-warm-dark/5 cursor-not-allowed'
+                    }`}
                 >
                     <Download size={12} />
                     Download Certificate

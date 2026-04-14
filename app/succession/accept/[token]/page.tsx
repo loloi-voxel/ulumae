@@ -2,7 +2,6 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import { Shield, Check, Loader2, AlertCircle, Scale } from 'lucide-react';
 
 export default function SuccessorAcceptancePage({ params }: { params: Promise<{ token: string }> }) {
@@ -21,14 +20,13 @@ export default function SuccessorAcceptancePage({ params }: { params: Promise<{ 
 
     const fetchSuccessorDetails = async () => {
         try {
-            const { data, error: dbError } = await supabase
-                .from('user_successors')
-                .select('*')
-                .eq('verification_token', token)
-                .single();
+            const response = await fetch(`/api/succession/accept/${token}`, {
+                cache: 'no-store',
+            });
+            const data = await response.json();
 
-            if (dbError || !data) throw new Error('Stewardship invitation not found or expired.');
-            if (data.status === 'accepted') throw new Error('You have already accepted this responsibility.');
+            if (!response.ok) throw new Error(data.error || 'Stewardship invitation not found or expired.');
+            if (data.alreadyAccepted) throw new Error('You have already accepted this responsibility.');
 
             setSuccessorRecord(data);
         } catch (err: any) {
@@ -41,12 +39,11 @@ export default function SuccessorAcceptancePage({ params }: { params: Promise<{ 
     const handleAccept = async () => {
         setProcessing(true);
         try {
-            const { error: updateError } = await supabase
-                .from('user_successors')
-                .update({ status: 'accepted' })
-                .eq('id', successorRecord.id);
-
-            if (updateError) throw updateError;
+            const response = await fetch(`/api/succession/accept/${token}`, {
+                method: 'POST',
+            });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || 'Could not accept this responsibility.');
 
             alert("Responsibility Accepted. You are now the designated Archive Steward.");
             router.push('/'); // Redirect to home or a success page

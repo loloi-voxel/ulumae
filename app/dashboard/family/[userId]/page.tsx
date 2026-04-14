@@ -15,6 +15,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import NotificationCenter from './_components/NotificationCenter';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
 import { useNotifications } from '@/hooks/useNotifications';
+import { permanentlyDeleteMemorial, updateMemorialTrashState } from '@/lib/memorialClientActions';
 
 interface PendingCreationRequest {
     id: string;
@@ -366,36 +367,22 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
 
         if (!confirm(confirmMessage)) return;
 
-        const { error } = await supabase
-            .from('memorials')
-            .update({
-                deleted: true,
-                deleted_at: new Date().toISOString()
-            })
-            .eq('id', id);
-
-        if (error) {
+        try {
+            await updateMemorialTrashState(id, 'delete');
+            loadMemorials();
+        } catch (error) {
             alert('Error deleting memorial');
             console.error(error);
-        } else {
-            loadMemorials();
         }
     };
 
     const restoreMemorial = async (id: string) => {
-        const { error } = await supabase
-            .from('memorials')
-            .update({
-                deleted: false,
-                deleted_at: null
-            })
-            .eq('id', id);
-
-        if (error) {
+        try {
+            await updateMemorialTrashState(id, 'restore');
+            loadMemorials();
+        } catch (error) {
             alert('Error restoring memorial');
             console.error(error);
-        } else {
-            loadMemorials();
         }
     };
 
@@ -403,8 +390,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
         if (!confirm('Are you sure you want to permanently delete this memorial? This action cannot be undone.')) return;
         if (!confirm('This is irreversible. The memorial and all its content will be lost forever. Continue?')) return;
         try {
-            const res = await fetch(`/api/memorials/${id}/permanent-delete`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Operation failed');
+            await permanentlyDeleteMemorial(id);
             loadMemorials();
         } catch {
             alert('Error permanently deleting memorial. Please try again.');

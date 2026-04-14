@@ -44,12 +44,28 @@ export default function Step7Memories({ data, onUpdate, onNext, onBack, readOnly
 
     const handleDecision = async (contribution: any, decision: 'approved' | 'rejected', overrideContent?: string) => {
         try {
-            const { error: updateError } = await supabase
-                .from('memorial_contributions')
-                .update({ status: decision })
-                .eq('id', contribution.id);
+            if (!memorialId) {
+                throw new Error('Missing memorial id');
+            }
 
-            if (updateError) throw updateError;
+            const response = await fetch(
+                `/api/archive/${memorialId}/contributions/${contribution.id}/review`,
+                {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        decision,
+                        ...(decision === 'rejected'
+                            ? { adminNotes: 'This contribution was not approved for publication.' }
+                            : {}),
+                    }),
+                }
+            );
+
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || 'Failed to process contribution');
+            }
 
             if (decision === 'approved') {
                 const newMemory = {

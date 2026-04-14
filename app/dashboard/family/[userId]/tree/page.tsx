@@ -290,28 +290,25 @@ function FamilyTreeGraph({ userId }: { userId: string }) {
         if (!selectedEdgeData) return;
         setSaving(true);
         try {
-            // Because we hid the duplicate reverse lines, we need to update BOTH lines in DB
-            // matching these two memorials.
-            const sourceId = selectedEdgeData.source;
-            const targetId = selectedEdgeData.target;
+            const response = await fetch('/api/family/link', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fromId: selectedEdgeData.source,
+                    toId: selectedEdgeData.target,
+                    description: newLabel,
+                }),
+            });
 
-            const { data: relatedEdges } = await supabase
-                .from('memorial_relations')
-                .select('id')
-                .or(`and(from_memorial_id.eq.${sourceId},to_memorial_id.eq.${targetId}),and(from_memorial_id.eq.${targetId},to_memorial_id.eq.${sourceId})`);
-
-            if (relatedEdges) {
-                const edgeIds = relatedEdges.map(e => e.id);
-                await supabase
-                    .from('memorial_relations')
-                    .update({ description: newLabel })
-                    .in('id', edgeIds);
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || 'Failed to update connection.');
             }
 
             await loadGraph();
             setSelectedEdgeData(null);
-        } catch (err) {
-            alert("Failed to update connection.");
+        } catch (err: any) {
+            alert(err.message || "Failed to update connection.");
         } finally {
             setSaving(false);
         }
@@ -322,19 +319,24 @@ function FamilyTreeGraph({ userId }: { userId: string }) {
         if (!confirm("Remove this connection?")) return;
         setSaving(true);
         try {
-            // Delete BOTH the forward and reverse relations between these two memorials
-            const sourceId = selectedEdgeData.source;
-            const targetId = selectedEdgeData.target;
+            const response = await fetch('/api/family/link', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fromId: selectedEdgeData.source,
+                    toId: selectedEdgeData.target,
+                }),
+            });
 
-            await supabase
-                .from('memorial_relations')
-                .delete()
-                .or(`and(from_memorial_id.eq.${sourceId},to_memorial_id.eq.${targetId}),and(from_memorial_id.eq.${targetId},to_memorial_id.eq.${sourceId})`);
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || 'Failed to delete connection.');
+            }
 
             await loadGraph();
             setSelectedEdgeData(null);
-        } catch (err) {
-            alert("Failed to delete connection.");
+        } catch (err: any) {
+            alert(err.message || "Failed to delete connection.");
         } finally {
             setSaving(false);
         }

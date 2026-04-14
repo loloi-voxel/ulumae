@@ -685,10 +685,6 @@ CREATE POLICY "Users can view own successors"
     ON user_successors FOR SELECT
     USING (user_id = auth.uid());
 
-CREATE POLICY "Public can view by verification token"
-    ON user_successors FOR SELECT
-    USING (true);
-
 CREATE POLICY "Users can manage own successors"
     ON user_successors FOR INSERT
     WITH CHECK (user_id = auth.uid());
@@ -734,10 +730,6 @@ CREATE POLICY "Users can view own activations"
     USING (
         successor_id IN (SELECT id FROM user_successors WHERE user_id = auth.uid())
     );
-
-CREATE POLICY "Anyone can create activation requests"
-    ON succession_activations FOR INSERT
-    WITH CHECK (true);
 
 
 -- ============================================================

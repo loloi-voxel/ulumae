@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { FileEdit, User, Users, Sparkles, Check, ArrowLeft, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuth } from '@/components/providers/AuthProvider';
+import { getPlanDashboardPath, useAuth } from '@/components/providers/AuthProvider';
 import { PLAN_PRICES_USD } from '@/lib/constants';
 
 const features = [
@@ -76,6 +76,11 @@ export default function ChoicePricingPage() {
     const ready = !auth.loading;
 
     const hasPaidPlan = auth.hasPaid;
+    const currentDashboardPath = userId ? getPlanDashboardPath(auth.plan, userId) : '/choice-pricing';
+    const activePlanLabel =
+        auth.plan === 'concierge'
+            ? 'Concierge'
+            : auth.plan.charAt(0).toUpperCase() + auth.plan.slice(1);
 
     const requireAuth = (nextPath: string): boolean => {
         if (userId) return true;
@@ -89,8 +94,15 @@ export default function ChoicePricingPage() {
     };
 
     const handleModeSelection = (mode: 'personal' | 'family') => {
+        if (hasPaidPlan && userId) {
+            const alreadyInFamilyWorkspace = auth.plan === 'family' || auth.plan === 'concierge';
+            if ((mode === 'personal' && auth.plan === 'personal') || alreadyInFamilyWorkspace) {
+                router.replace(currentDashboardPath);
+                return;
+            }
+        }
         if (hasPaidPlan && auth.plan === mode) {
-            router.replace(`/dashboard/${mode}/${userId}`);
+            router.replace(currentDashboardPath);
             return;
         }
         const confirmPath = mode === 'personal' ? '/personal-confirmation' : '/family-confirmation';
@@ -99,6 +111,10 @@ export default function ChoicePricingPage() {
     };
 
     const handleConciergeSelection = () => {
+        if (auth.plan === 'concierge' && userId) {
+            router.replace(currentDashboardPath);
+            return;
+        }
         router.push('/concierge/request');
     };
 
@@ -137,7 +153,7 @@ export default function ChoicePricingPage() {
                                     Current Plan
                                 </p>
                                 <p className="text-sm text-warm-dark">
-                                    You have an active <strong className="capitalize">{auth.plan}</strong> plan.{' '}
+                                    You have an active <strong>{activePlanLabel}</strong> plan.{' '}
                                     {auth.plan === 'personal'
                                         ? 'Secure their legacy for future generations by expanding to Family.'
                                         : auth.plan === 'family'
@@ -145,7 +161,7 @@ export default function ChoicePricingPage() {
                                             : 'You are on the highest level of preservation.'}
                                 </p>
                                 <button
-                                    onClick={() => router.replace(`/dashboard/${auth.plan}/${userId}`)}
+                                    onClick={() => router.replace(currentDashboardPath)}
                                     className="mt-3 px-4 py-2 glass-btn-primary text-xs uppercase tracking-widest hover-grow"
                                 >
                                     Go to Dashboard
@@ -303,7 +319,7 @@ export default function ChoicePricingPage() {
                         <div className="w-14 h-14 bg-gradient-to-br from-olive via-warm-brown to-olive/80 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                             <Sparkles size={28} className="text-warm-bg" />
                         </div>
-                        <h3 className="font-serif text-3xl text-warm-dark mb-1">Conciergerie</h3>
+                        <h3 className="font-serif text-3xl text-warm-dark mb-1">Concierge</h3>
                         <p className="text-xs uppercase tracking-widest text-warm-outline">
                             Estate Preservation
                         </p>
@@ -420,7 +436,7 @@ export default function ChoicePricingPage() {
             <div className="mt-16 text-center">
                 <p className="text-sm text-warm-outline">
                     Not sure which to choose? <strong>Preview Archive</strong> is free to start — you can upgrade to Personal at any time.
-                    Personal and Family are self-service tools. Conciergerie is a fully managed, human-led service.
+                    Personal and Family are self-service tools. Concierge is a fully managed, human-led service.
                 </p>
             </div>
         </main>

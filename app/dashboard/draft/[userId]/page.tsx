@@ -6,8 +6,9 @@ import { Plus, Eye, Edit, Trash2, FileEdit, Loader2, ArrowLeft, RefreshCcw, Aler
 import { useRouter } from 'next/navigation';
 import { Memorial } from '@/lib/supabase';
 import { createClient } from '@/utils/supabase/client';
-import { useAuth } from '@/components/providers/AuthProvider';
+import { getPlanDashboardPath, useAuth } from '@/components/providers/AuthProvider';
 import DashboardShell from '@/components/dashboard/DashboardShell';
+import { permanentlyDeleteMemorial, updateMemorialTrashState } from '@/lib/memorialClientActions';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
 
 export default function DraftDashboard({ params }: { params: Promise<{ userId: string }> }) {
@@ -32,7 +33,7 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
         }
         // If user has upgraded to a paid plan, redirect to the correct dashboard
         if (auth.hasPaid && auth.user) {
-            router.replace(`/dashboard/${auth.plan}/${auth.user.id}`);
+            router.replace(getPlanDashboardPath(auth.plan, auth.user.id));
             return;
         }
     }, [auth.loading, auth.authenticated, auth.user, auth.hasPaid, auth.plan, userId, router]);
@@ -81,32 +82,22 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
     const softDeleteMemorial = async (id: string) => {
         if (!confirm(`Are you sure you want to delete this archive? It will be moved to the trash for ${SOFT_DELETE_RETENTION_DAYS} days.`)) return;
 
-        const supabase = createClient();
-        const { error } = await supabase
-            .from('memorials')
-            .update({ deleted: true, deleted_at: new Date().toISOString() })
-            .eq('id', id);
-
-        if (error) {
+        try {
+            await updateMemorialTrashState(id, 'delete');
+            loadMemorials();
+        } catch (error) {
             alert('Error deleting archive');
             console.error(error);
-        } else {
-            loadMemorials();
         }
     };
 
     const restoreMemorial = async (id: string) => {
-        const supabase = createClient();
-        const { error } = await supabase
-            .from('memorials')
-            .update({ deleted: false, deleted_at: null })
-            .eq('id', id);
-
-        if (error) {
+        try {
+            await updateMemorialTrashState(id, 'restore');
+            loadMemorials();
+        } catch (error) {
             alert('Error restoring archive');
             console.error(error);
-        } else {
-            loadMemorials();
         }
     };
 
@@ -114,8 +105,7 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
         if (!confirm('Are you sure you want to permanently delete this archive? This action cannot be undone.')) return;
         if (!confirm('This is irreversible. The archive and all its content will be lost forever. Continue?')) return;
         try {
-            const res = await fetch(`/api/memorials/${id}/permanent-delete`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Operation failed');
+            await permanentlyDeleteMemorial(id);
             loadMemorials();
         } catch {
             alert('Error permanently deleting archive. Please try again.');

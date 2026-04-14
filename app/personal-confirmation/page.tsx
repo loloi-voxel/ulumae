@@ -7,7 +7,12 @@ import { ArrowLeft, Check, ExternalLink, ArrowUpCircle, Loader2 } from 'lucide-r
 import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/components/providers/AuthProvider';
+import { getPlanDashboardPath, useAuth } from '@/components/providers/AuthProvider';
+import {
+    clearCurrentMemorialId,
+    readCurrentMemorialId,
+    writeCurrentMemorialId,
+} from '@/lib/currentMemorialStorage';
 import { PLAN_PRICES_USD } from '@/lib/constants';
 
 function PersonalConfirmationContent() {
@@ -16,7 +21,6 @@ function PersonalConfirmationContent() {
     const [isOpeningAuth, setIsOpeningAuth] = useState(false);
     const [authorizationCompleted, setAuthorizationCompleted] = useState(false);
     const [currentMemorialId, setCurrentMemorialId] = useState<string | null>(null);
-    const [authUserId, setAuthUserId] = useState<string | null>(null);
     const router = useRouter();
     const searchParams = useSearchParams();
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -35,29 +39,23 @@ function PersonalConfirmationContent() {
         }
         // If user already has a paid personal or higher plan (not draft upgrade), redirect
         if (!isDraftUpgrade && auth.hasPaid && (auth.plan === 'personal' || auth.plan === 'family' || auth.plan === 'concierge')) {
-            router.replace(`/dashboard/${auth.plan}/${auth.user!.id}`);
+            router.replace(getPlanDashboardPath(auth.plan, auth.user!.id));
             return;
         }
     }, [auth.loading, auth.authenticated, auth.hasPaid, auth.plan, auth.user, isDraftUpgrade, router]);
 
-    // Get authenticated user
-    useEffect(() => {
-        const supabase = createClient();
-        supabase.auth.getUser().then(({ data: { user } }) => {
-            if (user) setAuthUserId(user.id);
-        });
-    }, []);
-
     // On mount: restore memorialId from URL/localStorage and check if auth was already completed
     useEffect(() => {
-        const storedId = upgradeMemorialId || localStorage.getItem('current-memorial-id');
+        if (!auth.user?.id) return;
+
+        const storedId = upgradeMemorialId || readCurrentMemorialId(auth.user.id, 'personal');
         if (storedId && storedId !== 'null' && storedId !== 'undefined') {
             setCurrentMemorialId(storedId);
             if (localStorage.getItem(`lv-auth-${storedId}`) === 'done') {
                 setAuthorizationCompleted(true);
             }
         }
-    }, [upgradeMemorialId]);
+    }, [auth.user?.id, upgradeMemorialId]);
 
     // Poll the DB every 3 s for auth completion, and listen for postMessage from popup
     useEffect(() => {
@@ -107,28 +105,35 @@ function PersonalConfirmationContent() {
     // Single source of truth for memorial creation — prevents duplicates
     const ensureMemorial = async (): Promise<string> => {
         const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Please sign in to continue.');
+        const storageUserId = auth.user?.id || user.id;
 
         // 1. Check React state first (most reliable)
         let memorialId = upgradeMemorialId || currentMemorialId;
 
         // 2. Fallback to localStorage
         if (!memorialId || memorialId === 'null' || memorialId === 'undefined') {
-            memorialId = localStorage.getItem('current-memorial-id');
+            memorialId = readCurrentMemorialId(storageUserId, 'personal');
         }
 
         // 3. Validate the memorial still exists in the DB
         if (memorialId && memorialId !== 'null' && memorialId !== 'undefined') {
             const { data: existing } = await supabase
-                .from('memorials').select('id').eq('id', memorialId).maybeSingle();
+                .from('memorials')
+                .select('id')
+                .eq('id', memorialId)
+                .eq('user_id', user.id)
+                .maybeSingle();
             if (existing) {
                 // Memorial exists — update state and return
                 setCurrentMemorialId(memorialId);
-                localStorage.setItem('current-memorial-id', memorialId);
+                writeCurrentMemorialId(storageUserId, 'personal', memorialId);
                 return memorialId;
             }
             // Memorial was deleted or invalid — clear stale reference
             memorialId = null;
-            localStorage.removeItem('current-memorial-id');
+            clearCurrentMemorialId(storageUserId, 'personal');
         }
 
         // 4. Prevent concurrent creation
@@ -141,9 +146,6 @@ function PersonalConfirmationContent() {
 
         creatingRef.current = true;
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Please sign in to continue.');
-
             // 5. Check for an existing unpaid personal memorial (dedup)
             const { data: existingUnpaid } = await supabase
                 .from('memorials')
@@ -170,7 +172,7 @@ function PersonalConfirmationContent() {
                 memorialId = data.id;
             }
 
-            localStorage.setItem('current-memorial-id', memorialId!);
+            writeCurrentMemorialId(storageUserId, 'personal', memorialId!);
             setCurrentMemorialId(memorialId);
             return memorialId!;
         } finally {
@@ -185,7 +187,7 @@ function PersonalConfirmationContent() {
 
             // replace: prevent back-button from returning to confirmation after going to payment
             const popupParam = isPopup ? '&popup=true' : '';
-            router.replace(`/payment?memorialId=${memorialId}${popupParam}`);
+            router.replace(`/payment?memorialId=${memorialId}&plan=personal${popupParam}`);
         } catch (error: any) {
             console.error('Payment error:', error);
             alert(error.message || 'Payment failed. Please try again.');

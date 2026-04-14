@@ -5,7 +5,12 @@ import { ArrowLeft, Check, ExternalLink, Loader2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/components/providers/AuthProvider';
+import { getPlanDashboardPath, useAuth } from '@/components/providers/AuthProvider';
+import {
+    clearCurrentMemorialId,
+    readCurrentMemorialId,
+    writeCurrentMemorialId,
+} from '@/lib/currentMemorialStorage';
 
 export default function FamilyConfirmationPage() {
     const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -13,7 +18,6 @@ export default function FamilyConfirmationPage() {
     const [isOpeningAuth, setIsOpeningAuth] = useState(false);
     const [authorizationCompleted, setAuthorizationCompleted] = useState(false);
     const [currentMemorialId, setCurrentMemorialId] = useState<string | null>(null);
-    const [authUserId, setAuthUserId] = useState<string | null>(null);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const router = useRouter();
     const auth = useAuth();
@@ -26,29 +30,23 @@ export default function FamilyConfirmationPage() {
             return;
         }
         if (auth.hasPaid && (auth.plan === 'family' || auth.plan === 'concierge')) {
-            router.replace(`/dashboard/${auth.plan}/${auth.user!.id}`);
+            router.replace(getPlanDashboardPath(auth.plan, auth.user!.id));
             return;
         }
     }, [auth.loading, auth.authenticated, auth.hasPaid, auth.plan, auth.user, router]);
 
-    // Get authenticated user
-    useEffect(() => {
-        const supabase = createClient();
-        supabase.auth.getUser().then(({ data: { user } }) => {
-            if (user) setAuthUserId(user.id);
-        });
-    }, []);
-
     // On mount: restore memorialId and check if auth was already completed
     useEffect(() => {
-        const storedId = localStorage.getItem('current-memorial-id');
+        if (!auth.user?.id) return;
+
+        const storedId = readCurrentMemorialId(auth.user.id, 'family');
         if (storedId && storedId !== 'null' && storedId !== 'undefined') {
             setCurrentMemorialId(storedId);
             if (localStorage.getItem(`lv-auth-${storedId}`) === 'done') {
                 setAuthorizationCompleted(true);
             }
         }
-    }, []);
+    }, [auth.user?.id]);
 
     // Poll DB every 3 s and listen for postMessage from popup
     useEffect(() => {
@@ -94,26 +92,33 @@ export default function FamilyConfirmationPage() {
     // Single source of truth for memorial creation — prevents duplicates
     const ensureMemorial = async (): Promise<string> => {
         const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Please sign in to continue.');
+        const storageUserId = auth.user?.id || user.id;
 
         // 1. Check React state first (most reliable)
         let memorialId: string | null = currentMemorialId;
 
         // 2. Fallback to localStorage
         if (!memorialId || memorialId === 'null' || memorialId === 'undefined') {
-            memorialId = localStorage.getItem('current-memorial-id');
+            memorialId = readCurrentMemorialId(storageUserId, 'family');
         }
 
         // 3. Validate the memorial still exists in the DB
         if (memorialId && memorialId !== 'null' && memorialId !== 'undefined') {
             const { data: existing } = await supabase
-                .from('memorials').select('id').eq('id', memorialId).maybeSingle();
+                .from('memorials')
+                .select('id')
+                .eq('id', memorialId)
+                .eq('user_id', user.id)
+                .maybeSingle();
             if (existing) {
                 setCurrentMemorialId(memorialId);
-                localStorage.setItem('current-memorial-id', memorialId);
+                writeCurrentMemorialId(storageUserId, 'family', memorialId);
                 return memorialId;
             }
             memorialId = null;
-            localStorage.removeItem('current-memorial-id');
+            clearCurrentMemorialId(storageUserId, 'family');
         }
 
         // 4. Prevent concurrent creation
@@ -125,9 +130,6 @@ export default function FamilyConfirmationPage() {
 
         creatingRef.current = true;
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('Please sign in to continue.');
-
             // 5. Check for an existing unpaid family memorial (dedup)
             const { data: existingUnpaid } = await supabase
                 .from('memorials')
@@ -154,7 +156,7 @@ export default function FamilyConfirmationPage() {
                 memorialId = data.id;
             }
 
-            localStorage.setItem('current-memorial-id', memorialId!);
+            writeCurrentMemorialId(storageUserId, 'family', memorialId!);
             setCurrentMemorialId(memorialId);
             return memorialId!;
         } finally {

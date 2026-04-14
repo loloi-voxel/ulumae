@@ -101,8 +101,28 @@ export default function FamilyLinker({ currentMemorialId, userId, mode }: Family
 
     const unlink = async (id: string) => {
         if (!confirm("Remove this connection?")) return;
-        await supabase.from('memorial_relations').delete().eq('id', id);
-        loadData();
+        const relation = relations.find((item) => item.id === id);
+        if (!relation) return;
+
+        try {
+            const response = await fetch('/api/family/link', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fromId: currentMemorialId,
+                    toId: relation.to_memorial_id,
+                }),
+            });
+
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || 'Failed to remove connection.');
+            }
+
+            loadData();
+        } catch (error: any) {
+            alert(error.message || 'Error removing connection. Please try again.');
+        }
     };
 
     if (loading) return <div className="p-4 text-center"><Loader2 className="animate-spin inline text-olive" /></div>;

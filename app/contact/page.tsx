@@ -54,7 +54,7 @@ export default function ContactPage() {
               </h2>
               <p className="text-sm text-warm-muted font-sans leading-relaxed">
                 Whether you have questions about our plans, need guidance on
-                building a memorial, or are considering the Conciergerie service —
+building a memorial, or are considering the Concierge service —
                 we are here to help with care and discretion.
               </p>
               <p className="text-sm text-warm-muted font-sans leading-relaxed mt-3">

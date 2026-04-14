@@ -1,8 +1,6 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
 import { secureUpload } from '@/lib/uploadService';
 import { ShieldAlert, FileText, CheckCircle, Loader2, ArrowLeft, User } from 'lucide-react';
 import Link from 'next/link';
@@ -12,7 +10,6 @@ export default function SuccessionRequestPage() {
     const [files, setFiles] = useState<{ deathCert: File | null, idProof: File | null }>({ deathCert: null, idProof: null });
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
-    const router = useRouter();
 
     const deathCertRef = useRef<HTMLInputElement>(null);
     const idProofRef = useRef<HTMLInputElement>(null);
@@ -26,35 +23,26 @@ export default function SuccessionRequestPage() {
         setSubmitting(true);
 
         try {
-            // 1. Verify this email is a designated steward
-            const { data: steward, error: stewardError } = await supabase
-                .from('user_successors')
-                .select('id')
-                .eq('successor_email', email)
-                .eq('status', 'accepted')
-                .single();
-
-            if (stewardError || !steward) {
-                throw new Error("We could not find an active stewardship associated with this email.");
-            }
-
-            // 2. Upload Documents
-            const deathCertRes = await secureUpload(files.deathCert, 'legal-documents', `activations/${steward.id}/death_cert_${Date.now()}`);
-            const idProofRes = await secureUpload(files.idProof, 'legal-documents', `activations/${steward.id}/id_proof_${Date.now()}`);
+            // 1. Upload Documents
+            const activationKey = email.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            const deathCertRes = await secureUpload(files.deathCert, 'legal-documents', `activations/${activationKey}/death_cert_${Date.now()}`);
+            const idProofRes = await secureUpload(files.idProof, 'legal-documents', `activations/${activationKey}/id_proof_${Date.now()}`);
 
             if (!deathCertRes.success || !idProofRes.success) throw new Error("File upload failed.");
 
-            // 3. Create Activation Request
-            const { error: insertError } = await supabase
-                .from('succession_activations')
-                .insert([{
-                    successor_id: steward.id,
-                    death_certificate_url: deathCertRes.url,
-                    id_proof_url: idProofRes.url,
-                    status: 'under_review'
-                }]);
+            // 2. Create Activation Request
+            const response = await fetch('/api/succession/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email,
+                    deathCertificateUrl: deathCertRes.url,
+                    idProofUrl: idProofRes.url,
+                }),
+            });
+            const payload = await response.json();
 
-            if (insertError) throw insertError;
+            if (!response.ok) throw new Error(payload.error || 'Could not submit the succession request.');
 
             setSubmitted(true);
         } catch (err: any) {

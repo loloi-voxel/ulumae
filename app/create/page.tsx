@@ -21,6 +21,7 @@ import Step9Videos from '@/components/wizard/Step9Videos';
 import Step10Review from '@/components/wizard/Step10Review';
 import TutorialPopup from '@/components/TutorialPopup';
 import VersionHistory from '@/components/VersionHistory';
+import { getPlanDashboardPath } from '@/components/providers/AuthProvider';
 import {
   MemorialData,
   BasicInfo,
@@ -248,26 +249,32 @@ function CreateMemorialPageContent() {
   const mode = searchParams.get('mode') || 'personal';
   const effectiveMode = dbMode || mode;
   // Personal & Family modes = user already paid for the plan → full access
-  const isPaidMode = effectiveMode === 'personal' || effectiveMode === 'family';
+  const isPaidMode = effectiveMode === 'personal' || effectiveMode === 'family' || effectiveMode === 'concierge';
   const hasFullAccess = isPaidMode || memorialData.paid;
 
   // Determine the correct dashboard path based on the memorial's actual mode
   const dashboardPath = authUserId
-    ? `/dashboard/${effectiveMode === 'family' ? 'family' : effectiveMode === 'draft' ? 'draft' : 'personal'}/${authUserId}`
+    ? getPlanDashboardPath(effectiveMode, authUserId)
     : '/dashboard';
   const isMemorialOwner = !!authUserId && memorialOwnerId === authUserId;
 
   // 2. HELPER FOR BADGE UI — Step 1.1.1: Warm, human draft banner
   const ModeBadge = () => (
-    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${effectiveMode === 'family'
+    <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${effectiveMode === 'family' || effectiveMode === 'concierge'
       ? 'bg-warm-brown/10 text-warm-brown border-warm-brown/20'
       : effectiveMode === 'draft'
         ? 'bg-warm-border/10 text-warm-muted border-warm-border/30'
         : 'bg-olive/10 text-olive border-olive/20'
       }`}>
-      {effectiveMode === 'family' ? <Users size={12} /> : <User size={12} />}
+      {effectiveMode === 'family' || effectiveMode === 'concierge' ? <Users size={12} /> : <User size={12} />}
       <span className="uppercase tracking-wider">
-        {effectiveMode === 'family' ? 'Family Archive' : effectiveMode === 'draft' ? 'Preview Archive' : 'Personal Archive'}
+        {effectiveMode === 'concierge'
+          ? 'Concierge Archive'
+          : effectiveMode === 'family'
+            ? 'Family Archive'
+            : effectiveMode === 'draft'
+              ? 'Preview Archive'
+              : 'Personal Archive'}
       </span>
     </div>
   );
@@ -1021,7 +1028,7 @@ function CreateMemorialPageContent() {
 
             {/* Step 1.3.1: Qualitative indicator instead of numerical */}
             {(() => {
-              const isPaidModeLocal = effectiveMode === 'personal' || effectiveMode === 'family';
+              const isPaidModeLocal = effectiveMode === 'personal' || effectiveMode === 'family' || effectiveMode === 'concierge';
               const isPresenceUnlocked = isPaidModeLocal || memorialData.paid || completedPathsCount >= 2;
 
               return (

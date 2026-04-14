@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { ArrowLeft, Shield, Lock, RefreshCw, CheckCircle } from 'lucide-react';
-import { useAuth } from '@/components/providers/AuthProvider';
+import { getDashboardPath, useAuth } from '@/components/providers/AuthProvider';
 
 // Load Stripe outside of component to avoid re-creating on every render
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -69,14 +69,10 @@ function PaymentForm({ memorialId, amount, fullName, plan, isPopup }: {
 
             // Payment succeeded without redirect (no 3DS required)
             if (paymentIntent && paymentIntent.status === 'succeeded') {
-                // Finalize the payment
-                await fetch('/api/finalize-payment', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ memorialId }),
-                });
                 // replace: prevent back-button from returning to payment form
-                router.replace(`/payment-success?id=${memorialId}&plan=${plan}${isPopup ? '&popup=true' : ''}`);
+                router.replace(
+                    `/payment-success?id=${memorialId}&plan=${plan}&payment_intent=${paymentIntent.id}${isPopup ? '&popup=true' : ''}`
+                );
             }
         } catch (err: any) {
             setPaymentError('An unexpected error occurred. Your draft is saved, and you can return at any time.');
@@ -273,7 +269,7 @@ function PaymentPageContent() {
                         This archive has already been activated. You can access it from your dashboard.
                     </p>
                     <button
-                        onClick={() => router.replace('/dashboard')}
+                        onClick={() => router.replace(getDashboardPath(auth))}
                         className="px-6 py-3 glass-btn-dark rounded-xl font-medium transition-colors"
                     >
                         Go to Dashboard

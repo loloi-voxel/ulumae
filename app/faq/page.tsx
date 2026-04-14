@@ -84,9 +84,9 @@ const faqItems: { question: string; answer: string }[] = [
       'No. The displayed price is final. No storage fees. No annual fees. No export fees. One payment, permanent preservation.',
   },
   {
-    question: 'What is the Conciergerie service?',
+question: 'What is the Concierge service?',
     answer:
-      'Our Conciergerie is a fully managed, human-led service. We conduct interviews, digitize documents, and professionally write the biography. The memorial is delivered within 60 days, with two revision cycles included.',
+'Our Concierge service is a fully managed, human-led service. We conduct interviews, digitize documents, and professionally write the biography. The memorial is delivered within 60 days, with two revision cycles included.',
   },
 ];
 
