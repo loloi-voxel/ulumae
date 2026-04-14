@@ -71,7 +71,9 @@ export default function MemorialRenderer({
         galleryGrid: compact ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4',
         quoteSize: compact ? 'text-lg' : 'text-3xl md:text-4xl',
     };
-    const galleryItems = (data.step8?.gallery || []).filter((photo: any) => !!photo?.preview);
+    const galleryItems = (data.step8?.gallery || [])
+        .filter((photo: any) => !!photo?.preview)
+        .filter((photo: any) => !brokenImages[photo.id]);
     const visibleGalleryItems = galleryItems.slice(0, visibleGalleryCount);
     const videoItems = (data.step9?.videos || []).filter((video: any) => !!video?.url);
     const visibleVideoItems = videoItems.slice(0, visibleVideoCount);
@@ -723,31 +725,22 @@ export default function MemorialRenderer({
                     ) : null}
 
                     {/* Photo Gallery */}
-                    {data.step8?.gallery?.length > 0 ? (
+                    {galleryItems.length > 0 ? (
                         <section>
                             <h2 className={`font-serif ${s.sectionTitle} text-warm-dark mb-${compact ? '4' : '8'}`}>Photo Gallery</h2>
                             <div className={`grid ${s.galleryGrid} gap-${compact ? '2' : '4'}`}>
-                                {data.step8.gallery
-                                    .filter((photo: any) => !!photo?.preview)
-                                    .slice(0, visibleGalleryCount)
-                                    .map((photo: any, index: number) => (
+                                {visibleGalleryItems.map((photo: any, index: number) => (
                                     <button
                                         key={photo.id}
                                         onClick={() => { setViewerStartIndex(index); setViewerOpen(true); }}
                                         className={`group relative aspect-square rounded-xl overflow-hidden bg-warm-border/20 shadow-sm cursor-pointer hover:shadow-lg transition-all ${isPreview && index > 0 ? 'opacity-50 pointer-events-none' : ''}`}
                                     >
-                                        {brokenImages[photo.id] ? (
-                                            <div className="flex h-full w-full items-center justify-center p-4 text-center text-xs text-warm-dark/40">
-                                                Preview unavailable
-                                            </div>
-                                        ) : (
-                                            <img
-                                                src={photo.preview}
-                                                alt={photo.caption}
-                                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                                                onError={() => setBrokenImages((current) => ({ ...current, [photo.id]: true }))}
-                                            />
-                                        )}
+                                        <img
+                                            src={photo.preview}
+                                            alt={photo.caption}
+                                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                            onError={() => setBrokenImages((current) => ({ ...current, [photo.id]: true }))}
+                                        />
 
                                         <IntegrityBadge hash={photo.sha256_hash} />
 
@@ -760,7 +753,7 @@ export default function MemorialRenderer({
                                     </button>
                                 ))}
                             </div>
-                            {data.step8.gallery.length > visibleGalleryCount && (
+                            {galleryItems.length > visibleGalleryCount && (
                                 <div className="mt-4 text-center">
                                     <button
                                         onClick={() => setVisibleGalleryCount((current) => current + (compact ? 6 : 12))}
@@ -771,7 +764,7 @@ export default function MemorialRenderer({
                                 </div>
                             )}
                             {viewerOpen && !compact && (
-                                <ImageViewer images={data.step8.gallery} initialIndex={viewerStartIndex} onClose={() => setViewerOpen(false)} />
+                                <ImageViewer images={galleryItems} initialIndex={viewerStartIndex} onClose={() => setViewerOpen(false)} />
                             )}
                         </section>
                     ) : isPreview ? (
@@ -779,24 +772,37 @@ export default function MemorialRenderer({
                     ) : null}
 
                     {/* Videos */}
-                    {data.step9?.videos?.length > 0 ? (
+                    {videoItems.length > 0 ? (
                         <section>
                             <h2 className={`font-serif ${s.sectionTitle} text-warm-dark mb-${compact ? '4' : '8'}`}>Video Memories</h2>
                             <div className={`grid grid-cols-1 ${compact ? '' : 'md:grid-cols-2'} gap-${compact ? '3' : '6'}`}>
-                                {data.step9.videos.map((video: any) => (
+                                {visibleVideoItems.map((video: any) => (
                                     <div key={video.id} className={`bg-white rounded-xl ${compact ? 'p-3' : 'p-4'} border border-warm-border/30 shadow-sm relative`}>
 
                                         <IntegrityBadge hash={video.sha256_hash} className="top-2 left-2" />
 
                                         <div className="aspect-video bg-warm-dark/10 rounded-lg overflow-hidden mb-2">
                                             <video controls preload="metadata" className="w-full h-full" poster={video.thumbnail}>
-                                                <source src={video.url} type="video/mp4" />
+                                                <source src={video.url} type={video.mimeType || 'video/mp4'} />
                                             </video>
                                         </div>
                                         {video.title && <h3 className={`font-semibold text-warm-dark ${compact ? 'text-xs' : ''}`}>{video.title}</h3>}
+                                        {video.description && !compact && (
+                                            <p className="mt-2 text-sm text-warm-dark/55 line-clamp-2">{video.description}</p>
+                                        )}
                                     </div>
                                 ))}
                             </div>
+                            {videoItems.length > visibleVideoCount && (
+                                <div className="mt-4 text-center">
+                                    <button
+                                        onClick={() => setVisibleVideoCount((current) => current + (compact ? 4 : 8))}
+                                        className="px-4 py-2 text-sm border border-warm-border/30 rounded-xl text-warm-dark/60 hover:bg-warm-border/10 transition-all"
+                                    >
+                                        Load more videos
+                                    </button>
+                                </div>
+                            )}
                         </section>
                     ) : isPreview ? (
                         <GhostPresence variant="video" whisper="No moving images have been gathered." />

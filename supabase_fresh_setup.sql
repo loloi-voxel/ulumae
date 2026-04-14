@@ -497,6 +497,60 @@ CREATE POLICY "Service role full access to contributions"
 
 
 -- ============================================================
+-- SECTION 7.5: MEMORIAL MEDIA ASSETS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS memorial_media_assets (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    memorial_id UUID NOT NULL REFERENCES memorials(id) ON DELETE CASCADE,
+    contribution_id UUID REFERENCES memorial_contributions(id) ON DELETE SET NULL,
+    kind TEXT NOT NULL
+        CHECK (
+            kind IN (
+                'profile_photo',
+                'cover_photo',
+                'gallery_photo',
+                'interactive_photo',
+                'voice_recording',
+                'video',
+                'video_thumbnail',
+                'contribution_photo'
+            )
+        ),
+    bucket TEXT NOT NULL
+        CHECK (bucket IN ('memorial-media', 'videos')),
+    storage_path TEXT NOT NULL,
+    public_url TEXT NOT NULL,
+    original_file_name TEXT,
+    mime_type TEXT NOT NULL,
+    file_size BIGINT NOT NULL CHECK (file_size > 0),
+    sha256_hash TEXT NOT NULL,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    deleted_at TIMESTAMPTZ,
+    deleted_by UUID REFERENCES auth.users(id) ON DELETE SET NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_memorial_media_assets_bucket_storage
+    ON memorial_media_assets(bucket, storage_path);
+CREATE INDEX IF NOT EXISTS idx_memorial_media_assets_memorial
+    ON memorial_media_assets(memorial_id);
+CREATE INDEX IF NOT EXISTS idx_memorial_media_assets_kind
+    ON memorial_media_assets(kind);
+CREATE INDEX IF NOT EXISTS idx_memorial_media_assets_deleted_at
+    ON memorial_media_assets(deleted_at);
+
+ALTER TABLE memorial_media_assets ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Service role full access to memorial media assets"
+    ON memorial_media_assets FOR ALL
+    USING (auth.role() = 'service_role')
+    WITH CHECK (auth.role() = 'service_role');
+
+
+-- ============================================================
 -- SECTION 8: MEMORIAL RELATIONS (family connections)
 -- ============================================================
 
@@ -1156,20 +1210,21 @@ ON CONFLICT (id) DO NOTHING;
 -- ============================================================
 
 -- Videos bucket policies
-CREATE POLICY "Anyone can upload videos"
-    ON storage.objects FOR INSERT
-    TO public
-    WITH CHECK (bucket_id = 'videos');
-
 CREATE POLICY "Anyone can read videos"
     ON storage.objects FOR SELECT
     TO public
     USING (bucket_id = 'videos');
 
-CREATE POLICY "Anyone can delete videos"
-    ON storage.objects FOR DELETE
-    TO public
-    USING (bucket_id = 'videos');
+CREATE POLICY "Service role can manage videos"
+    ON storage.objects FOR ALL
+    USING (
+        bucket_id = 'videos'
+        AND auth.role() = 'service_role'
+    )
+    WITH CHECK (
+        bucket_id = 'videos'
+        AND auth.role() = 'service_role'
+    );
 
 -- Paid users video upload restriction (optional, uncomment if needed)
 -- CREATE POLICY "Only paid users can upload videos"
@@ -1209,20 +1264,21 @@ CREATE POLICY "Users can read authorization PDFs"
     USING (bucket_id = 'authorization-pdfs');
 
 -- Memorial media policies
-CREATE POLICY "Anyone can upload memorial media"
-    ON storage.objects FOR INSERT
-    TO public
-    WITH CHECK (bucket_id = 'memorial-media');
-
 CREATE POLICY "Anyone can read memorial media"
     ON storage.objects FOR SELECT
     TO public
     USING (bucket_id = 'memorial-media');
 
-CREATE POLICY "Anyone can delete memorial media"
-    ON storage.objects FOR DELETE
-    TO public
-    USING (bucket_id = 'memorial-media');
+CREATE POLICY "Service role can manage memorial media"
+    ON storage.objects FOR ALL
+    USING (
+        bucket_id = 'memorial-media'
+        AND auth.role() = 'service_role'
+    )
+    WITH CHECK (
+        bucket_id = 'memorial-media'
+        AND auth.role() = 'service_role'
+    );
 
 -- Certificates policies
 CREATE POLICY "Users can view own certificates files"
@@ -1245,7 +1301,7 @@ CREATE POLICY "Service role can manage certificates files"
 -- ============================================================
 -- Run these after executing everything above to verify setup.
 
--- Check all 19 tables exist
+-- Check all 20 tables exist
 SELECT table_name
 FROM information_schema.tables
 WHERE table_schema = 'public'
@@ -1256,6 +1312,7 @@ AND table_name IN (
     'memorial_versions',
     'witness_invitations',
     'memorial_contributions',
+    'memorial_media_assets',
     'memorial_relations',
     'user_successors',
     'succession_activations',
@@ -1283,7 +1340,7 @@ FROM pg_tables
 WHERE schemaname = 'public'
 AND tablename IN (
     'users', 'memorials', 'memorial_authorizations', 'memorial_versions',
-    'witness_invitations', 'memorial_contributions', 'memorial_relations',
+    'witness_invitations', 'memorial_contributions', 'memorial_media_assets', 'memorial_relations',
     'user_successors', 'succession_activations', 'memorial_reminders',
     'concierge_projects', 'concierge_files', 'concierge_notes',
     'arweave_transactions', 'anchor_devices', 'recovery_contacts',

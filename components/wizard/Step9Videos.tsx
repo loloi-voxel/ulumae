@@ -7,9 +7,7 @@ import {
   Film,
   Play,
   Plus,
-  RefreshCw,
   Trash2,
-  Upload,
   X,
 } from 'lucide-react';
 
@@ -44,6 +42,19 @@ function statusLabel(status?: string) {
   if (status === 'error') return 'Needs retry';
   if (status === 'deleting') return 'Removing';
   return 'Ready';
+}
+
+function formatUploadedAt(value?: string | null) {
+  if (!value) return 'Not saved yet';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not saved yet';
+  return date.toLocaleString();
+}
+
+function formatFileSize(value?: number | null) {
+  if (!value || value <= 0) return 'Unknown size';
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 async function getVideoDuration(file: File): Promise<string> {
@@ -158,6 +169,129 @@ export default function Step9Videos({
     return true;
   };
 
+  const uploadVideoFile = async (file: File, existingVideo?: VideoReference) => {
+    if (!ensureMemorial()) return false;
+    if (file.size > MAX_VIDEO_FILE_SIZE_BYTES) {
+      setErrorMessage(`"${file.name}" exceeds the ${Math.round(MAX_VIDEO_FILE_SIZE_BYTES / 1024 / 1024)}MB video limit.`);
+      return false;
+    }
+
+    const tempId = existingVideo?.id || `video-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const duration = existingVideo?.duration || await getVideoDuration(file);
+    const localUrl = existingVideo ? null : URL.createObjectURL(file);
+    const pendingVideo: VideoReference = existingVideo
+      ? {
+          ...existingVideo,
+          file,
+          duration,
+          uploadStatus: 'uploading',
+          uploadError: null,
+        }
+      : {
+          id: tempId,
+          file,
+          url: localUrl!,
+          thumbnail: localUrl!,
+          title: file.name.replace(/\.[^/.]+$/, ''),
+          description: '',
+          duration,
+          uploadStatus: 'uploading',
+          uploadError: null,
+        };
+
+    applyUpdate((current) => ({
+      ...current,
+      videos: existingVideo
+        ? current.videos.map((item) => (item.id === existingVideo.id ? pendingVideo : item))
+        : [...current.videos, pendingVideo],
+    }));
+
+    const previousAssetIds = existingVideo
+      ? [existingVideo.assetId, existingVideo.thumbnailAssetId].filter(Boolean) as string[]
+      : [];
+
+    const videoResult = await secureUpload(file, {
+      memorialId: memorialId!,
+      kind: 'video',
+      metadata: { duration },
+    });
+
+    if (!videoResult.success || !videoResult.asset) {
+      applyUpdate((current) => ({
+        ...current,
+        videos: current.videos.map((item) =>
+          item.id === tempId
+            ? {
+                ...item,
+                file,
+                duration,
+                uploadStatus: 'error',
+                uploadError: videoResult.error || 'Upload failed.',
+              }
+            : item
+        ),
+      }));
+      setErrorMessage(videoResult.error || `Could not upload ${file.name}.`);
+      return false;
+    }
+
+    let thumbnailAsset = null;
+    try {
+      const thumbnailBlob = await createVideoThumbnail(file);
+      const thumbnailFile = new File([thumbnailBlob], `${tempId}.png`, { type: 'image/png' });
+      const thumbResult = await secureUpload(thumbnailFile, {
+        memorialId: memorialId!,
+        kind: 'video_thumbnail',
+        metadata: { videoAssetId: videoResult.asset.id },
+      });
+      if (thumbResult.success && thumbResult.asset) {
+        thumbnailAsset = thumbResult.asset;
+      }
+    } catch {
+      thumbnailAsset = null;
+    }
+
+    applyUpdate((current) => ({
+      ...current,
+      videos: current.videos.map((item) =>
+        item.id === tempId
+          ? {
+              ...item,
+              file: null,
+              url: videoResult.asset!.publicUrl,
+              thumbnail: thumbnailAsset?.publicUrl || videoResult.asset!.publicUrl,
+              assetId: videoResult.asset!.id,
+              bucket: videoResult.asset!.bucket,
+              storagePath: videoResult.asset!.storagePath,
+              originalFileName: videoResult.asset!.originalFileName,
+              mimeType: videoResult.asset!.mimeType,
+              fileSize: videoResult.asset!.fileSize,
+              uploadedAt: videoResult.asset!.createdAt,
+              uploadStatus: 'ready',
+              uploadError: null,
+              sha256_hash: videoResult.asset!.sha256Hash,
+              thumbnailAssetId: thumbnailAsset?.id || null,
+              thumbnailBucket: thumbnailAsset?.bucket || null,
+              thumbnailStoragePath: thumbnailAsset?.storagePath || null,
+              thumbnailMimeType: thumbnailAsset?.mimeType || null,
+              thumbnailFileSize: thumbnailAsset?.fileSize || null,
+              thumbnailUploadedAt: thumbnailAsset?.createdAt || null,
+            }
+          : item
+      ),
+    }));
+
+    if (existingVideo && memorialId && previousAssetIds.length > 0) {
+      try {
+        await deleteMediaAssets(memorialId, previousAssetIds, 'soft');
+      } catch {
+        setErrorMessage('The new video was saved, but the previous file could not be marked for removal yet.');
+      }
+    }
+
+    return true;
+  };
+
   const uploadVideoFiles = async (files: File[]) => {
     if (!ensureMemorial()) return;
     const remaining = maxVideos - dataRef.current.videos.length;
@@ -172,93 +306,28 @@ export default function Step9Videos({
     }
 
     for (const file of accepted) {
-      if (file.size > MAX_VIDEO_FILE_SIZE_BYTES) {
-        setErrorMessage(`"${file.name}" exceeds the ${Math.round(MAX_VIDEO_FILE_SIZE_BYTES / 1024 / 1024)}MB video limit.`);
-        continue;
-      }
+      // eslint-disable-next-line no-await-in-loop
+      await uploadVideoFile(file);
+    }
+  };
 
-      const tempId = `video-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      const localUrl = URL.createObjectURL(file);
-      const duration = await getVideoDuration(file);
-      const pendingVideo: VideoReference = {
-        id: tempId,
-        file,
-        url: localUrl,
-        thumbnail: localUrl,
-        title: file.name.replace(/\.[^/.]+$/, ''),
-        description: '',
-        duration,
-        uploadStatus: 'uploading',
-        uploadError: null,
-      };
+  const retryVideo = async (id: string) => {
+    const video = dataRef.current.videos.find((item) => item.id === id);
+    if (!video?.file) {
+      setErrorMessage('Retry is only available for uploads from this session.');
+      return;
+    }
 
-      applyUpdate((current) => ({
-        ...current,
-        videos: [...current.videos, pendingVideo],
-      }));
+    await uploadVideoFile(video.file, video);
+  };
 
-      const videoResult = await secureUpload(file, {
-        memorialId: memorialId!,
-        kind: 'video',
-        metadata: { duration },
-      });
+  const replaceVideo = async (id: string, file: File) => {
+    const video = dataRef.current.videos.find((item) => item.id === id);
+    if (!video) return;
 
-      if (!videoResult.success || !videoResult.asset) {
-        applyUpdate((current) => ({
-          ...current,
-          videos: current.videos.map((item) =>
-            item.id === tempId ? { ...item, uploadStatus: 'error', uploadError: videoResult.error || 'Upload failed.' } : item
-          ),
-        }));
-        setErrorMessage(videoResult.error || `Could not upload ${file.name}.`);
-        continue;
-      }
-
-      let thumbnailAsset = null;
-      try {
-        const thumbnailBlob = await createVideoThumbnail(file);
-        const thumbnailFile = new File([thumbnailBlob], `${tempId}.png`, { type: 'image/png' });
-        const thumbResult = await secureUpload(thumbnailFile, {
-          memorialId: memorialId!,
-          kind: 'video_thumbnail',
-          metadata: { videoAssetId: videoResult.asset.id },
-        });
-        if (thumbResult.success && thumbResult.asset) {
-          thumbnailAsset = thumbResult.asset;
-        }
-      } catch {
-        thumbnailAsset = null;
-      }
-
-      applyUpdate((current) => ({
-        ...current,
-        videos: current.videos.map((item) =>
-          item.id === tempId
-            ? {
-                ...item,
-                file: null,
-                url: videoResult.asset!.publicUrl,
-                thumbnail: thumbnailAsset?.publicUrl || videoResult.asset!.publicUrl,
-                assetId: videoResult.asset!.id,
-                bucket: videoResult.asset!.bucket,
-                storagePath: videoResult.asset!.storagePath,
-                originalFileName: videoResult.asset!.originalFileName,
-                mimeType: videoResult.asset!.mimeType,
-                fileSize: videoResult.asset!.fileSize,
-                uploadedAt: videoResult.asset!.createdAt,
-                uploadStatus: 'ready',
-                uploadError: null,
-                sha256_hash: videoResult.asset!.sha256Hash,
-                thumbnailAssetId: thumbnailAsset?.id || null,
-                thumbnailBucket: thumbnailAsset?.bucket || null,
-                thumbnailStoragePath: thumbnailAsset?.storagePath || null,
-                thumbnailMimeType: thumbnailAsset?.mimeType || null,
-                thumbnailFileSize: thumbnailAsset?.fileSize || null,
-                thumbnailUploadedAt: thumbnailAsset?.createdAt || null,
-              }
-            : item
-        ),
-      }));
+    const replaced = await uploadVideoFile(file, video);
+    if (replaced) {
+      setReplaceId(null);
     }
   };
 
@@ -431,16 +500,26 @@ export default function Step9Videos({
                       </div>
                       <input type="text" value={video.title} onChange={(event) => updateVideoField(video.id, 'title', event.target.value)} disabled={readOnly} placeholder="Title" className="rounded-xl border border-warm-border/30 px-3 py-2 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
                       <textarea value={video.description || ''} onChange={(event) => updateVideoField(video.id, 'description', event.target.value)} rows={3} disabled={readOnly} placeholder="Description" className="rounded-xl border border-warm-border/30 px-3 py-3 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
+                      {video.uploadError && (
+                        <p className="text-xs text-red-600">{video.uploadError}</p>
+                      )}
                       <div className="flex items-center justify-between text-xs text-warm-dark/45">
                         <span className="inline-flex items-center gap-1">
                           <Play size={12} />
                           {video.duration || '0:00'}
                         </span>
-                        {!readOnly && (
-                          <button onClick={() => removeVideo(video.id)} className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
-                            Remove
-                          </button>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {!readOnly && video.uploadStatus === 'error' && (
+                            <button onClick={() => retryVideo(video.id)} className="rounded-xl border border-warm-border/30 px-3 py-2 text-sm text-warm-dark/70 hover:bg-warm-border/10">
+                              Retry
+                            </button>
+                          )}
+                          {!readOnly && (
+                            <button onClick={() => removeVideo(video.id)} className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
+                              Remove
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -477,7 +556,19 @@ export default function Step9Videos({
       </div>
 
       <input ref={videoRef} type="file" accept="video/*" multiple className="hidden" onChange={(event) => { const files = Array.from(event.target.files || []); if (files.length > 0) uploadVideoFiles(files); event.currentTarget.value = ''; }} disabled={readOnly} />
-      <input ref={replaceRef} type="file" accept="video/*" className="hidden" onChange={() => undefined} />
+      <input
+        ref={replaceRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file && replaceId) {
+            replaceVideo(replaceId, file);
+          }
+          event.currentTarget.value = '';
+        }}
+      />
 
       <div className="mt-10 flex gap-4">
         <button onClick={onBack} className="rounded-xl border border-warm-border/30 px-6 py-4 font-medium hover:bg-warm-border/10">
@@ -504,8 +595,25 @@ export default function Step9Videos({
               <video controls preload="metadata" className="aspect-video w-full rounded-2xl bg-warm-dark/10" poster={detailItem.thumbnail}>
                 <source src={detailItem.url} type={detailItem.mimeType || 'video/mp4'} />
               </video>
+              <div className="mt-4 grid gap-3 rounded-2xl border border-warm-border/30 bg-warm-border/10 p-4 text-sm text-warm-dark/70 sm:grid-cols-2">
+                <p>Type: {detailItem.mimeType || 'video/mp4'}</p>
+                <p>Status: {statusLabel(detailItem.uploadStatus)}</p>
+                <p>Uploaded: {formatUploadedAt(detailItem.uploadedAt)}</p>
+                <p>Size: {formatFileSize(detailItem.fileSize)}</p>
+              </div>
+              {detailItem.uploadError && (
+                <p className="mt-4 text-sm text-red-600">{detailItem.uploadError}</p>
+              )}
               {!readOnly && (
                 <div className="mt-6 flex flex-wrap gap-3">
+                  <button onClick={() => { setReplaceId(detailItem.id); replaceRef.current?.click(); }} className="rounded-xl border border-warm-border/30 px-4 py-2 text-sm text-warm-dark/70 hover:bg-warm-border/10">
+                    Replace
+                  </button>
+                  {detailItem.uploadStatus === 'error' && (
+                    <button onClick={() => retryVideo(detailItem.id)} className="rounded-xl border border-warm-border/30 px-4 py-2 text-sm text-warm-dark/70 hover:bg-warm-border/10">
+                      Retry upload
+                    </button>
+                  )}
                   <button onClick={() => moveVideo(detailItem.id, -1)} className="rounded-xl border border-warm-border/30 px-4 py-2 text-sm text-warm-dark/70 hover:bg-warm-border/10">
                     Move earlier
                   </button>
