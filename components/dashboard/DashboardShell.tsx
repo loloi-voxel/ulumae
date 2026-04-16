@@ -14,12 +14,11 @@ import {
     Settings,
     Shield,
     UserCheck,
-    Users,
     Workflow,
     X,
 } from 'lucide-react';
 import {
-    getDashboardPath,
+    getPlanDashboardPath,
     isFamilyPlan,
     isPersonalPlan,
     useAuth,
@@ -62,18 +61,13 @@ function firstArchiveByMode(
     return archives.find((archive) => archive.mode === mode)?.id || null;
 }
 
-function isFamilySection(searchParams: URLSearchParams, section: string) {
-    return searchParams.get('section') === section;
-}
-
 function buildItems(options: {
     pathname: string;
-    searchParams: URLSearchParams;
     userId: string;
     plan: string;
     archives: Array<{ id: string; mode: string }>;
 }): NavItem[] {
-    const { pathname, searchParams, userId, plan, archives } = options;
+    const { pathname, userId, plan, archives } = options;
     const personalArchiveId = firstArchiveByMode(archives, 'personal');
 
     if (isPersonalPlan(plan as any)) {
@@ -113,6 +107,14 @@ function buildItems(options: {
                 active: pathname.startsWith(`/dashboard/preservation/${userId}`),
             },
             {
+                key: 'succession',
+                label: 'Succession',
+                description: 'Designate who takes over your archive',
+                href: `/dashboard/succession/${userId}`,
+                icon: UserCheck,
+                active: pathname.startsWith(`/dashboard/succession/${userId}`),
+            },
+            {
                 key: 'settings',
                 label: 'Settings',
                 description: 'Profile, billing, and security',
@@ -128,32 +130,10 @@ function buildItems(options: {
             {
                 key: 'overview',
                 label: 'Overview',
-                description: 'Family dashboard and archive status',
+                description: 'Family dashboard, members, and activity',
                 href: `/dashboard/family/${userId}`,
                 icon: LayoutDashboard,
-                active:
-                    pathname === `/dashboard/family/${userId}` &&
-                    !searchParams.get('section'),
-            },
-            {
-                key: 'members',
-                label: 'Family Members',
-                description: 'Invites, roles, and access',
-                href: `/dashboard/family/${userId}?section=members`,
-                icon: Users,
-                active:
-                    pathname === `/dashboard/family/${userId}` &&
-                    isFamilySection(searchParams, 'members'),
-            },
-            {
-                key: 'contributions',
-                label: 'Contributions',
-                description: 'Pending requests and review work',
-                href: `/dashboard/family/${userId}?section=pending`,
-                icon: Archive,
-                active:
-                    pathname === `/dashboard/family/${userId}` &&
-                    isFamilySection(searchParams, 'pending'),
+                active: pathname === `/dashboard/family/${userId}`,
             },
             {
                 key: 'relations',
@@ -187,17 +167,9 @@ function buildItems(options: {
             key: 'overview',
             label: 'Overview',
             description: 'Current workspace and next steps',
-            href: getDashboardPath({
-                authenticated: true,
-                loading: false,
-                user: { id: userId, email: '' },
-                plan: plan as any,
-                hasPaid: false,
-                archives: [],
-                revalidate: async () => {},
-            }),
+            href: getPlanDashboardPath('draft', userId),
             icon: LayoutDashboard,
-            active: pathname.startsWith('/dashboard'),
+            active: pathname.startsWith(`/dashboard/draft/${userId}`),
         },
         {
             key: 'settings',
@@ -301,12 +273,11 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
         () =>
             buildItems({
                 pathname,
-                searchParams,
                 userId,
                 plan: auth.plan,
                 archives: auth.archives,
             }),
-        [pathname, searchParams, userId, auth.plan, auth.archives]
+        [pathname, userId, auth.plan, auth.archives]
     );
 
     return (

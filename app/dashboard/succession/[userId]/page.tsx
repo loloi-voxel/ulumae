@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Shield, UserCheck, Clock, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import DashboardShell from '@/components/dashboard/DashboardShell';
-import { isFamilyPlan, useAuth } from '@/components/providers/AuthProvider';
+import { isFamilyPlan, isPersonalPlan, useAuth } from '@/components/providers/AuthProvider';
 import SuccessorSettings from '@/components/SuccessorSettings';
 
 export default function DashboardSuccessionPage({ params }: { params: Promise<{ userId: string }> }) {
@@ -23,12 +23,12 @@ export default function DashboardSuccessionPage({ params }: { params: Promise<{ 
             router.replace(`/dashboard/succession/${auth.user.id}`);
             return;
         }
-        if (!isFamilyPlan(auth.plan) && auth.user) {
-            router.replace(`/dashboard/${auth.plan === 'personal' ? 'personal' : 'draft'}/${auth.user.id}`);
+        if (!isFamilyPlan(auth.plan) && !isPersonalPlan(auth.plan) && auth.user) {
+            router.replace(`/dashboard/draft/${auth.user.id}`);
         }
     }, [auth.loading, auth.authenticated, auth.user, auth.plan, userId, router]);
 
-    if (auth.loading || !auth.authenticated || auth.user?.id !== userId || !isFamilyPlan(auth.plan)) {
+    if (auth.loading || !auth.authenticated || auth.user?.id !== userId || (!isFamilyPlan(auth.plan) && !isPersonalPlan(auth.plan))) {
         return (
             <div className="min-h-screen bg-surface-low flex items-center justify-center">
                 <div className="w-10 h-10 border-2 border-warm-border/30 border-t-olive rounded-full animate-spin" />
@@ -41,10 +41,10 @@ export default function DashboardSuccessionPage({ params }: { params: Promise<{ 
             <div className="min-h-screen bg-surface-low">
                 <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
                     <div className="mb-8">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Family / Succession</p>
-                        <h1 className="mt-3 font-serif text-4xl text-warm-dark">Plan who takes care of the family archives</h1>
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Succession</p>
+                        <h1 className="mt-3 font-serif text-4xl text-warm-dark">Plan who takes over your archive</h1>
                         <p className="mt-3 max-w-3xl text-sm text-warm-muted">
-                            Keep long-term stewardship separate from day-to-day collaboration. This section is only for family-plan succession planning.
+                            Designate a trusted successor and set the dead man&apos;s switch that decides when outreach begins. Stewardship stays separate from day-to-day editing.
                         </p>
                     </div>
 

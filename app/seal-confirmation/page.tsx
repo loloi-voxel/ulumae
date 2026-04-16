@@ -6,19 +6,29 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Shield, Check, Clock, Infinity as InfinityIcon } from 'lucide-react';
+import { ArrowLeft, Shield, Check, Clock, Infinity as InfinityIcon, FileEdit } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { MemorialData } from '@/types/memorial';
 import { calculateCompletion } from '@/lib/completionLogic';
 import { countFragments } from '@/lib/emotionalState';
+import { useAuth } from '@/components/providers/AuthProvider';
+
+interface DraftOption {
+    id: string;
+    fullName: string | null;
+    profilePhotoUrl: string | null;
+    updatedAt: string;
+}
 
 function SealConfirmationContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const auth = useAuth();
     const memorialId = searchParams.get('memorialId');
 
     const [loading, setLoading] = useState(true);
     const [memorial, setMemorial] = useState<MemorialData | null>(null);
+    const [draftOptions, setDraftOptions] = useState<DraftOption[] | null>(null);
     const [archiveStats, setArchiveStats] = useState({
         photos: 0,
         videos: 0,
@@ -29,8 +39,56 @@ function SealConfirmationContent() {
     });
 
     useEffect(() => {
+        if (memorialId) return;
+        if (auth.loading) return;
+        if (!auth.authenticated || !auth.user) {
+            router.replace('/login?next=/seal-confirmation');
+            return;
+        }
+
+        const loadDrafts = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('memorials')
+                    .select('id, full_name, profile_photo_url, updated_at')
+                    .eq('user_id', auth.user!.id)
+                    .eq('mode', 'draft')
+                    .eq('deleted', false)
+                    .order('updated_at', { ascending: false });
+
+                if (error) throw error;
+                const rows = (data || []) as Array<{ id: string; full_name: string | null; profile_photo_url: string | null; updated_at: string }>;
+
+                if (rows.length === 0) {
+                    router.replace('/create?mode=draft');
+                    return;
+                }
+
+                if (rows.length === 1) {
+                    router.replace(`/seal-confirmation?memorialId=${rows[0].id}`);
+                    return;
+                }
+
+                setDraftOptions(
+                    rows.map((row) => ({
+                        id: row.id,
+                        fullName: row.full_name,
+                        profilePhotoUrl: row.profile_photo_url,
+                        updatedAt: row.updated_at,
+                    }))
+                );
+                setLoading(false);
+            } catch (err) {
+                console.error('Error loading drafts:', err);
+                setLoading(false);
+            }
+        };
+
+        loadDrafts();
+    }, [memorialId, auth.loading, auth.authenticated, auth.user, router]);
+
+    useEffect(() => {
         if (!memorialId) {
-            setLoading(false);
             return;
         }
 
@@ -92,6 +150,72 @@ function SealConfirmationContent() {
         return (
             <div className="min-h-screen bg-surface-low flex items-center justify-center">
                 <div className="h-12 w-12 rounded-none border-3 border-warm-border/30 border-t-warm-dark/40 animate-spin" />
+            </div>
+        );
+    }
+
+    if (!memorialId && draftOptions) {
+        const userDashboard = auth.user ? `/dashboard/draft/${auth.user.id}` : '/dashboard';
+        return (
+            <div className="min-h-screen bg-surface-low">
+                <div className="border-b border-warm-border/20 bg-white/60 backdrop-blur-sm">
+                    <div className="max-w-4xl mx-auto px-6 py-5">
+                        <Link
+                            href={userDashboard}
+                            className="inline-flex items-center gap-2 text-warm-dark/40 hover:text-warm-dark transition-colors text-sm"
+                        >
+                            <ArrowLeft size={16} />
+                            Back to archives
+                        </Link>
+                    </div>
+                </div>
+
+                <div className="max-w-4xl mx-auto px-6 py-16">
+                    <div className="text-center mb-12">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline mb-4">Preserve an archive</p>
+                        <h1 className="font-serif text-4xl md:text-5xl text-warm-dark mb-4">
+                            Which archive do you want to preserve?
+                        </h1>
+                        <p className="font-serif italic text-lg text-warm-muted max-w-2xl mx-auto">
+                            You have several drafts. Choose the one you are ready to seal — you can return for the others later.
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {draftOptions.map((draft) => (
+                            <Link
+                                key={draft.id}
+                                href={`/seal-confirmation?memorialId=${draft.id}`}
+                                className="group flex flex-col overflow-hidden border border-warm-border/30 bg-white transition-all hover:border-olive/40 hover:shadow-lg rounded-none"
+                            >
+                                <div className="relative h-44 bg-surface-mid">
+                                    {draft.profilePhotoUrl ? (
+                                        <img
+                                            src={draft.profilePhotoUrl}
+                                            alt={draft.fullName || ''}
+                                            className="w-full h-full object-cover opacity-90"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                            <FileEdit size={48} className="text-warm-muted/30" />
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex-1 flex flex-col p-6">
+                                    <h3 className="font-serif text-2xl text-warm-dark">
+                                        {draft.fullName || 'Untitled archive'}
+                                    </h3>
+                                    <p className="mt-2 text-xs text-warm-outline font-serif italic">
+                                        Last edited {new Date(draft.updatedAt).toLocaleDateString()}
+                                    </p>
+                                    <span className="mt-6 inline-flex items-center justify-center gap-2 px-5 py-2.5 glass-btn-primary text-sm font-serif tracking-wide rounded-none">
+                                        Preserve this archive
+                                    </span>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
             </div>
         );
     }

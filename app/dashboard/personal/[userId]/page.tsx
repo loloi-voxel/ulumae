@@ -480,18 +480,18 @@ function ActiveArchiveView({
                         {/* Actions */}
                         <div className="flex flex-wrap items-center gap-2.5 mt-10">
                             <Link
-                                href={`/person/${archive.id}`}
+                                href={`/create?id=${archive.id}&mode=personal`}
                                 className="flex items-center gap-2 px-6 py-2.5 glass-btn-primary text-sm font-serif tracking-wide rounded-none"
                             >
-                                <Eye size={14} />
-                                View
+                                <Edit size={14} />
+                                Open editor
                             </Link>
                             <Link
-                                href={`/create?id=${archive.id}&mode=personal`}
+                                href={`/person/${archive.id}`}
                                 className="flex items-center gap-2 border border-warm-border/30 px-6 py-2.5 text-sm font-serif italic text-warm-dark transition-colors hover:bg-surface-mid rounded-none"
                             >
-                                <Edit size={14} />
-                                Edit
+                                <Eye size={14} />
+                                View memorial
                             </Link>
                             {!isPreserved && (
                                 <button
@@ -515,16 +515,13 @@ function ActiveArchiveView({
             </div>
 
             <div className="glass-card p-6">
-                <h3 className="font-serif italic text-lg text-warm-dark mb-2">Continue building</h3>
+                <h3 className="font-serif italic text-lg text-warm-dark mb-2">Jump to a section</h3>
                 <p className="text-sm text-warm-muted font-sans leading-relaxed mb-5">
-                    Open the exact part of the memorial you want to work on without digging through duplicate controls.
+                    Go straight to a specific part of the memorial.
                 </p>
                 <div className="flex flex-wrap gap-3">
                     <QuickAction href={`/create?id=${archive.id}&mode=personal&step=8`} icon={Camera} label="Photos & Media" />
                     <QuickAction href={`/create?id=${archive.id}&mode=personal&step=6`} icon={FileText} label="Biography" />
-                    <Link href={`/create?id=${archive.id}&mode=personal`} className="flex items-center gap-2 px-5 py-2.5 border border-warm-border/30 text-warm-dark rounded-lg text-sm font-serif italic hover:bg-surface-mid transition-all">
-                        <Edit size={14} /> Open Full Editor
-                    </Link>
                 </div>
             </div>
 
@@ -566,16 +563,6 @@ function ActiveArchiveView({
                                     <div>
                                         <p className="font-serif">Preservation details</p>
                                         <p className="text-xs text-warm-outline">Review storage, coverage, and media rules</p>
-                                    </div>
-                                    <ChevronRight size={15} className="text-warm-outline" />
-                                </Link>
-                                <Link
-                                    href={`/person/${archive.id}`}
-                                    className="flex items-center justify-between gap-3 border border-warm-border/20 px-4 py-3 text-sm text-warm-dark transition-colors hover:bg-surface-mid/50 rounded-none"
-                                >
-                                    <div>
-                                        <p className="font-serif">Live memorial</p>
-                                        <p className="text-xs text-warm-outline">Open the public memorial view</p>
                                     </div>
                                     <ChevronRight size={15} className="text-warm-outline" />
                                 </Link>

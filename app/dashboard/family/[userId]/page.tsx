@@ -3,7 +3,7 @@
 'use client';
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, Edit, Trash2, User, Loader2, ArrowLeft, Network, X, Search, Filter, RefreshCcw, AlertTriangle, Archive, Clock, Shield, Wifi, BellDot, CheckCircle2, History, MessageSquareText, ChevronDown } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, User, Loader2, Network, X, Search, Filter, RefreshCcw, AlertTriangle, Archive, Clock, Shield, Wifi, BellDot, CheckCircle2, History, MessageSquareText, ChevronDown } from 'lucide-react';
 import { supabase, Memorial } from '@/lib/supabase';
 import FamilyLinker from '@/components/FamilyLinker';
 import AnchorPanel from '@/components/AnchorPanel';
@@ -541,9 +541,6 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                     <div className="flex items-center justify-between">
                         <div>
                             <div className="flex items-center gap-3 mb-3">
-                                <Link href="/choice-pricing" className="p-2 hover:bg-surface-high rounded-lg transition-colors">
-                                    <ArrowLeft size={20} className="text-warm-muted" />
-                                </Link>
                                 <h1 className="font-serif text-4xl text-warm-dark">
                                     The {familyName} Legacy Archive
                                 </h1>

@@ -85,12 +85,9 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                                     <p className="mt-2 text-sm text-warm-muted">
                                         You can review the package rules now, but permanent preservation activates only after moving from Draft into a paid Personal or Family plan.
                                     </p>
-                                    <div className="mt-4 flex flex-wrap gap-3">
-                                        <Link href="/choice-pricing" className="glass-btn-primary rounded-xl px-4 py-2 text-sm font-medium text-white">
+                                    <div className="mt-4">
+                                        <Link href="/choice-pricing" className="glass-btn-primary inline-flex rounded-xl px-4 py-2 text-sm font-medium text-white">
                                             Review Upgrade Options
-                                        </Link>
-                                        <Link href="/personal-confirmation" className="rounded-xl border border-warm-border/30 px-4 py-2 text-sm text-warm-dark transition-colors hover:bg-white">
-                                            Start Personal Preservation
                                         </Link>
                                     </div>
                                 </div>

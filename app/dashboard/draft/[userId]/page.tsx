@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, Edit, Trash2, FileEdit, Loader2, ArrowLeft, RefreshCcw, AlertTriangle, ArrowUpCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, FileEdit, Loader2, RefreshCcw, AlertTriangle, Shield } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Memorial } from '@/lib/supabase';
 import { createClient } from '@/utils/supabase/client';
@@ -142,33 +142,30 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
                     <div className="flex items-center justify-between">
                         <div>
                             <div className="flex items-center gap-3 mb-2">
-                                <Link href="/choice-pricing" className="p-2 hover:bg-warm-border/10 rounded-lg">
-                                    <ArrowLeft size={20} className="text-warm-dark/60" />
-                                </Link>
                                 <h1 className="font-serif text-4xl text-warm-dark">My Archives</h1>
                                 <span className="px-3 py-1 bg-warm-dark/10 text-warm-dark/60 text-xs font-semibold rounded-full uppercase tracking-wide">
                                     Private Preview
                                 </span>
                             </div>
-                            <p className="text-warm-dark/60">Your private preview archives — upgrade to Personal to preserve permanently</p>
-                            <p className="text-xs text-warm-dark/40 mt-1">ID: {userId.slice(0, 8)}...</p>
+                            <p className="text-warm-dark/60">Your private preview archives — preserve one when you are ready to make it permanent</p>
                         </div>
 
                         <div className="flex items-center gap-3">
-                            {/* Upgrade CTA — follows Seal flow: confirmation → authorization → payment */}
-                            <button
-                                onClick={() => {
-                                    const targetId = memorials.length > 0 ? memorials[0].id : null;
-                                    const sealUrl = targetId
-                                        ? `/seal-confirmation?memorialId=${targetId}`
-                                        : '/seal-confirmation';
-                                    router.push(sealUrl);
-                                }}
-                                className="glass-btn-primary px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 border-2 border-olive text-olive hover:bg-olive/10 transition-all text-sm"
-                            >
-                                <ArrowUpCircle size={18} />
-                                Upgrade to Personal
-                            </button>
+                            {memorials.length > 0 && (
+                                <button
+                                    onClick={() => {
+                                        if (memorials.length === 1) {
+                                            router.push(`/seal-confirmation?memorialId=${memorials[0].id}`);
+                                        } else {
+                                            router.push('/seal-confirmation');
+                                        }
+                                    }}
+                                    className="glass-btn-primary px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 border-2 border-olive text-olive hover:bg-olive/10 transition-all text-sm"
+                                >
+                                    <Shield size={18} />
+                                    Preserve an archive
+                                </button>
+                            )}
 
                             <button
                                 onClick={handleCreate}
