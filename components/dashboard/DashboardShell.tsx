@@ -7,8 +7,6 @@ import {
     Archive,
     ChevronLeft,
     ChevronRight,
-    Edit3,
-    Eye,
     LayoutDashboard,
     Menu,
     Settings,
@@ -54,21 +52,12 @@ function planLabel(plan: string) {
     }
 }
 
-function firstArchiveByMode(
-    archives: Array<{ id: string; mode: string }>,
-    mode: 'personal' | 'family'
-) {
-    return archives.find((archive) => archive.mode === mode)?.id || null;
-}
-
 function buildItems(options: {
     pathname: string;
     userId: string;
     plan: string;
-    archives: Array<{ id: string; mode: string }>;
 }): NavItem[] {
-    const { pathname, userId, plan, archives } = options;
-    const personalArchiveId = firstArchiveByMode(archives, 'personal');
+    const { pathname, userId, plan } = options;
 
     if (isPersonalPlan(plan as any)) {
         return [
@@ -79,24 +68,6 @@ function buildItems(options: {
                 href: `/dashboard/personal/${userId}`,
                 icon: LayoutDashboard,
                 active: pathname === `/dashboard/personal/${userId}`,
-            },
-            {
-                key: 'memorial',
-                label: 'Memorial',
-                description: 'View your live memorial',
-                href: personalArchiveId ? `/person/${personalArchiveId}` : `/dashboard/personal/${userId}`,
-                icon: Eye,
-                active: pathname.startsWith('/person/'),
-            },
-            {
-                key: 'edit',
-                label: 'Edit',
-                description: 'Open the memorial editor',
-                href: personalArchiveId
-                    ? `/create?id=${personalArchiveId}&mode=personal`
-                    : '/create?mode=personal',
-                icon: Edit3,
-                active: pathname.startsWith('/create'),
             },
             {
                 key: 'preserve',
@@ -275,9 +246,8 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                 pathname,
                 userId,
                 plan: auth.plan,
-                archives: auth.archives,
             }),
-        [pathname, userId, auth.plan, auth.archives]
+        [pathname, userId, auth.plan]
     );
 
     return (

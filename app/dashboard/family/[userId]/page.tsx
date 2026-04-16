@@ -560,13 +560,6 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                         </div>
 
                         <div className="flex gap-3">
-                            <Link
-                                href={`/dashboard/family/${userId}/tree`}
-                                className="px-5 py-3 rounded-lg font-sans font-semibold flex items-center gap-2 border border-warm-border/30 text-warm-dark text-sm hover:bg-surface-high transition-all"
-                            >
-                                <Network size={18} />
-                                View Constellation
-                            </Link>
                             <button
                                 onClick={handleCreate}
                                 className="px-5 py-3 rounded-lg font-sans font-semibold flex items-center gap-2 glass-btn-primary text-sm"

@@ -5,7 +5,7 @@ import {
     Plus, Eye, Edit, Trash2, User, Loader2, RefreshCcw,
     AlertTriangle, CheckCircle,
     Clock, Shield,
-    Archive, Download, Copy, Mail, QrCode, Camera, FileText,
+    Archive, Download, Copy, Mail, QrCode,
     ChevronRight
 } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -514,19 +514,6 @@ function ActiveArchiveView({
                 <MetricCard label="Chapters" value={stats.chapters} helper="Structured life-story sections" />
             </div>
 
-            <div className="glass-card p-6">
-                <h3 className="font-serif italic text-lg text-warm-dark mb-2">Jump to a section</h3>
-                <p className="text-sm text-warm-muted font-sans leading-relaxed mb-5">
-                    Go straight to a specific part of the memorial.
-                </p>
-                <div className="flex flex-wrap gap-3">
-                    <QuickAction href={`/create?id=${archive.id}&mode=personal&step=8`} icon={Camera} label="Photos & Media" />
-                    <QuickAction href={`/create?id=${archive.id}&mode=personal&step=6`} icon={FileText} label="Biography" />
-                </div>
-            </div>
-
-            {/* --- ADD THE MODAL HERE --- */}
-
             {/* ── Witnesses ── */}
             <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-8">
                 <div className="glass-card p-8 space-y-6">
@@ -556,16 +543,6 @@ function ActiveArchiveView({
                         <div className="border border-warm-border/25 bg-white p-6 rounded-none">
                             <h4 className="font-serif italic text-base text-warm-dark mb-4">Next steps</h4>
                             <div className="space-y-3">
-                                <Link
-                                    href={`/dashboard/preservation/${userId}`}
-                                    className="flex items-center justify-between gap-3 border border-warm-border/20 px-4 py-3 text-sm text-warm-dark transition-colors hover:bg-surface-mid/50 rounded-none"
-                                >
-                                    <div>
-                                        <p className="font-serif">Preservation details</p>
-                                        <p className="text-xs text-warm-outline">Review storage, coverage, and media rules</p>
-                                    </div>
-                                    <ChevronRight size={15} className="text-warm-outline" />
-                                </Link>
                                 <button
                                     onClick={handleExportArchive}
                                     disabled={isExporting}
@@ -644,22 +621,6 @@ function MetricCard({ label, value, helper }: { label: string; value: number; he
             <p className="mt-3 font-serif text-4xl text-warm-dark">{value}</p>
             <p className="mt-2 text-xs text-warm-muted">{helper}</p>
         </div>
-    );
-}
-
-function QuickAction({ href, icon: Icon, label, accent }: { href: string; icon: any; label: string; accent?: boolean }) {
-    return (
-        <Link
-            href={href}
-            className={`flex items-center gap-2 px-5 py-2.5 text-sm font-serif italic transition-all rounded-none ${
-                accent
-                    ? 'bg-olive/10 text-olive border border-olive/20 hover:bg-olive/20'
-                    : 'bg-white text-warm-muted border border-warm-border/30 hover:bg-surface-mid hover:text-warm-dark'
-            }`}
-        >
-            <Icon size={14} />
-            {label}
-        </Link>
     );
 }
 
