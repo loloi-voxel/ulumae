@@ -9,6 +9,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { ArrowLeft, Shield, Lock, RefreshCw, CheckCircle } from 'lucide-react';
 import { getDashboardPath, useAuth } from '@/components/providers/AuthProvider';
+import { ExperiencePage, ExperienceHero, ExperiencePanel } from '@/components/ui/experience';
 
 // Load Stripe outside of component to avoid re-creating on every render
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
@@ -259,7 +260,7 @@ function PaymentPageContent() {
     // show a confirmation screen instead of the payment form
     if (alreadyPaid) {
         return (
-            <div className="min-h-screen bg-surface-low flex items-center justify-center p-6">
+            <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
                 <div className="max-w-md text-center">
                     <div className="w-16 h-16 bg-warm-dark/10 rounded-full flex items-center justify-center mx-auto mb-6">
                         <CheckCircle size={32} className="text-warm-dark/60" />
@@ -270,29 +271,29 @@ function PaymentPageContent() {
                     </p>
                     <button
                         onClick={() => router.replace(getDashboardPath(auth))}
-                        className="px-6 py-3 glass-btn-dark rounded-xl font-medium transition-colors"
+                        className="experience-button experience-button-primary rounded-[1rem] px-6 py-3 text-[11px] tracking-[0.22em]"
                     >
                         Go to Dashboard
                     </button>
                 </div>
-            </div>
+            </ExperiencePage>
         );
     }
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-surface-low flex items-center justify-center">
+            <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
                 <div className="text-center">
                     <div className="w-10 h-10 border-2 border-warm-border/30 border-t-warm-dark/40 rounded-full animate-spin mx-auto mb-4" />
                     <p className="text-xs text-warm-dark/30">Preparing secure payment...</p>
                 </div>
-            </div>
+            </ExperiencePage>
         );
     }
 
     if (error) {
         return (
-            <div className="min-h-screen bg-surface-low flex items-center justify-center p-6">
+            <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
                 <div className="max-w-md text-center">
                     <p className="text-warm-dark/50 mb-4">{error}</p>
                     <button
@@ -302,111 +303,125 @@ function PaymentPageContent() {
                         Go back
                     </button>
                 </div>
-            </div>
+            </ExperiencePage>
         );
     }
 
     if (!clientSecret) return null;
 
     return (
-        <div className="min-h-screen bg-surface-low">
-            {/* Header */}
-            <div className="border-b border-warm-border/20 bg-white/60 backdrop-blur-sm">
-                <div className="max-w-2xl mx-auto px-6 py-5 flex items-center justify-between">
-                    <button
-                        onClick={() => router.back()}
-                        className="inline-flex items-center gap-2 text-warm-dark/40 hover:text-warm-dark transition-colors text-sm"
-                    >
-                        <ArrowLeft size={16} />
-                        Back
-                    </button>
-                    <div className="flex items-center gap-1.5 text-xs text-warm-dark/25">
-                        <Shield size={12} />
-                        Secure payment
-                    </div>
-                </div>
-            </div>
+        <ExperiencePage containerClassName="max-w-6xl">
+            <button
+                onClick={() => router.back()}
+                className="experience-button experience-button-secondary mb-10 text-[11px] tracking-[0.22em]"
+            >
+                <ArrowLeft size={14} />
+                Back
+            </button>
 
-            {/* Step 2.2.1: Payment form with Stripe Elements */}
-            <div className="max-w-lg mx-auto px-6 py-16">
-                <Elements
-                    stripe={stripePromise}
-                    options={{
-                        clientSecret,
-                        appearance: {
-                            theme: 'flat',
-                            variables: {
-                                colorPrimary: '#5a6b78',
-                                colorBackground: '#fdf6f0',
-                                colorText: '#5a6b78',
-                                colorDanger: '#d4958a',
-                                fontFamily: 'Georgia, serif',
-                                borderRadius: '12px',
-                                spacingUnit: '4px',
-                            },
-                            rules: {
-                                '.Input': {
-                                    border: '1px solid #e8d8cc',
-                                    boxShadow: 'none',
-                                    padding: '12px 16px',
-                                },
-                                '.Input:focus': {
-                                    border: '1px solid #8AABB4',
-                                    boxShadow: '0 0 0 2px rgba(138,171,180,0.1)',
-                                },
-                                '.Label': {
-                                    fontSize: '12px',
-                                    fontWeight: '500',
-                                    color: '#5a6b78',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.05em',
-                                },
-                                '.Tab': {
-                                    border: '1px solid #e8d8cc',
-                                    borderRadius: '8px',
-                                    color: '#5a6b78',
-                                },
-                                '.Tab:hover': {
-                                    color: '#3d4a54',
-                                    border: '1px solid #c5b5a8',
-                                },
-                                '.Tab--selected': {
-                                    backgroundColor: '#fdf6f0',
-                                    border: '1px solid #5a6b78',
-                                    color: '#3d4a54',
-                                },
-                                '.Tab--selected:hover': {
-                                    color: '#3d4a54',
-                                },
-                                '.TabLabel': {
-                                    color: '#5a6b78',
-                                },
-                                '.TabIcon': {
-                                    fill: '#5a6b78',
-                                },
-                            },
-                        },
-                    }}
-                >
-                    <PaymentForm
-                        memorialId={memorialId!}
-                        amount={amount}
-                        fullName={fullName}
-                        plan={planParam}
-                        isPopup={popupParam}
+            <div className="grid gap-8 lg:grid-cols-[0.9fr_0.8fr] lg:items-start">
+                <div>
+                    <ExperienceHero
+                        kicker={<span className="experience-kicker">Secure Payment</span>}
+                        title={
+                            <>
+                                Complete the
+                                <br />
+                                <span className="italic text-olive">preservation</span>
+                            </>
+                        }
+                        subtitle="Your archive, authorization, and amount are already prepared. This final step uses Stripe's encrypted payment form without changing any of your archive data."
                     />
-                </Elements>
+                </div>
+
+                <ExperiencePanel className="mx-auto w-full max-w-lg">
+                    <div className="mb-4 flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-[0.22em] text-warm-outline">Payment Details</p>
+                        <div className="flex items-center gap-1.5 text-xs text-warm-outline">
+                            <Shield size={12} />
+                            Secure payment
+                        </div>
+                    </div>
+
+                    <Elements
+                        stripe={stripePromise}
+                        options={{
+                            clientSecret,
+                            appearance: {
+                                theme: 'flat',
+                                variables: {
+                                    colorPrimary: '#5a6b78',
+                                    colorBackground: '#fdf6f0',
+                                    colorText: '#5a6b78',
+                                    colorDanger: '#d4958a',
+                                    fontFamily: 'Georgia, serif',
+                                    borderRadius: '12px',
+                                    spacingUnit: '4px',
+                                },
+                                rules: {
+                                    '.Input': {
+                                        border: '1px solid #e8d8cc',
+                                        boxShadow: 'none',
+                                        padding: '12px 16px',
+                                    },
+                                    '.Input:focus': {
+                                        border: '1px solid #8AABB4',
+                                        boxShadow: '0 0 0 2px rgba(138,171,180,0.1)',
+                                    },
+                                    '.Label': {
+                                        fontSize: '12px',
+                                        fontWeight: '500',
+                                        color: '#5a6b78',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.05em',
+                                    },
+                                    '.Tab': {
+                                        border: '1px solid #e8d8cc',
+                                        borderRadius: '8px',
+                                        color: '#5a6b78',
+                                    },
+                                    '.Tab:hover': {
+                                        color: '#3d4a54',
+                                        border: '1px solid #c5b5a8',
+                                    },
+                                    '.Tab--selected': {
+                                        backgroundColor: '#fdf6f0',
+                                        border: '1px solid #5a6b78',
+                                        color: '#3d4a54',
+                                    },
+                                    '.Tab--selected:hover': {
+                                        color: '#3d4a54',
+                                    },
+                                    '.TabLabel': {
+                                        color: '#5a6b78',
+                                    },
+                                    '.TabIcon': {
+                                        fill: '#5a6b78',
+                                    },
+                                },
+                            },
+                        }}
+                    >
+                        <PaymentForm
+                            memorialId={memorialId!}
+                            amount={amount}
+                            fullName={fullName}
+                            plan={planParam}
+                            isPopup={popupParam}
+                        />
+                    </Elements>
+                </ExperiencePanel>
             </div>
-        </div>
+        </ExperiencePage>
     );
 }
 
 export default function PaymentPage() {
     return (
         <Suspense fallback={
-            <div className="min-h-screen bg-surface-low flex items-center justify-center">
+            <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
                 <div className="w-10 h-10 border-2 border-warm-border/30 border-t-warm-dark/40 rounded-full animate-spin" />
-            </div>
+            </ExperiencePage>
         }>
             <PaymentPageContent />
         </Suspense>

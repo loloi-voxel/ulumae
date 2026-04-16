@@ -73,11 +73,11 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
   const totalStewardCount = pendingCount;
 
   return (
-    <div className="min-h-screen bg-surface-low">
+    <div className="experience-shell">
       <RoleBanner />
 
-      <div className="border-b border-warm-border/20 bg-white sticky top-0 z-10 shadow-sm">
-        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div className="sticky top-0 z-10 border-b border-warm-border/20 bg-white/82 shadow-sm backdrop-blur-sm">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-6 py-4">
           <div className="flex items-center gap-3">
             {memorial.profilePhotoUrl ? (
               <img
@@ -97,22 +97,19 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
               </p>
             </div>
           </div>
-          <Link
-            href={`/archive/${memorialId}/view`}
-            className="flex items-center gap-1.5 text-sm text-olive hover:text-olive/80 transition-colors font-sans"
-          >
+          <Link href={`/archive/${memorialId}/view`} className="experience-button experience-button-secondary text-[11px] tracking-[0.2em]">
             <Eye size={16} />
             View archive
           </Link>
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-6 py-10 space-y-8">
+      <div className="mx-auto max-w-4xl px-6 py-10 space-y-8">
         {capabilities.canReview && (
-          <section className="bg-white border border-warm-border/30 rounded-xl p-5">
+          <section className="experience-panel p-6">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-warm-muted/10 rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-warm-muted/10">
                   <Shield size={18} className="text-warm-muted" />
                 </div>
                 <div>
@@ -124,7 +121,7 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
               </div>
               <button
                 onClick={() => router.push(`/archive/${memorialId}/steward`)}
-                className="inline-flex items-center gap-2 rounded-lg border border-warm-border/30 px-4 py-2 text-sm text-warm-dark/70 transition-colors hover:bg-warm-border/10"
+                className="experience-button experience-button-secondary text-[11px] tracking-[0.2em]"
               >
                 Open queue
                 <ChevronRight size={16} />
@@ -197,12 +194,12 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
             </div>
 
             {myContributions.length === 0 ? (
-              <div className="bg-white border-2 border-dashed border-warm-border/40 rounded-xl p-10 text-center">
+              <div className="experience-panel border-2 border-dashed border-warm-border/35 p-10 text-center">
                 <MessageCircle size={24} className="text-warm-dark/20 mx-auto mb-4" />
                 <p className="text-sm text-warm-dark/40 mb-4 font-sans">You have not contributed anything yet.</p>
                 <button
                   onClick={() => router.push(`/archive/${memorialId}/contribute`)}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 glass-btn-dark rounded-xl text-sm font-medium transition-all font-sans"
+                  className="experience-button experience-button-primary"
                 >
                   <Plus size={16} />
                   Share your first memory
@@ -217,7 +214,7 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
             )}
           </section>
         ) : (
-          <section className="bg-white border border-warm-border/30 rounded-xl p-6">
+          <section className="experience-panel p-6">
             <h2 className="text-xs font-semibold text-warm-dark/40 uppercase tracking-wider font-sans mb-3">Your Access</h2>
             <p className="text-sm text-warm-dark/50 font-sans leading-relaxed">
               This role is read-only. You can explore the archive and, on family vaults, move through linked memorials, but you cannot add or review content.
@@ -241,7 +238,7 @@ function PendingCard({
   return (
     <button
       onClick={onClick}
-      className="rounded-xl border border-warm-border/20 bg-surface-low/30 px-4 py-4 text-left transition-colors hover:bg-surface-low/60"
+      className="experience-card px-4 py-4 text-left"
     >
       <p className="text-xs uppercase tracking-[0.16em] text-warm-outline">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-warm-dark">{count}</p>
@@ -254,8 +251,8 @@ function QuickAction({ icon: Icon, label, onClick, primary = false, badge }: any
   return (
     <button
       onClick={onClick}
-      className={`relative p-4 rounded-xl border transition-all flex flex-col items-center gap-2 font-sans ${
-        primary ? 'glass-btn-dark' : 'bg-white text-warm-dark/70 border-warm-border/30 hover:border-warm-border/60 hover:bg-warm-border/5'
+      className={`relative flex flex-col items-center gap-2 rounded-[1.35rem] border p-4 font-sans transition-all ${
+        primary ? 'experience-button-primary text-white' : 'bg-white/92 text-warm-dark/70 border-warm-border/30 hover:border-warm-border/60 hover:bg-warm-border/5'
       }`}
     >
       {badge !== undefined && (
@@ -275,7 +272,7 @@ function ContributionRow({ contribution, memorialId }: { contribution: any; memo
   const TypeIcon = TYPE_ICONS[contribution.type as keyof typeof TYPE_ICONS];
 
   return (
-    <div className="bg-white border border-warm-border/30 rounded-xl p-4">
+    <div className="experience-card p-4">
       <div className="flex items-center gap-4">
         <div className="w-9 h-9 bg-warm-border/20 rounded-lg flex items-center justify-center flex-shrink-0">
           <TypeIcon size={16} className="text-warm-dark/40" />

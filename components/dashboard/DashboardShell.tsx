@@ -222,10 +222,10 @@ function SidebarContent({
     onNavigate?: () => void;
 }) {
     return (
-        <div className="flex h-full flex-col bg-white/95 backdrop-blur-sm">
-            <div className="border-b border-warm-border/30 px-6 py-6">
+        <div className="flex h-full flex-col bg-white/92 backdrop-blur-sm">
+            <div className="border-b border-warm-border/20 px-6 py-6">
                 <Link href="/" className="inline-flex items-center gap-3" onClick={onNavigate}>
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-warm-dark text-surface-low">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-[1.25rem] bg-warm-dark text-surface-low shadow-[0_14px_30px_rgba(57,56,48,0.14)]">
                         <Archive size={18} />
                     </div>
                     <div>
@@ -238,7 +238,7 @@ function SidebarContent({
             </div>
 
             <div className="px-4 py-5">
-                <div className="rounded-2xl border border-warm-border/30 bg-surface-mid/40 px-4 py-4">
+                <div className="rounded-[1.5rem] border border-warm-border/28 bg-surface-mid/45 px-4 py-4">
                     <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Current Plan</p>
                     <p className="mt-2 font-serif text-xl text-warm-dark">{planLabel(plan)}</p>
                     {email && <p className="mt-1 truncate text-xs text-warm-muted">{email}</p>}
@@ -258,10 +258,10 @@ function SidebarContent({
                                 key={item.key}
                                 href={item.href}
                                 onClick={onNavigate}
-                                className={`group flex items-center gap-3 rounded-2xl border px-4 py-3 transition-all ${baseClass}`}
+                                className={`group flex items-center gap-3 rounded-[1.35rem] border px-4 py-3 transition-all ${baseClass}`}
                             >
                                 <div
-                                    className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${
+                                    className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-[1rem] ${
                                         item.active ? 'bg-white text-olive' : 'bg-white/80 text-warm-muted'
                                     }`}
                                 >
@@ -310,7 +310,7 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
     );
 
     return (
-        <div className="min-h-screen bg-surface-low">
+        <div className="experience-shell">
             <div
                 className={`lg:grid lg:min-h-screen ${
                     desktopCollapsed
@@ -318,21 +318,21 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                         : 'lg:grid-cols-[280px_minmax(0,1fr)]'
                 }`}
             >
-                <aside className="hidden border-r border-warm-border/30 lg:sticky lg:top-0 lg:block lg:h-screen">
+                <aside className="hidden border-r border-warm-border/20 bg-white/70 backdrop-blur-sm lg:sticky lg:top-0 lg:block lg:h-screen">
                     <div className="relative h-full">
                         <button
                             onClick={() => setDesktopCollapsed((value) => !value)}
                             aria-label={desktopCollapsed ? 'Expand navigation' : 'Collapse navigation'}
-                            className="absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-warm-border/30 bg-white text-warm-dark shadow-sm transition-colors hover:bg-surface-mid/50"
+                            className="absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-warm-border/30 bg-white/90 text-warm-dark shadow-sm transition-colors hover:bg-surface-mid/70"
                         >
                             {desktopCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
                         </button>
 
                         {desktopCollapsed ? (
-                            <div className="flex h-full flex-col items-center bg-white/95 px-3 py-16 backdrop-blur-sm">
+                            <div className="flex h-full flex-col items-center bg-white/92 px-3 py-16 backdrop-blur-sm">
                                 <Link
                                     href="/"
-                                    className="mb-8 flex h-12 w-12 items-center justify-center rounded-2xl bg-warm-dark text-surface-low"
+                                    className="mb-8 flex h-12 w-12 items-center justify-center rounded-[1.4rem] bg-warm-dark text-surface-low shadow-[0_16px_36px_rgba(57,56,48,0.14)]"
                                 >
                                     <Archive size={18} />
                                 </Link>
@@ -348,8 +348,8 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                                                 title={item.label}
                                                 className={`flex h-12 w-12 items-center justify-center rounded-2xl border transition-all ${
                                                     item.active
-                                                        ? 'border-olive/30 bg-olive/10 text-olive shadow-sm'
-                                                        : 'border-transparent bg-transparent text-warm-dark/75 hover:border-warm-border/30 hover:bg-surface-mid/40'
+                                                        ? 'border-olive/25 bg-olive/10 text-olive shadow-sm'
+                                                        : 'border-transparent bg-transparent text-warm-dark/75 hover:border-warm-border/30 hover:bg-surface-mid/45'
                                                 }`}
                                             >
                                                 <Icon size={17} />
@@ -365,11 +365,11 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                 </aside>
 
                 <div className="min-w-0">
-                    <div className="sticky top-0 z-40 border-b border-warm-border/30 bg-surface-low/95 backdrop-blur-sm lg:hidden">
+                    <div className="sticky top-0 z-40 border-b border-warm-border/20 bg-white/80 backdrop-blur-sm lg:hidden">
                         <div className="flex items-center justify-between px-4 py-3">
                             <button
                                 onClick={() => setMobileOpen(true)}
-                                className="inline-flex items-center gap-2 rounded-xl border border-warm-border/30 bg-white px-3 py-2 text-sm text-warm-dark transition-colors hover:bg-surface-mid/60"
+                                className="inline-flex items-center gap-2 rounded-2xl border border-warm-border/30 bg-white/90 px-3 py-2 text-sm text-warm-dark transition-colors hover:bg-surface-mid/60"
                             >
                                 <Menu size={16} />
                                 Menu
@@ -386,7 +386,7 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                         </div>
                     </div>
 
-                    <div className="sticky top-0 z-40 hidden border-b border-warm-border/30 bg-surface-low/95 backdrop-blur-sm lg:block">
+                    <div className="sticky top-0 z-40 hidden border-b border-warm-border/20 bg-white/78 backdrop-blur-sm lg:block">
                         <div className="flex items-center justify-end px-8 py-3">
                             <NotificationCenter />
                         </div>
@@ -403,11 +403,11 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                         className="absolute inset-0 bg-warm-dark/55 backdrop-blur-sm"
                         onClick={() => setMobileOpen(false)}
                     />
-                    <div className="absolute inset-y-0 left-0 w-[88vw] max-w-sm overflow-y-auto border-r border-warm-border/30 bg-white shadow-2xl">
+                    <div className="absolute inset-y-0 left-0 w-[88vw] max-w-sm overflow-y-auto border-r border-warm-border/30 bg-white/95 shadow-2xl backdrop-blur-sm">
                         <div className="flex items-center justify-end border-b border-warm-border/30 px-4 py-3">
                             <button
                                 onClick={() => setMobileOpen(false)}
-                                className="rounded-xl border border-warm-border/30 p-2 text-warm-dark transition-colors hover:bg-surface-mid/50"
+                                className="rounded-2xl border border-warm-border/30 p-2 text-warm-dark transition-colors hover:bg-surface-mid/50"
                                 aria-label="Close navigation"
                             >
                                 <X size={18} />

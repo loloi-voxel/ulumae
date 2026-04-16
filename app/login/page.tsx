@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { ArrowLeft, Mail, Lock, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { ExperiencePage, ExperienceHero, ExperiencePanel } from '@/components/ui/experience';
 
 function LoginForm() {
   const router = useRouter();
@@ -44,35 +45,56 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-surface-mid via-surface-low to-surface-high flex items-center justify-center p-6">
-      <div className="max-w-md w-full">
-        <div className="mb-8">
+    <ExperiencePage containerClassName="max-w-6xl">
+      <div className="grid gap-8 lg:grid-cols-[0.95fr_0.75fr] lg:items-center">
+        <div>
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-warm-muted hover:text-warm-dark transition-colors"
+            className="experience-button experience-button-secondary mb-10 w-fit text-[11px] tracking-[0.22em]"
           >
-            <ArrowLeft size={20} />
-            <span>Back</span>
+            <ArrowLeft size={14} />
+            Back
           </Link>
+
+          <ExperienceHero
+            kicker={<span className="experience-kicker">Private Access</span>}
+            title={
+              <>
+                Return to your
+                <br />
+                <span className="italic text-olive">archives</span>
+              </>
+            }
+            subtitle="Sign in to continue where you left off, manage your preservation spaces, and keep every archive within reach."
+          />
+
+          <div className="experience-card hidden max-w-xl p-6 lg:block">
+            <p className="text-xs uppercase tracking-[0.22em] text-warm-outline">What happens next</p>
+            <p className="mt-4 text-sm leading-relaxed text-warm-muted">
+              We send you back to the exact space you were trying to reach, whether that is your dashboard,
+              a secure archive route, or a pending invitation.
+            </p>
+          </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl border border-warm-border/30 p-8 md:p-10">
-          <div className="text-center mb-8">
-            <h1 className="font-serif text-3xl text-warm-dark mb-2">Welcome Back</h1>
-            <p className="text-warm-muted text-sm">
-              Sign in to continue to your archives
+        <ExperiencePanel className="mx-auto w-full max-w-xl">
+          <div className="mb-8">
+            <p className="text-xs uppercase tracking-[0.22em] text-warm-outline">Sign In</p>
+            <h2 className="mt-3 font-serif text-4xl text-warm-dark">Welcome back</h2>
+            <p className="mt-3 text-sm leading-relaxed text-warm-muted">
+              Use the account attached to your archive so your dashboard, invites, and preservation history stay in sync.
             </p>
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+            <div className="mb-6 rounded-[1.25rem] border border-red-200 bg-red-50/90 px-5 py-4">
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-xs font-medium text-warm-outline uppercase tracking-widest mb-2">
+              <label className="mb-2 block text-xs font-medium uppercase tracking-[0.22em] text-warm-outline">
                 Email
               </label>
               <div className="relative">
@@ -83,13 +105,13 @@ function LoginForm() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   placeholder="you@example.com"
-                  className="w-full pl-11 pr-4 py-3 glass-input rounded-xl"
+                  className="experience-input w-full pl-11 pr-4"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-warm-outline uppercase tracking-widest mb-2">
+              <label className="mb-2 block text-xs font-medium uppercase tracking-[0.22em] text-warm-outline">
                 Password
               </label>
               <div className="relative">
@@ -100,7 +122,7 @@ function LoginForm() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="Your password"
-                  className="w-full pl-11 pr-4 py-3 glass-input rounded-xl"
+                  className="experience-input w-full pl-11 pr-4"
                 />
               </div>
             </div>
@@ -108,16 +130,16 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full py-3.5 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${
+              className={`experience-button w-full justify-center rounded-[1.15rem] py-4 text-[11px] tracking-[0.22em] ${
                 loading
-                  ? 'bg-surface-high text-warm-outline cursor-not-allowed'
-                  : 'glass-btn-primary'
+                  ? 'cursor-not-allowed border border-warm-border/30 bg-surface-mid/80 text-warm-outline'
+                  : 'experience-button-primary'
               }`}
             >
               {loading ? (
                 <>
                   <Loader2 size={18} className="animate-spin" />
-                  Signing in...
+                  Signing in
                 </>
               ) : (
                 'Sign In'
@@ -125,20 +147,20 @@ function LoginForm() {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-sm text-warm-muted">
-              Don&apos;t have an account?{' '}
-              <Link
-                href={`/signup${next !== '/dashboard' ? `?next=${encodeURIComponent(next)}` : ''}`}
-                className="text-olive font-medium hover:underline"
-              >
-                Create one
-              </Link>
-            </p>
-          </div>
-        </div>
+          <div className="experience-divider my-6" />
+
+          <p className="text-sm text-warm-muted">
+            Don&apos;t have an account?{' '}
+            <Link
+              href={`/signup${next !== '/dashboard' ? `?next=${encodeURIComponent(next)}` : ''}`}
+              className="experience-link font-medium"
+            >
+              Create one
+            </Link>
+          </p>
+        </ExperiencePanel>
       </div>
-    </div>
+    </ExperiencePage>
   );
 }
 
@@ -146,9 +168,9 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-surface-low flex items-center justify-center">
-          <div className="w-10 h-10 border-2 border-warm-border/30 border-t-olive rounded-full animate-spin" />
-        </div>
+        <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
+          <div className="h-10 w-10 rounded-full border-2 border-warm-border/30 border-t-olive animate-spin" />
+        </ExperiencePage>
       }
     >
       <LoginForm />

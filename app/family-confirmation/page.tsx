@@ -1,5 +1,6 @@
 // app/family-confirmation/page.tsx
 'use client';
+
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Check, ExternalLink, Loader2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
@@ -11,6 +12,7 @@ import {
     readCurrentMemorialId,
     writeCurrentMemorialId,
 } from '@/lib/currentMemorialStorage';
+import { ExperiencePage, ExperienceHero, ExperiencePanel } from '@/components/ui/experience';
 
 export default function FamilyConfirmationPage() {
     const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -22,7 +24,6 @@ export default function FamilyConfirmationPage() {
     const router = useRouter();
     const auth = useAuth();
 
-    // Auth guard: if user already has a family or higher plan, redirect to dashboard
     useEffect(() => {
         if (auth.loading) return;
         if (!auth.authenticated) {
@@ -35,7 +36,6 @@ export default function FamilyConfirmationPage() {
         }
     }, [auth.loading, auth.authenticated, auth.hasPaid, auth.plan, auth.user, router]);
 
-    // On mount: restore memorialId and check if auth was already completed
     useEffect(() => {
         if (!auth.user?.id) return;
 
@@ -48,7 +48,6 @@ export default function FamilyConfirmationPage() {
         }
     }, [auth.user?.id]);
 
-    // Poll DB every 3 s and listen for postMessage from popup
     useEffect(() => {
         if (!currentMemorialId || authorizationCompleted) return;
 
@@ -86,25 +85,20 @@ export default function FamilyConfirmationPage() {
         if (authorizationCompleted && pollRef.current) clearInterval(pollRef.current);
     }, [authorizationCompleted]);
 
-    // Mutex to prevent concurrent memorial creation
     const creatingRef = useRef(false);
 
-    // Single source of truth for memorial creation — prevents duplicates
     const ensureMemorial = async (): Promise<string> => {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Please sign in to continue.');
         const storageUserId = auth.user?.id || user.id;
 
-        // 1. Check React state first (most reliable)
         let memorialId: string | null = currentMemorialId;
 
-        // 2. Fallback to localStorage
         if (!memorialId || memorialId === 'null' || memorialId === 'undefined') {
             memorialId = readCurrentMemorialId(storageUserId, 'family');
         }
 
-        // 3. Validate the memorial still exists in the DB
         if (memorialId && memorialId !== 'null' && memorialId !== 'undefined') {
             const { data: existing } = await supabase
                 .from('memorials')
@@ -121,16 +115,14 @@ export default function FamilyConfirmationPage() {
             clearCurrentMemorialId(storageUserId, 'family');
         }
 
-        // 4. Prevent concurrent creation
         if (creatingRef.current) {
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise((resolve) => setTimeout(resolve, 1000));
             if (currentMemorialId) return currentMemorialId;
             throw new Error('Memorial creation in progress. Please try again.');
         }
 
         creatingRef.current = true;
         try {
-            // 5. Check for an existing unpaid family memorial (dedup)
             const { data: existingUnpaid } = await supabase
                 .from('memorials')
                 .select('id')
@@ -144,7 +136,6 @@ export default function FamilyConfirmationPage() {
             if (existingUnpaid) {
                 memorialId = existingUnpaid.id;
             } else {
-                // 6. Create only if truly none exists
                 const { data, error: insertError } = await supabase
                     .from('memorials')
                     .insert({ user_id: user.id, slug: `family-memorial-${Date.now()}`, mode: 'family', paid: false })
@@ -168,8 +159,6 @@ export default function FamilyConfirmationPage() {
         setIsProcessing(true);
         try {
             const memorialId = await ensureMemorial();
-
-            // replace: prevent back-button from returning to confirmation after going to payment
             router.replace(`/payment?memorialId=${memorialId}&plan=family&amount=2940`);
         } catch (error: any) {
             console.error('Payment error:', error);
@@ -183,7 +172,6 @@ export default function FamilyConfirmationPage() {
         setIsOpeningAuth(true);
         try {
             const memorialId = await ensureMemorial();
-
             const url = `/authorization/${memorialId}?type=account&popup=true`;
             window.open(url, '_blank', 'width=960,height=820,scrollbars=yes,resizable=yes');
         } catch (err: any) {
@@ -196,111 +184,146 @@ export default function FamilyConfirmationPage() {
     const canPay = acceptedTerms && authorizationCompleted && !isProcessing;
 
     return (
-        <div className="min-h-screen bg-surface-low">
-            <div className="border-b border-warm-border/20 bg-white/60 backdrop-blur-sm">
-                <div className="max-w-4xl mx-auto px-6 py-6">
-                    <Link href="/choice-pricing" className="inline-flex items-center gap-2 text-warm-dark/40 hover:text-warm-dark transition-colors text-sm">
-                        <ArrowLeft size={16} />
-                        <span>Back to plans</span>
-                    </Link>
+        <ExperiencePage containerClassName="max-w-6xl">
+            <Link
+                href="/choice-pricing"
+                className="experience-button experience-button-secondary mb-10 w-fit text-[11px] tracking-[0.22em]"
+            >
+                <ArrowLeft size={14} />
+                Back to plans
+            </Link>
+
+            <div className="grid gap-8 lg:grid-cols-[0.92fr_0.78fr] lg:items-start">
+                <div>
+                    <ExperienceHero
+                        kicker={<span className="experience-kicker">Family Preservation</span>}
+                        title={
+                            <>
+                                Seal the
+                                <br />
+                                <span className="italic text-olive">family archive</span>
+                            </>
+                        }
+                        subtitle="$2,940 is a one-time payment for a permanent family archive with no monthly fees, renewals, or storage surprises."
+                    />
+
+                    <div className="experience-card max-w-xl p-6">
+                        <p className="text-xs uppercase tracking-[0.22em] text-warm-outline">What happens here</p>
+                        <div className="mt-5 space-y-4 text-sm leading-relaxed text-warm-muted">
+                            <p>1. Confirm the legal and privacy terms for the family archive.</p>
+                            <p>2. Complete the family authorization form in a separate window.</p>
+                            <p>3. Continue to secure payment only after approval is in place.</p>
+                        </div>
+                    </div>
                 </div>
-            </div>
 
-            <div className="max-w-4xl mx-auto px-6 py-12">
-                <div className="text-center mb-12">
-                    <h1 className="font-serif text-4xl text-warm-dark mb-4">Seal the Archive</h1>
-                    <p className="text-lg text-warm-dark/50">$2,940 — A single payment for a permanent family archive. No monthly fees. No renewals. No surprises.</p>
-                </div>
+                <ExperiencePanel className="mx-auto w-full max-w-2xl">
+                    <p className="text-xs uppercase tracking-[0.22em] text-warm-outline">Before Payment</p>
+                    <h2 className="mt-3 font-serif text-3xl text-warm-dark">Prepare the family archive</h2>
 
-                {/* Steps before payment */}
-                <div className="bg-white rounded-2xl border border-warm-border/25 p-8 mb-8 max-w-2xl mx-auto">
-                    <h3 className="text-sm font-medium text-warm-dark/40 uppercase tracking-wider mb-6">Before Payment</h3>
-
-                    {/* Step 1 — Accept terms */}
-                    <label className="flex items-start gap-4 cursor-pointer group mb-6">
-                        <div className="relative flex-shrink-0 mt-1">
+                    <label className="group mt-8 flex cursor-pointer items-start gap-4 rounded-[1.35rem] border border-warm-border/25 bg-white/72 p-5 transition-colors hover:bg-white">
+                        <div className="relative mt-1 flex-shrink-0">
                             <input
                                 type="checkbox"
                                 checked={acceptedTerms}
                                 onChange={(e) => setAcceptedTerms(e.target.checked)}
-                                className="w-5 h-5 border-2 border-warm-border/40 rounded cursor-pointer accent-warm-dark"
+                                className="h-5 w-5 cursor-pointer rounded border-2 border-warm-border/40 accent-warm-dark"
                             />
                         </div>
                         <div className="flex-1">
-                            <p className="text-sm text-warm-dark/60 group-hover:text-warm-dark/80 transition-colors">
+                            <p className="text-sm leading-relaxed text-warm-dark/65 group-hover:text-warm-dark">
                                 I accept the{' '}
-                                <Link href="/legal/terms" className="text-warm-dark underline font-medium" target="_blank">General Conditions</Link>
-                                {' '}and{' '}
-                                <Link href="/legal/privacy" className="text-warm-dark underline font-medium" target="_blank">Privacy Policy</Link>
+                                <Link href="/legal/terms" className="experience-link font-medium underline underline-offset-4" target="_blank">
+                                    General Conditions
+                                </Link>{' '}
+                                and{' '}
+                                <Link href="/legal/privacy" className="experience-link font-medium underline underline-offset-4" target="_blank">
+                                    Privacy Policy
+                                </Link>
+                                .
                             </p>
                         </div>
                     </label>
 
-                    {/* Step 2 — Authorization form */}
-                    <div className={`p-6 rounded-xl border transition-all ${acceptedTerms ? 'border-warm-border/30 bg-warm-border/5' : 'border-warm-border/15 bg-warm-border/5 opacity-40 pointer-events-none'}`}>
-                        <div className="flex items-start gap-3">
-                            <div className="flex-shrink-0 mt-0.5">
+                    <div
+                        className={`mt-5 rounded-[1.5rem] border p-6 transition-all ${
+                            acceptedTerms
+                                ? 'border-warm-border/30 bg-surface-mid/35'
+                                : 'pointer-events-none border-warm-border/15 bg-warm-border/5 opacity-50'
+                        }`}
+                    >
+                        <div className="flex items-start gap-4">
+                            <div className="mt-0.5 flex-shrink-0">
                                 {authorizationCompleted ? (
-                                    <div className="w-7 h-7 bg-warm-dark rounded-full flex items-center justify-center">
-                                        <Check size={14} className="text-surface-low" strokeWidth={2.5} />
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warm-dark">
+                                        <Check size={15} className="text-surface-low" strokeWidth={2.5} />
                                     </div>
                                 ) : (
-                                    <div className="w-7 h-7 bg-warm-border/20 rounded-full flex items-center justify-center">
-                                        <ExternalLink size={14} className="text-warm-dark/30" />
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90">
+                                        <ExternalLink size={14} className="text-warm-dark/35" />
                                     </div>
                                 )}
                             </div>
                             <div className="flex-1">
-                                <h4 className="font-medium text-warm-dark text-sm mb-1">Memorial Authorization</h4>
+                                <h3 className="text-sm font-medium uppercase tracking-[0.18em] text-warm-outline">Memorial Authorization</h3>
                                 {authorizationCompleted ? (
-                                    <p className="text-xs text-warm-dark/40">
-                                        Authorization completed. You may now proceed to payment.
+                                    <p className="mt-3 text-sm leading-relaxed text-warm-muted">
+                                        Authorization completed. You can continue directly to payment.
                                     </p>
                                 ) : (
                                     <>
-                                        <p className="text-xs text-warm-dark/40 mb-4">
-                                            Confirm your legal authority to create this family archive. The form opens in a new window.
+                                        <p className="mt-3 text-sm leading-relaxed text-warm-muted">
+                                            Confirm your legal authority for this family archive in a separate window before payment begins.
                                         </p>
                                         <button
                                             onClick={handleOpenAuthorization}
                                             disabled={isOpeningAuth || !acceptedTerms}
-                                            className="inline-flex items-center gap-2 px-4 py-2 glass-btn-dark rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+                                            className={`experience-button mt-5 rounded-[1rem] px-5 py-3 text-[11px] tracking-[0.22em] ${
+                                                isOpeningAuth || !acceptedTerms
+                                                    ? 'cursor-not-allowed border border-warm-border/30 bg-surface-mid/80 text-warm-outline'
+                                                    : 'experience-button-secondary'
+                                            }`}
                                         >
                                             {isOpeningAuth ? (
-                                                <div className="w-3.5 h-3.5 border-2 border-surface-low/40 border-t-surface-low rounded-full animate-spin" />
+                                                <>
+                                                    <div className="h-3.5 w-3.5 rounded-full border-2 border-warm-dark/20 border-t-warm-dark animate-spin" />
+                                                    Opening form
+                                                </>
                                             ) : (
-                                                <ExternalLink size={13} />
+                                                <>
+                                                    <ExternalLink size={13} />
+                                                    Open Authorization Form
+                                                </>
                                             )}
-                                            Open Authorization Form
                                         </button>
                                     </>
                                 )}
 
                                 {currentMemorialId && !authorizationCompleted && !isOpeningAuth && (
-                                    <p className="text-[11px] text-warm-dark/25 mt-3 flex items-center gap-1.5">
+                                    <p className="mt-4 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.16em] text-warm-outline">
                                         <Loader2 size={10} className="animate-spin" />
-                                        Waiting for authorization…
+                                        Waiting for authorization
                                     </p>
                                 )}
                             </div>
                         </div>
                     </div>
-                </div>
 
-                {/* Payment Button */}
-                <div className="max-w-2xl mx-auto">
+                    <div className="experience-divider my-8" />
+
                     <button
                         onClick={handlePayment}
                         disabled={!canPay}
-                        className={`w-full py-4 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${canPay
-                            ? 'glass-btn-dark'
-                            : 'bg-warm-border/20 text-warm-dark/25 cursor-not-allowed'
-                            }`}
+                        className={`experience-button w-full justify-center rounded-[1.2rem] py-4 text-[11px] tracking-[0.22em] ${
+                            canPay
+                                ? 'experience-button-primary'
+                                : 'cursor-not-allowed border border-warm-border/30 bg-surface-mid/80 text-warm-outline'
+                        }`}
                     >
                         {isProcessing ? (
                             <>
-                                <div className="w-4 h-4 border-2 border-surface-low/30 border-t-surface-low rounded-full animate-spin" />
-                                Preparing payment...
+                                <div className="h-4 w-4 rounded-full border-2 border-surface-low/30 border-t-surface-low animate-spin" />
+                                Preparing payment
                             </>
                         ) : (
                             'Proceed to payment ($2,940)'
@@ -308,16 +331,16 @@ export default function FamilyConfirmationPage() {
                     </button>
 
                     {!authorizationCompleted && acceptedTerms && (
-                        <p className="text-center text-[11px] text-warm-dark/25 mt-3">
-                            Complete the authorization form above to enable payment.
+                        <p className="mt-4 text-center text-[11px] uppercase tracking-[0.16em] text-warm-outline">
+                            Complete authorization to enable payment
                         </p>
                     )}
 
-                    <p className="text-center text-[11px] text-warm-dark/20 mt-6">
-                        Secure payment powered by Stripe. Your information is encrypted.
+                    <p className="mt-6 text-center text-xs leading-relaxed text-warm-outline">
+                        Secure payment powered by Stripe. Your information remains encrypted throughout the process.
                     </p>
-                </div>
+                </ExperiencePanel>
             </div>
-        </div>
+        </ExperiencePage>
     );
 }

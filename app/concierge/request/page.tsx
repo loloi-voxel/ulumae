@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Sparkles, Hammer, Mail } from 'lucide-react';
+import { ExperiencePage, ExperienceHero, ExperiencePanel } from '@/components/ui/experience';
 
 export default function ConciergeRequestPage() {
     const [email, setEmail] = useState('');
@@ -10,94 +11,67 @@ export default function ConciergeRequestPage() {
 
     const handleNotify = (e: React.FormEvent) => {
         e.preventDefault();
-        // Here you would typically save to a DB, but for now we just show success
         setNotified(true);
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-olive/10 via-surface-low to-warm-muted/10">
+        <ExperiencePage>
+            <Link href="/choice-pricing" className="experience-button experience-button-secondary mb-10 w-fit text-[11px] tracking-[0.22em]">
+                <ArrowLeft size={14} />
+                Back to options
+            </Link>
 
-            {/* Header */}
-            <div className="border-b border-warm-border/30 bg-white/80 backdrop-blur-sm">
-                <div className="max-w-4xl mx-auto px-6 py-6">
-                    <Link
-                        href="/choice-pricing"
-                        className="inline-flex items-center gap-2 text-warm-muted hover:text-warm-dark transition-colors"
-                    >
-                        <ArrowLeft size={20} />
-                        <span>Back to options</span>
-                    </Link>
-                </div>
-            </div>
+            <ExperienceHero
+                kicker={<span className="experience-kicker">Concierge Service</span>}
+                title={
+                    <>
+                        A white-glove
+                        <br />
+                        <span className="italic text-olive">experience</span>
+                    </>
+                }
+                subtitle="We are currently refining the Concierge offering. You can join the priority list now and we’ll reach out as soon as the service reopens."
+            />
 
-            {/* Main Content */}
-            <div className="max-w-2xl mx-auto px-6 py-20 text-center">
-
-                {/* Icon */}
-                <div className="w-24 h-24 bg-gradient-to-br from-olive to-warm-muted rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-xl shadow-olive/20">
-                    <Sparkles size={40} className="text-surface-low" />
-                </div>
-
-                <h1 className="font-serif text-4xl md:text-5xl text-warm-dark mb-6">
-                    Concierge Service
-                </h1>
-
-                <div className="bg-white p-8 rounded-2xl border border-warm-border/30 shadow-sm mb-8">
-                    <div className="flex items-center justify-center gap-2 text-warm-muted font-medium mb-4">
+            <div className="grid gap-6 lg:grid-cols-[0.92fr_0.78fr]">
+                <ExperiencePanel>
+                    <div className="mb-6 flex items-center gap-3 text-warm-muted">
                         <Hammer size={20} />
-                        <span>Currently Under Construction</span>
+                        <span className="text-sm font-medium uppercase tracking-[0.16em]">Currently under construction</span>
                     </div>
-
-                    <p className="text-lg text-warm-dark/70 leading-relaxed mb-6">
-                        We are currently upgrading our white-glove Concierge experience to better serve families.
-                        Due to high demand and these improvements, we are not accepting new Concierge projects at this moment.
+                    <p className="text-sm leading-relaxed text-warm-muted">
+                        Due to demand and active improvements, we are not accepting new Concierge projects at this exact moment. Personal and Family archives remain available immediately through self-service tools.
                     </p>
+                </ExperiencePanel>
 
-                    <p className="text-sm text-warm-muted bg-warm-border/10 p-4 rounded-xl">
-                        <strong>Note:</strong> You can still create a <strong>Personal</strong> or <strong>Family</strong> archive immediately using our self-service tools. They include all the same digital preservation features.
-                    </p>
-                </div>
-
-                {/* Waitlist Form */}
-                {!notified ? (
-                    <form onSubmit={handleNotify} className="max-w-md mx-auto">
-                        <label className="block text-sm font-medium text-warm-muted mb-2">
-                            Notify me when Concierge re-opens
-                        </label>
-                        <div className="flex gap-2">
+                <ExperiencePanel>
+                    {!notified ? (
+                        <form onSubmit={handleNotify}>
+                            <label className="mb-2 block text-xs uppercase tracking-[0.22em] text-warm-outline">
+                                Notify me when Concierge reopens
+                            </label>
                             <input
                                 type="email"
                                 required
                                 placeholder="Enter your email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="flex-1 px-4 py-3 rounded-xl border border-warm-border/40 focus:outline-none focus:ring-2 focus:ring-olive/30 bg-white"
+                                className="experience-input w-full"
                             />
-                            <button
-                                type="submit"
-                                className="px-6 py-3 glass-btn-dark rounded-lg font-medium transition-all"
-                            >
+                            <button type="submit" className="experience-button experience-button-primary mt-5 w-full justify-center">
                                 Notify Me
                             </button>
+                        </form>
+                    ) : (
+                        <div className="rounded-[1.4rem] border border-olive/20 bg-olive/10 px-5 py-5 text-sm text-olive">
+                            <div className="flex items-center gap-2">
+                                <Mail size={18} />
+                                Thank you. We&apos;ve added you to the priority list.
+                            </div>
                         </div>
-                    </form>
-                ) : (
-                    <div className="bg-olive/10 text-olive border border-olive/20 p-4 rounded-xl inline-flex items-center gap-2 animate-fadeIn">
-                        <Mail size={18} />
-                        <span>Thank you! We've added you to the priority list.</span>
-                    </div>
-                )}
-
-                <div className="mt-12">
-                    <Link
-                        href="/choice-pricing"
-                        className="text-olive hover:text-olive/80 font-medium underline underline-offset-4"
-                    >
-                        Create a Personal Memorial instead &rarr;
-                    </Link>
-                </div>
-
+                    )}
+                </ExperiencePanel>
             </div>
-        </div>
+        </ExperiencePage>
     );
 }
