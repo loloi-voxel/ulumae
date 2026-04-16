@@ -87,7 +87,7 @@ function LoginForm() {
           </div>
 
           {error && (
-            <div className="mb-6 rounded-[1.25rem] border border-red-200 bg-red-50/90 px-5 py-4">
+            <div className="mb-6 rounded-none border border-red-200 bg-red-50/90 px-5 py-4">
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
@@ -130,7 +130,7 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className={`experience-button w-full justify-center rounded-[1.15rem] py-4 text-[11px] tracking-[0.22em] ${
+              className={`experience-button w-full justify-center py-4 text-[11px] tracking-[0.22em] ${
                 loading
                   ? 'cursor-not-allowed border border-warm-border/30 bg-surface-mid/80 text-warm-outline'
                   : 'experience-button-primary'
@@ -169,7 +169,7 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
-          <div className="h-10 w-10 rounded-full border-2 border-warm-border/30 border-t-olive animate-spin" />
+          <div className="h-10 w-10 rounded-none border-2 border-warm-border/30 border-t-olive animate-spin" />
         </ExperiencePage>
       }
     >

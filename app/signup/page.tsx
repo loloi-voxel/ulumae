@@ -58,7 +58,7 @@ function SignupForm() {
     return (
       <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
         <ExperiencePanel className="mx-auto w-full max-w-xl text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-olive/10">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-none bg-olive/10">
             <Check size={32} className="text-olive" />
           </div>
           <p className="text-xs uppercase tracking-[0.22em] text-warm-outline">Account Created</p>
@@ -69,7 +69,7 @@ function SignupForm() {
           </p>
           <p className="mt-5 text-xs text-warm-outline">
             Didn&apos;t receive it? Check spam, or{' '}
-            <button onClick={() => setConfirmationSent(false)} className="experience-link underline underline-offset-4">
+            <button onClick={() => setConfirmationSent(false)} className="experience-link rounded-none underline underline-offset-4">
               try again
             </button>
             .
@@ -121,7 +121,7 @@ function SignupForm() {
           </div>
 
           {error && (
-            <div className="mb-6 rounded-[1.25rem] border border-red-200 bg-red-50/90 px-5 py-4">
+            <div className="mb-6 rounded-none border border-red-200 bg-red-50/90 px-5 py-4">
               <p className="text-sm text-red-700">{error}</p>
             </div>
           )}
@@ -182,7 +182,7 @@ function SignupForm() {
             <button
               type="submit"
               disabled={loading}
-              className={`experience-button w-full justify-center rounded-[1.15rem] py-4 text-[11px] tracking-[0.22em] ${
+              className={`experience-button w-full justify-center py-4 text-[11px] tracking-[0.22em] ${
                 loading
                   ? 'cursor-not-allowed border border-warm-border/30 bg-surface-mid/80 text-warm-outline'
                   : 'experience-button-primary'
@@ -221,7 +221,7 @@ export default function SignupPage() {
     <Suspense
       fallback={
         <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
-          <div className="h-10 w-10 rounded-full border-2 border-warm-border/30 border-t-olive animate-spin" />
+          <div className="h-10 w-10 rounded-none border-2 border-warm-border/30 border-t-olive animate-spin" />
         </ExperiencePage>
       }
     >

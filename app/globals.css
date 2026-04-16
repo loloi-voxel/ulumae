@@ -557,8 +557,8 @@
     align-items: center;
     gap: 0.55rem;
     border: 1px solid rgba(189, 185, 174, 0.35);
-    border-radius: 999px;
-    padding: 0.6rem 1rem;
+    border-radius: 0;
+    padding: 0.7rem 1.1rem;
     font-size: 0.68rem;
     line-height: 1;
     letter-spacing: 0.24em;
@@ -592,7 +592,7 @@
   .experience-panel {
     background: rgba(255, 255, 255, 0.88);
     border: 1px solid rgba(189, 185, 174, 0.3);
-    border-radius: 1.75rem;
+    border-radius: 0;
     box-shadow:
       0 20px 70px rgba(57, 56, 48, 0.08),
       0 4px 16px rgba(57, 56, 48, 0.04);
@@ -602,13 +602,13 @@
   .experience-panel-soft {
     background: rgba(248, 243, 233, 0.72);
     border: 1px solid rgba(189, 185, 174, 0.25);
-    border-radius: 1.5rem;
+    border-radius: 0;
   }
 
   .experience-card {
     background: rgba(255, 255, 255, 0.92);
     border: 1px solid rgba(189, 185, 174, 0.24);
-    border-radius: 1.5rem;
+    border-radius: 0;
     box-shadow:
       0 10px 40px rgba(57, 56, 48, 0.05),
       0 2px 10px rgba(57, 56, 48, 0.03);
@@ -633,8 +633,8 @@
     align-items: center;
     justify-content: center;
     gap: 0.55rem;
-    border-radius: 999px;
-    padding: 0.95rem 1.45rem;
+    border-radius: 0;
+    padding: 1rem 1.5rem;
     font-size: 0.72rem;
     line-height: 1;
     letter-spacing: 0.24em;
@@ -679,7 +679,7 @@
   .experience-input {
     background: rgba(248, 243, 233, 0.88);
     border: 1px solid rgba(189, 185, 174, 0.34);
-    border-radius: 1rem;
+    border-radius: 0;
     padding: 0.95rem 1rem;
     color: #393830;
     font-size: 0.92rem;

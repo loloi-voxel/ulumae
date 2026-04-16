@@ -708,9 +708,9 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                             {/* + Add Memorial Card */}
                             <button
                                 onClick={handleCreate}
-                                className="bg-white border border-warm-border/30 border-dashed rounded-xl overflow-hidden transition-all flex flex-col items-center justify-center min-h-[320px] group cursor-pointer hover:border-olive/30 hover:shadow-lg"
+                                className="group flex min-h-[320px] cursor-pointer flex-col items-center justify-center overflow-hidden border border-dashed border-warm-border/30 bg-white transition-all hover:border-olive/30 hover:shadow-lg rounded-none"
                             >
-                                <div className="w-16 h-16 rounded-full bg-surface-mid flex items-center justify-center mb-4 group-hover:bg-olive/10 transition-colors">
+                                <div className="mb-4 flex h-16 w-16 items-center justify-center bg-surface-mid transition-colors group-hover:bg-olive/10 rounded-none">
                                     <Plus size={28} className="text-warm-muted group-hover:text-olive transition-colors" />
                                 </div>
                                 <p className="font-sans font-semibold text-warm-muted group-hover:text-warm-dark text-sm transition-colors">Add Memorial</p>
@@ -721,7 +721,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
 
                 {/* MEMBERS — Role Management per Memorial */}
                 {firstPaidMemorial && (
-                    <div id="members" className="mt-12 bg-white border border-warm-border/30 rounded-xl p-8">
+                    <div id="members" className="mt-12 border border-warm-border/30 bg-white p-8 rounded-none">
                         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                             <div>
                                 <h3 className="font-serif text-2xl text-warm-dark mb-2">Member management</h3>
@@ -731,7 +731,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                             </div>
                             <button
                                 onClick={() => setMemberManagerMemorial(firstPaidMemorial)}
-                                className="inline-flex items-center gap-2 px-5 py-3 rounded-lg font-sans font-semibold border border-warm-border/30 text-warm-dark text-sm hover:bg-surface-high transition-all"
+                                className="inline-flex items-center gap-2 border border-warm-border/30 px-5 py-3 text-sm font-sans font-semibold text-warm-dark transition-all hover:bg-surface-high rounded-none"
                             >
                                 <User size={16} />
                                 Open primary member manager
@@ -741,7 +741,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                 )}
 
                 <div id="activity" className="mt-12">
-                    <section className="bg-white border border-warm-border/30 rounded-xl p-6">
+                    <section className="border border-warm-border/30 bg-white p-6 rounded-none">
                         <div className="mb-5">
                             <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Recent activity</p>
                             <h2 className="mt-2 font-serif text-2xl text-warm-dark">Who changed what</h2>
@@ -756,11 +756,11 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                 <p className="text-sm text-warm-muted font-sans">Loading activity...</p>
                             </div>
                         ) : notificationError ? (
-                            <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-5 text-sm text-red-700">
+                            <div className="border border-red-200 bg-red-50 px-6 py-5 text-sm text-red-700 rounded-none">
                                 {notificationError}
                             </div>
                         ) : activityItems.length === 0 ? (
-                            <div className="rounded-xl border-2 border-dashed border-warm-border/35 bg-surface-low/40 px-6 py-10 text-center">
+                            <div className="border-2 border-dashed border-warm-border/35 bg-surface-low/40 px-6 py-10 text-center rounded-none">
                                 <History size={24} className="mx-auto mb-3 text-warm-muted" />
                                 <p className="font-serif text-xl text-warm-dark">No activity yet</p>
                                 <p className="mt-2 text-sm text-warm-muted font-sans">
@@ -773,7 +773,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                     <details
                                         key={dayGroup.dayKey}
                                         open
-                                        className="group rounded-xl border border-warm-border/20 bg-surface-low/20"
+                                        className="group border border-warm-border/20 bg-surface-low/20 rounded-none"
                                     >
                                         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
                                             <div>
@@ -794,7 +794,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                             {dayGroup.people.map((personGroup) => (
                                                 <details
                                                     key={`${dayGroup.dayKey}-${personGroup.name}`}
-                                                    className="group/person rounded-xl border border-warm-border/20 bg-white"
+                                                    className="group/person border border-warm-border/20 bg-white rounded-none"
                                                 >
                                                     <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
                                                         <div>
@@ -815,10 +815,10 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                                         {personGroup.items.map((item) => (
                                                             <div
                                                                 key={item.id}
-                                                                className="rounded-xl border border-warm-border/20 bg-surface-low/25 px-4 py-3"
+                                                                className="border border-warm-border/20 bg-surface-low/25 px-4 py-3 rounded-none"
                                                             >
                                                                 <div className="flex items-start gap-3">
-                                                                    <div className="mt-1 flex h-9 w-9 items-center justify-center rounded-lg bg-olive/10 text-olive">
+                                                                    <div className="mt-1 flex h-9 w-9 items-center justify-center bg-olive/10 text-olive rounded-none">
                                                                         <MessageSquareText size={16} />
                                                                     </div>
                                                                     <div className="min-w-0 flex-1">
@@ -855,9 +855,9 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
 
                 {/* OFFLINE ACCESS GUARANTEE */}
                 <div className="mt-8">
-                    <div className="bg-white border border-warm-border/30 rounded-xl p-6">
+                    <div className="border border-warm-border/30 bg-white p-6 rounded-none">
                         <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 bg-olive/10 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center bg-olive/10 rounded-none">
                                 <Wifi size={16} className="text-olive" />
                             </div>
                             <div>
@@ -884,7 +884,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-75">
                             {deletedMemorials.map((memorial) => (
-                                <div key={memorial.id} className="bg-white border border-warm-border/30 rounded-xl p-4 flex items-center justify-between">
+                                <div key={memorial.id} className="flex items-center justify-between border border-warm-border/30 bg-white p-4 rounded-none">
                                     <div>
                                         <p className="font-sans font-medium text-warm-dark">{memorial.full_name || 'Untitled'}</p>
                                         <p className="text-xs text-red-500 mt-1 flex items-center gap-1 font-sans">
@@ -895,14 +895,14 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => restoreMemorial(memorial.id)}
-                                            className="p-2 bg-surface-mid border border-warm-border/30 text-warm-dark rounded-lg hover:bg-surface-high transition-colors"
+                                            className="border border-warm-border/30 bg-surface-mid p-2 text-warm-dark transition-colors hover:bg-surface-high rounded-none"
                                             title="Restore"
                                         >
                                             <RefreshCcw size={18} />
                                         </button>
                                         <button
                                             onClick={() => permanentDeleteMemorial(memorial.id)}
-                                            className="p-2 bg-red-50 border border-red-200 text-red-500 hover:text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                            className="border border-red-200 bg-red-50 p-2 text-red-500 transition-colors hover:bg-red-100 hover:text-red-600 rounded-none"
                                             title="Delete permanently"
                                         >
                                             <Trash2 size={18} />
@@ -918,12 +918,12 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
             {/* CONNECTION MANAGER MODAL */}
             {managingId && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-overlay">
-                    <div className="glass-modal w-full max-w-lg overflow-hidden shadow-2xl animate-fadeIn">
+                        <div className="glass-modal w-full max-w-lg overflow-hidden shadow-2xl animate-fadeIn rounded-none">
                         <div className="p-4 border-b border-warm-border/30 flex justify-between items-center bg-surface-mid/50">
                             <h3 className="font-serif text-lg text-warm-dark">Manage Family Connections</h3>
                             <button
                                 onClick={() => setManagingId(null)}
-                                className="p-2 hover:bg-surface-high rounded-full transition-colors"
+                                className="p-2 hover:bg-surface-high transition-colors rounded-none"
                             >
                                 <X size={20} className="text-warm-muted" />
                             </button>

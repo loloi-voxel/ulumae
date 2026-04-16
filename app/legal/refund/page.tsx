@@ -35,7 +35,7 @@ export default function RefundPolicyPage() {
             {/* Hero Section */}
             <div className="bg-gradient-to-br from-plum/10 via-surface-low to-warm-brown/10 border-b border-warm-border/30">
                 <div className="max-w-4xl mx-auto px-6 py-16 text-center">
-                    <div className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-plum/20 text-plum rounded-full border border-plum/30 mb-6">
+                    <div className="mb-6 inline-flex items-center justify-center gap-2 border border-plum/30 bg-plum/20 px-4 py-2 text-plum rounded-none">
                         <RotateCcw size={16} />
                         <span className="text-sm font-medium">Fair & Transparent</span>
                     </div>
@@ -82,7 +82,7 @@ export default function RefundPolicyPage() {
                                 ))}
                             </nav>
 
-                            <div className="mt-8 p-4 bg-gradient-to-br from-plum/5 to-warm-brown/5 rounded-xl border border-warm-border/30">
+                            <div className="mt-8 border border-warm-border/30 bg-gradient-to-br from-plum/5 to-warm-brown/5 p-4 rounded-none">
                                 <h4 className="font-medium text-warm-dark mb-2 flex items-center gap-2">
                                     <AlertCircle size={16} className="text-warm-brown" />
                                     Request Refund
@@ -104,9 +104,9 @@ export default function RefundPolicyPage() {
                     <div className="lg:col-span-3">
                         {/* Quick Reference Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
-                            <div className="p-6 bg-surface-low rounded-xl border border-warm-border/30 shadow-sm">
+                            <div className="border border-warm-border/30 bg-surface-low p-6 shadow-sm rounded-none">
                                 <div className="flex items-center gap-3 mb-3">
-                                    <div className="p-2 bg-plum/10 rounded-lg">
+                                    <div className="bg-plum/10 p-2 rounded-none">
                                         <DollarSign className="text-plum" size={20} />
                                     </div>
                                     <h3 className="font-serif text-lg text-warm-dark">Personal Plan</h3>
@@ -127,9 +127,9 @@ export default function RefundPolicyPage() {
                                 </ul>
                             </div>
 
-                            <div className="p-6 bg-surface-low rounded-xl border border-warm-border/30 shadow-sm">
+                            <div className="border border-warm-border/30 bg-surface-low p-6 shadow-sm rounded-none">
                                 <div className="flex items-center gap-3 mb-3">
-                                    <div className="p-2 bg-warm-brown/10 rounded-lg">
+                                    <div className="bg-warm-brown/10 p-2 rounded-none">
                                         <DollarSign className="text-warm-brown" size={20} />
                                     </div>
                                     <h3 className="font-serif text-lg text-warm-dark">Family Plan</h3>
@@ -214,7 +214,7 @@ export default function RefundPolicyPage() {
                         </article>
 
                         {/* Contact CTA */}
-                        <div className="mt-16 p-8 bg-gradient-to-br from-plum/10 to-warm-brown/10 rounded-2xl border border-warm-border/30">
+                        <div className="mt-16 border border-warm-border/30 bg-gradient-to-br from-plum/10 to-warm-brown/10 p-8 rounded-none">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
                                 <div>
                                     <RotateCcw className="mx-auto mb-3 text-plum" size={28} />

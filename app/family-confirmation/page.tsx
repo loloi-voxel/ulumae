@@ -221,13 +221,13 @@ export default function FamilyConfirmationPage() {
                     <p className="text-xs uppercase tracking-[0.22em] text-warm-outline">Before Payment</p>
                     <h2 className="mt-3 font-serif text-3xl text-warm-dark">Prepare the family archive</h2>
 
-                    <label className="group mt-8 flex cursor-pointer items-start gap-4 rounded-[1.35rem] border border-warm-border/25 bg-white/72 p-5 transition-colors hover:bg-white">
+                    <label className="group mt-8 flex cursor-pointer items-start gap-4 rounded-none border border-warm-border/25 bg-white/72 p-5 transition-colors hover:bg-white">
                         <div className="relative mt-1 flex-shrink-0">
                             <input
                                 type="checkbox"
                                 checked={acceptedTerms}
                                 onChange={(e) => setAcceptedTerms(e.target.checked)}
-                                className="h-5 w-5 cursor-pointer rounded border-2 border-warm-border/40 accent-warm-dark"
+                                className="h-5 w-5 cursor-pointer rounded-none border-2 border-warm-border/40 accent-warm-dark"
                             />
                         </div>
                         <div className="flex-1">
@@ -246,7 +246,7 @@ export default function FamilyConfirmationPage() {
                     </label>
 
                     <div
-                        className={`mt-5 rounded-[1.5rem] border p-6 transition-all ${
+                        className={`mt-5 rounded-none border p-6 transition-all ${
                             acceptedTerms
                                 ? 'border-warm-border/30 bg-surface-mid/35'
                                 : 'pointer-events-none border-warm-border/15 bg-warm-border/5 opacity-50'
@@ -255,11 +255,11 @@ export default function FamilyConfirmationPage() {
                         <div className="flex items-start gap-4">
                             <div className="mt-0.5 flex-shrink-0">
                                 {authorizationCompleted ? (
-                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-warm-dark">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-none bg-warm-dark">
                                         <Check size={15} className="text-surface-low" strokeWidth={2.5} />
                                     </div>
                                 ) : (
-                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-none bg-white/90">
                                         <ExternalLink size={14} className="text-warm-dark/35" />
                                     </div>
                                 )}
@@ -278,7 +278,7 @@ export default function FamilyConfirmationPage() {
                                         <button
                                             onClick={handleOpenAuthorization}
                                             disabled={isOpeningAuth || !acceptedTerms}
-                                            className={`experience-button mt-5 rounded-[1rem] px-5 py-3 text-[11px] tracking-[0.22em] ${
+                                            className={`experience-button mt-5 px-5 py-3 text-[11px] tracking-[0.22em] ${
                                                 isOpeningAuth || !acceptedTerms
                                                     ? 'cursor-not-allowed border border-warm-border/30 bg-surface-mid/80 text-warm-outline'
                                                     : 'experience-button-secondary'
@@ -286,7 +286,7 @@ export default function FamilyConfirmationPage() {
                                         >
                                             {isOpeningAuth ? (
                                                 <>
-                                                    <div className="h-3.5 w-3.5 rounded-full border-2 border-warm-dark/20 border-t-warm-dark animate-spin" />
+                                                    <div className="h-3.5 w-3.5 rounded-none border-2 border-warm-dark/20 border-t-warm-dark animate-spin" />
                                                     Opening form
                                                 </>
                                             ) : (
@@ -314,7 +314,7 @@ export default function FamilyConfirmationPage() {
                     <button
                         onClick={handlePayment}
                         disabled={!canPay}
-                        className={`experience-button w-full justify-center rounded-[1.2rem] py-4 text-[11px] tracking-[0.22em] ${
+                        className={`experience-button w-full justify-center py-4 text-[11px] tracking-[0.22em] ${
                             canPay
                                 ? 'experience-button-primary'
                                 : 'cursor-not-allowed border border-warm-border/30 bg-surface-mid/80 text-warm-outline'
@@ -322,7 +322,7 @@ export default function FamilyConfirmationPage() {
                     >
                         {isProcessing ? (
                             <>
-                                <div className="h-4 w-4 rounded-full border-2 border-surface-low/30 border-t-surface-low animate-spin" />
+                                <div className="h-4 w-4 rounded-none border-2 border-surface-low/30 border-t-surface-low animate-spin" />
                                 Preparing payment
                             </>
                         ) : (

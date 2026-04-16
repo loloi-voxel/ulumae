@@ -52,7 +52,7 @@ export default function ContactPage() {
 
       <div className="experience-section">
         <ExperienceCard className="text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-olive/10">
+                            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-none bg-olive/10">
             <Sparkles size={24} className="text-olive" />
           </div>
           <p className="mx-auto max-w-2xl text-sm leading-relaxed text-warm-muted">

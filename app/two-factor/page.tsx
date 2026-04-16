@@ -160,7 +160,7 @@ function TwoFactorChallengeScreen() {
 
                 <ExperiencePanel className="mx-auto w-full max-w-xl">
                     <div className="mb-6 flex items-start gap-4">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-olive/10 text-olive">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-none bg-olive/10 text-olive">
                             <Shield size={22} />
                         </div>
                         <div>
@@ -172,16 +172,16 @@ function TwoFactorChallengeScreen() {
                         </div>
                     </div>
 
-                    <div className="mb-5 grid grid-cols-2 gap-2 rounded-[1.2rem] bg-surface-mid/50 p-1.5">
+                    <div className="mb-5 grid grid-cols-2 gap-2 rounded-none bg-surface-mid/50 p-1.5">
                         <button
                             onClick={() => setMode('totp')}
-                            className={`rounded-[1rem] px-4 py-3 text-sm transition-colors ${mode === 'totp' ? 'bg-white text-warm-dark shadow-sm' : 'text-warm-muted'}`}
+                            className={`rounded-none px-4 py-3 text-sm transition-colors ${mode === 'totp' ? 'bg-white text-warm-dark shadow-sm' : 'text-warm-muted'}`}
                         >
                             Authenticator
                         </button>
                         <button
                             onClick={() => setMode('recovery')}
-                            className={`rounded-[1rem] px-4 py-3 text-sm transition-colors ${mode === 'recovery' ? 'bg-white text-warm-dark shadow-sm' : 'text-warm-muted'}`}
+                            className={`rounded-none px-4 py-3 text-sm transition-colors ${mode === 'recovery' ? 'bg-white text-warm-dark shadow-sm' : 'text-warm-muted'}`}
                         >
                             Recovery code
                         </button>
@@ -244,7 +244,7 @@ function TwoFactorChallengeScreen() {
                     )}
 
                     {error && (
-                        <div className="mb-4 rounded-[1.25rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        <div className="mb-4 rounded-none border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                             <div className="flex items-start gap-2">
                                 <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
                                 <span>{error}</span>
@@ -255,14 +255,14 @@ function TwoFactorChallengeScreen() {
                     <div className="grid gap-3 sm:grid-cols-2">
                         <button
                             onClick={handleSignOut}
-                            className="experience-button experience-button-secondary w-full justify-center rounded-[1.05rem] py-3 text-[11px] tracking-[0.22em]"
+                            className="experience-button experience-button-secondary w-full justify-center py-3 text-[11px] tracking-[0.22em]"
                         >
                             Sign Out
                         </button>
                         <button
                             onClick={handleSubmit}
                             disabled={submitting || (mode === 'totp' ? code.trim().length < 6 : recoveryCode.trim().length < 8)}
-                            className={`experience-button w-full justify-center rounded-[1.05rem] py-3 text-[11px] tracking-[0.22em] ${
+                            className={`experience-button w-full justify-center py-3 text-[11px] tracking-[0.22em] ${
                                 submitting || (mode === 'totp' ? code.trim().length < 6 : recoveryCode.trim().length < 8)
                                     ? 'cursor-not-allowed border border-warm-border/30 bg-surface-mid/80 text-warm-outline'
                                     : 'experience-button-primary'
@@ -289,7 +289,7 @@ export default function TwoFactorPage() {
         <Suspense
             fallback={
                 <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
-                    <div className="h-10 w-10 rounded-full border-2 border-warm-border/30 border-t-olive animate-spin" />
+                    <div className="h-10 w-10 rounded-none border-2 border-warm-border/30 border-t-olive animate-spin" />
                 </ExperiencePage>
             }
         >

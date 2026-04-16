@@ -83,7 +83,7 @@ export default function AdminDashboard() {
                             <h1 className="text-3xl font-bold text-slate-900">Concierge Admin</h1>
                             <p className="text-slate-600 mt-1">Manage all concierge requests and projects</p>
                         </div>
-                        <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-lg">
+                        <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-none">
                             <Users size={20} className="text-slate-600" />
                             <span className="font-semibold text-slate-900">{stats.total}</span>
                             <span className="text-slate-600 text-sm">Total Projects</span>
@@ -101,7 +101,7 @@ export default function AdminDashboard() {
                         return (
                             <div
                                 key={status}
-                                className={`p-4 rounded-xl border-2 ${config.bg} border-transparent hover:border-slate-300 transition-all cursor-pointer`}
+                                className={`cursor-pointer border-2 p-4 transition-all hover:border-slate-300 ${config.bg} border-transparent rounded-none`}
                                 onClick={() => setStatusFilter(status)}
                             >
                                 <div className="flex items-center justify-between mb-2">
@@ -115,7 +115,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Search and Filter Bar */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
+                <div className="mb-6 border border-slate-200 bg-white p-4 shadow-sm rounded-none">
                     <div className="flex flex-col md:flex-row gap-4">
                         <div className="flex-1 relative">
                             <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -124,7 +124,7 @@ export default function AdminDashboard() {
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search by name, email, or person being honored..."
-                                className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full border border-slate-300 py-3 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-none"
                             />
                         </div>
                         <div className="relative">
@@ -132,7 +132,7 @@ export default function AdminDashboard() {
                             <select
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
-                                className="pl-12 pr-8 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                className="border border-slate-300 bg-white py-3 pl-12 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-none"
                             >
                                 <option value="all">All Status</option>
                                 <option value="requested">Requested</option>
@@ -145,7 +145,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Projects Table */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="overflow-hidden border border-slate-200 bg-white shadow-sm rounded-none">
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead className="bg-slate-50 border-b border-slate-200">
@@ -190,7 +190,7 @@ export default function AdminDashboard() {
                                                     <p className="font-medium text-slate-900">{project.person_full_name || '—'}</p>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color}`}>
+                                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium ${statusConfig.bg} ${statusConfig.color} rounded-none`}>
                                                         <StatusIcon size={14} />
                                                         {statusConfig.label}
                                                     </span>
@@ -204,7 +204,7 @@ export default function AdminDashboard() {
                                                 <td className="px-6 py-4">
                                                     <Link
                                                         href={`/admin/${project.id}`}
-                                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2 inline-flex"
+                                                        className="inline-flex items-center gap-2 bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 rounded-none"
                                                     >
                                                         <Edit size={16} />
                                                         Manage

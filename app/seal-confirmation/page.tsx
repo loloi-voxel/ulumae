@@ -91,7 +91,7 @@ function SealConfirmationContent() {
     if (loading) {
         return (
             <div className="min-h-screen bg-surface-low flex items-center justify-center">
-                <div className="w-12 h-12 border-3 border-warm-border/30 border-t-warm-dark/40 rounded-full animate-spin" />
+                <div className="h-12 w-12 rounded-none border-3 border-warm-border/30 border-t-warm-dark/40 animate-spin" />
             </div>
         );
     }
@@ -133,7 +133,7 @@ function SealConfirmationContent() {
                 </div>
 
                 {/* Narrative summary — replaces raw stats */}
-                <div className="bg-white rounded-2xl border border-warm-border/25 p-10 mb-8 text-center">
+                <div className="mb-8 border border-warm-border/25 bg-white p-10 text-center rounded-none">
                     <p className="font-serif text-5xl text-warm-dark mb-2">{archiveStats.fragments}</p>
                     <p className="text-warm-dark/50 text-lg font-serif italic mb-8">
                         fragments of their life have been gathered
@@ -160,14 +160,14 @@ function SealConfirmationContent() {
                 </div>
 
                 {/* Timeline of Immortality */}
-                <div className="bg-gradient-to-br from-olive/5 to-warm-brown/5 rounded-2xl border border-warm-border/15 p-8 mb-8">
+                <div className="mb-8 border border-warm-border/15 bg-gradient-to-br from-olive/5 to-warm-brown/5 p-8 rounded-none">
                     <h2 className="text-sm font-medium text-warm-dark/40 uppercase tracking-wider mb-8 text-center">
                         Timeline of Immortality
                     </h2>
                     <div className="flex items-center justify-between max-w-md mx-auto">
                         {/* Step 1: Gathered */}
                         <div className="flex flex-col items-center">
-                            <div className="w-12 h-12 rounded-full bg-olive/20 border-2 border-olive flex items-center justify-center mb-2">
+                            <div className="mb-2 flex h-12 w-12 items-center justify-center border-2 border-olive bg-olive/20 rounded-none">
                                 <Check size={20} className="text-olive" />
                             </div>
                             <p className="text-xs font-medium text-olive">Gathered</p>
@@ -177,7 +177,7 @@ function SealConfirmationContent() {
                         <div className="flex-1 h-0.5 bg-gradient-to-r from-olive to-warm-brown/40 mx-3 mt-[-20px]" />
                         {/* Step 2: Sealed */}
                         <div className="flex flex-col items-center">
-                            <div className="w-12 h-12 rounded-full bg-warm-brown/10 border-2 border-warm-brown/40 border-dashed flex items-center justify-center mb-2 animate-pulse">
+                            <div className="mb-2 flex h-12 w-12 items-center justify-center border-2 border-dashed border-warm-brown/40 bg-warm-brown/10 animate-pulse rounded-none">
                                 <Clock size={20} className="text-warm-brown/50" />
                             </div>
                             <p className="text-xs font-medium text-warm-brown/60">Sealed</p>
@@ -187,7 +187,7 @@ function SealConfirmationContent() {
                         <div className="flex-1 h-0.5 bg-warm-border/20 mx-3 mt-[-20px]" />
                         {/* Step 3: Eternal */}
                         <div className="flex flex-col items-center">
-                            <div className="w-12 h-12 rounded-full bg-warm-border/10 border-2 border-warm-border/20 flex items-center justify-center mb-2">
+                            <div className="mb-2 flex h-12 w-12 items-center justify-center border-2 border-warm-border/20 bg-warm-border/10 rounded-none">
                                 <InfinityIcon size={20} className="text-warm-dark/20" />
                             </div>
                             <p className="text-xs font-medium text-warm-dark/30">Eternal</p>
@@ -197,26 +197,26 @@ function SealConfirmationContent() {
                 </div>
 
                 {/* What sealing means — solemn narrative */}
-                <div className="bg-warm-border/8 rounded-2xl border border-warm-border/15 p-8 mb-8">
+                <div className="mb-8 border border-warm-border/15 bg-warm-border/8 p-8 rounded-none">
                     <h2 className="text-sm font-medium text-warm-dark/40 uppercase tracking-wider mb-5">
                         What this means
                     </h2>
                     <ul className="space-y-3 text-sm text-warm-dark/50 leading-relaxed">
                         <li className="flex items-start gap-3">
-                            <div className="w-1.5 h-1.5 rounded-full bg-warm-dark/20 mt-2 flex-shrink-0" />
+                            <div className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-none bg-warm-dark/20" />
                             Their presence becomes permanent — accessible forever at
                             <span className="text-warm-dark/70 font-medium ml-1">ulumae.com/person/{slug}</span>
                         </li>
                         <li className="flex items-start gap-3">
-                            <div className="w-1.5 h-1.5 rounded-full bg-warm-dark/20 mt-2 flex-shrink-0" />
+                            <div className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-none bg-warm-dark/20" />
                             This legacy can be shared, passed to your heirs, and carried forward through generations.
                         </li>
                         <li className="flex items-start gap-3">
-                            <div className="w-1.5 h-1.5 rounded-full bg-warm-dark/20 mt-2 flex-shrink-0" />
+                            <div className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-none bg-warm-dark/20" />
                             The draft watermark will be lifted. What remains is the pure archive, exactly as you shaped it.
                         </li>
                         <li className="flex items-start gap-3">
-                            <div className="w-1.5 h-1.5 rounded-full bg-warm-dark/20 mt-2 flex-shrink-0" />
+                            <div className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-none bg-warm-dark/20" />
                             You remain the guardian — you may continue enriching this archive after sealing.
                         </li>
                     </ul>
@@ -238,13 +238,13 @@ function SealConfirmationContent() {
                 <div className="space-y-3 max-w-md mx-auto">
                     <button
                         onClick={handleProceed}
-                        className="w-full py-4 glass-btn-dark rounded-xl font-medium transition-all flex items-center justify-center gap-2"
+                        className="flex w-full items-center justify-center gap-2 py-4 glass-btn-dark font-medium transition-all rounded-none"
                     >
                         Seal this legacy forever
                     </button>
                     <button
                         onClick={handleGoBack}
-                        className="w-full py-4 bg-white border border-warm-border/30 text-warm-dark/50 rounded-xl font-medium hover:bg-warm-border/5 transition-all"
+                        className="w-full border border-warm-border/30 bg-white py-4 font-medium text-warm-dark/50 transition-all hover:bg-warm-border/5 rounded-none"
                     >
                         I need more time with their story
                     </button>
@@ -262,7 +262,7 @@ export default function SealConfirmationPage() {
     return (
         <Suspense fallback={
             <div className="min-h-screen bg-surface-low flex items-center justify-center">
-                <div className="w-12 h-12 border-3 border-warm-border/30 border-t-warm-dark/40 rounded-full animate-spin" />
+                <div className="h-12 w-12 rounded-none border-3 border-warm-border/30 border-t-warm-dark/40 animate-spin" />
             </div>
         }>
             <SealConfirmationContent />

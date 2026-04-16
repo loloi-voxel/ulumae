@@ -101,7 +101,7 @@ function PaymentForm({ memorialId, amount, fullName, plan, isPopup }: {
             </div>
 
             {/* Stripe Payment Element — Step 2.2.1 */}
-            <div className="mb-6 p-5 bg-surface-low/50 rounded-xl border border-warm-border/20">
+            <div className="mb-6 border border-warm-border/20 bg-surface-low/50 p-5 rounded-none">
                 <PaymentElement
                     options={{
                         layout: 'tabs',
@@ -111,7 +111,7 @@ function PaymentForm({ memorialId, amount, fullName, plan, isPopup }: {
 
             {/* Step 2.2.3: Payment error display */}
             {paymentError && (
-                <div className="mb-6 p-5 bg-warm-border/8 border border-warm-border/20 rounded-xl">
+                <div className="mb-6 border border-warm-border/20 bg-warm-border/8 p-5 rounded-none">
                     <p className="text-sm text-warm-dark/60 leading-relaxed mb-3">
                         {paymentError}
                     </p>
@@ -125,21 +125,21 @@ function PaymentForm({ memorialId, amount, fullName, plan, isPopup }: {
             {/* Trust elements */}
             <div className="mb-6 space-y-2">
                 <div className="flex items-center gap-2 text-xs text-warm-dark/25">
-                    <div className="w-1 h-1 rounded-full bg-warm-dark/15" />
+                    <div className="h-1 w-1 rounded-none bg-warm-dark/15" />
                     A single payment for a permanent archive — No subscription — No hidden fees
                 </div>
                 <div className="flex items-center gap-2 text-xs text-warm-dark/25">
-                    <div className="w-1 h-1 rounded-full bg-warm-dark/15" />
+                    <div className="h-1 w-1 rounded-none bg-warm-dark/15" />
                     Secure payment powered by Stripe — Your banking details are never stored on our servers
                 </div>
                 <div className="flex items-center gap-2 text-xs text-warm-dark/25">
-                    <div className="w-1 h-1 rounded-full bg-warm-dark/15" />
+                    <div className="h-1 w-1 rounded-none bg-warm-dark/15" />
                     Permanent archive + Independent export + Lifetime access + Dedicated support
                 </div>
             </div>
 
             {/* Refund policy reminder */}
-            <div className="mb-6 p-4 bg-warm-border/5 border border-warm-border/15 rounded-xl">
+            <div className="mb-6 border border-warm-border/15 bg-warm-border/5 p-4 rounded-none">
                 <p className="text-xs text-warm-dark/40 leading-relaxed">
                     After payment, your archive will be active. You may request a full refund as long as it has not been published. Once published, the archive is no longer eligible for refund.
                 </p>
@@ -149,7 +149,7 @@ function PaymentForm({ memorialId, amount, fullName, plan, isPopup }: {
             <button
                 type="submit"
                 disabled={!stripe || isProcessing}
-                className={`w-full py-4 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${isProcessing || !stripe
+                className={`w-full py-4 rounded-none font-medium transition-all flex items-center justify-center gap-2 ${isProcessing || !stripe
                     ? 'bg-warm-border/20 text-warm-dark/30 cursor-not-allowed'
                     : 'glass-btn-dark'
                     }`}
@@ -262,7 +262,7 @@ function PaymentPageContent() {
         return (
             <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
                 <div className="max-w-md text-center">
-                    <div className="w-16 h-16 bg-warm-dark/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-none bg-warm-dark/10">
                         <CheckCircle size={32} className="text-warm-dark/60" />
                     </div>
                     <h2 className="font-serif text-2xl text-warm-dark mb-3">Payment already completed</h2>
@@ -271,7 +271,7 @@ function PaymentPageContent() {
                     </p>
                     <button
                         onClick={() => router.replace(getDashboardPath(auth))}
-                        className="experience-button experience-button-primary rounded-[1rem] px-6 py-3 text-[11px] tracking-[0.22em]"
+                        className="experience-button experience-button-primary px-6 py-3 text-[11px] tracking-[0.22em]"
                     >
                         Go to Dashboard
                     </button>
@@ -284,7 +284,7 @@ function PaymentPageContent() {
         return (
             <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
                 <div className="text-center">
-                    <div className="w-10 h-10 border-2 border-warm-border/30 border-t-warm-dark/40 rounded-full animate-spin mx-auto mb-4" />
+                    <div className="mx-auto mb-4 h-10 w-10 rounded-none border-2 border-warm-border/30 border-t-warm-dark/40 animate-spin" />
                     <p className="text-xs text-warm-dark/30">Preparing secure payment...</p>
                 </div>
             </ExperiencePage>
@@ -355,7 +355,7 @@ function PaymentPageContent() {
                                     colorText: '#5a6b78',
                                     colorDanger: '#d4958a',
                                     fontFamily: 'Georgia, serif',
-                                    borderRadius: '12px',
+                                    borderRadius: '0px',
                                     spacingUnit: '4px',
                                 },
                                 rules: {
@@ -377,7 +377,7 @@ function PaymentPageContent() {
                                     },
                                     '.Tab': {
                                         border: '1px solid #e8d8cc',
-                                        borderRadius: '8px',
+                                        borderRadius: '0px',
                                         color: '#5a6b78',
                                     },
                                     '.Tab:hover': {
@@ -420,7 +420,7 @@ export default function PaymentPage() {
     return (
         <Suspense fallback={
             <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
-                <div className="w-10 h-10 border-2 border-warm-border/30 border-t-warm-dark/40 rounded-full animate-spin" />
+                <div className="h-10 w-10 rounded-none border-2 border-warm-border/30 border-t-warm-dark/40 animate-spin" />
             </ExperiencePage>
         }>
             <PaymentPageContent />

@@ -64,7 +64,7 @@ function PreservationGateContent() {
                         <ArrowLeft size={16} /> Back to editor
                     </button>
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-olive/10 rounded-xl flex items-center justify-center">
+                        <div className="flex h-10 w-10 items-center justify-center bg-olive/10 rounded-none">
                             <Shield size={20} className="text-olive" />
                         </div>
                         <div>
@@ -77,7 +77,7 @@ function PreservationGateContent() {
 
             <div className="max-w-4xl mx-auto px-6 py-10">
                 {/* Current status */}
-                <div className="bg-white border border-warm-border/30 rounded-xl p-6 mb-8 border-dashed">
+                <div className="mb-8 border border-dashed border-warm-border/30 bg-white p-6 rounded-none">
                     <div className="flex items-start gap-3">
                         <Clock size={18} className="text-amber-400 mt-0.5" />
                         <div>
@@ -96,7 +96,7 @@ function PreservationGateContent() {
                 {/* Preservation plans */}
                 <div className="grid md:grid-cols-2 gap-6 mb-8">
                     {/* Personal Archive */}
-                    <div className="bg-white border border-warm-border/30 rounded-xl p-6 hover:border-warm-border/50 hover:shadow-lg transition-all cursor-pointer group" onClick={handlePreservePersonal}>
+                    <div className="group cursor-pointer border border-warm-border/30 bg-white p-6 transition-all hover:border-warm-border/50 hover:shadow-lg rounded-none" onClick={handlePreservePersonal}>
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-serif text-white">Personal Archive</h3>
                             <span className="text-2xl font-sans font-bold text-olive">${PLAN_PRICES_USD.personal.toLocaleString()}</span>
@@ -125,7 +125,7 @@ function PreservationGateContent() {
                     </div>
 
                     {/* Family Legacy Network */}
-                    <div className="bg-white border border-warm-border/30 rounded-xl p-6 hover:border-warm-border/50 hover:shadow-lg transition-all cursor-pointer group border-olive/20" onClick={handlePreserveFamily}>
+                    <div className="group cursor-pointer border border-warm-border/30 border-olive/20 bg-white p-6 transition-all hover:border-warm-border/50 hover:shadow-lg rounded-none" onClick={handlePreserveFamily}>
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-serif text-white">Family Legacy Network</h3>
                             <span className="text-2xl font-sans font-bold text-olive">${PLAN_PRICES_USD.family.toLocaleString()}</span>
@@ -161,7 +161,7 @@ function PreservationGateContent() {
 
                 {/* Estimated cost */}
                 {estimatedCost && (
-                    <div className="bg-white border border-warm-border/30 rounded-xl p-5 mb-8">
+                    <div className="mb-8 border border-warm-border/30 bg-white p-5 rounded-none">
                         <div className="flex items-center justify-between">
                             <div>
                                 <p className="text-xs text-warm-muted font-sans mb-0.5">Estimated preservation size</p>

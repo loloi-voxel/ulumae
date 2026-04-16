@@ -43,7 +43,7 @@ export default function ContentPolicyPage() {
             {/* Hero Section */}
             <div className="bg-gradient-to-br from-olive/10 via-surface-low to-warm-brown/10 border-b border-warm-border/30">
                 <div className="max-w-4xl mx-auto px-6 py-16 text-center">
-                    <div className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-olive/20 text-olive rounded-full border border-olive/30 mb-6">
+                    <div className="mb-6 inline-flex items-center justify-center gap-2 border border-olive/30 bg-olive/20 px-4 py-2 text-olive rounded-none">
                         <Heart size={16} />
                         <span className="text-sm font-medium">Community Standards</span>
                     </div>
@@ -85,7 +85,7 @@ export default function ContentPolicyPage() {
                                 ))}
                             </nav>
 
-                            <div className="mt-8 p-4 bg-gradient-to-br from-olive/5 to-warm-brown/5 rounded-xl border border-warm-border/30">
+                            <div className="mt-8 border border-warm-border/30 bg-gradient-to-br from-olive/5 to-warm-brown/5 p-4 rounded-none">
                                 <h4 className="font-medium text-warm-dark mb-2 flex items-center gap-2">
                                     <AlertTriangle size={16} className="text-warm-brown" />
                                     Report Issue
@@ -209,7 +209,7 @@ export default function ContentPolicyPage() {
                         </article>
 
                         {/* Contact CTA */}
-                        <div className="mt-16 p-8 bg-gradient-to-br from-olive/10 to-warm-brown/10 rounded-2xl border border-warm-border/30 text-center">
+                        <div className="mt-16 border border-warm-border/30 bg-gradient-to-br from-olive/10 to-warm-brown/10 p-8 text-center rounded-none">
                             <Shield className="mx-auto mb-4 text-olive" size={32} />
                             <h3 className="font-serif text-2xl text-warm-dark mb-3">Commitment to Safety</h3>
                             <p className="text-warm-muted mb-6 max-w-md mx-auto">
@@ -218,14 +218,14 @@ export default function ContentPolicyPage() {
                             <div className="flex flex-col sm:flex-row gap-4 justify-center">
                                 <a
                                     href="mailto:reports@ulumae.com"
-                                    className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-olive hover:bg-olive/90 text-warm-bg rounded-lg font-medium transition-all"
+                                    className="inline-flex items-center justify-center gap-2 bg-olive px-6 py-3 font-medium text-warm-bg transition-all hover:bg-olive/90 rounded-none"
                                 >
                                     <Mail size={18} />
                                     Report Content
                                 </a>
                                 <Link
                                     href="/legal/terms"
-                                    className="inline-flex items-center justify-center gap-2 px-6 py-3 border-2 border-warm-border/40 hover:border-olive text-warm-dark rounded-lg font-medium transition-all"
+                                    className="inline-flex items-center justify-center gap-2 border-2 border-warm-border/40 px-6 py-3 font-medium text-warm-dark transition-all hover:border-olive rounded-none"
                                 >
                                     <FileText size={18} />
                                     Terms of Service

@@ -38,7 +38,7 @@ function RequestedContent() {
     if (loading) {
         return (
             <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
-                <div className="w-16 h-16 border-4 border-olive/10 border-t-olive rounded-full animate-spin" />
+                <div className="h-16 w-16 rounded-none border-4 border-olive/10 border-t-olive animate-spin" />
             </ExperiencePage>
         );
     }
@@ -47,7 +47,7 @@ function RequestedContent() {
         <ExperiencePage>
             <div className="mx-auto max-w-3xl">
                 <ExperiencePanel className="text-center">
-                    <div className="mx-auto mb-8 flex h-24 w-24 items-center justify-center rounded-full bg-olive/10">
+                <div className="mx-auto mb-8 flex h-24 w-24 items-center justify-center rounded-none bg-olive/10">
                         <Check size={42} className="text-olive" />
                     </div>
                     <p className="text-xs uppercase tracking-[0.22em] text-warm-outline">Request Received</p>
@@ -108,7 +108,7 @@ export default function RequestedPage() {
         <Suspense
             fallback={
                 <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
-                    <div className="w-16 h-16 border-4 border-warm-border/30 border-t-olive rounded-full animate-spin" />
+                <div className="h-16 w-16 rounded-none border-4 border-warm-border/30 border-t-olive animate-spin" />
                 </ExperiencePage>
             }
         >

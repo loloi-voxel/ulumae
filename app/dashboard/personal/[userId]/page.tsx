@@ -236,7 +236,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                 </div>
 
                 {loading ? (
-                    <div className="glass-card rounded-[2rem] px-8 py-16 text-center">
+                    <div className="glass-card px-8 py-16 text-center rounded-none">
                         <Loader2 size={28} className="text-warm-muted/40 animate-spin mx-auto" />
                     </div>
                 ) : activeArchive && activeArchive.full_name ? (
@@ -249,7 +249,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                 ) : (
                     /* Empty state — either no archive or paid but unfilled archive */
                     <div className="text-center py-32">
-                        <div className="w-20 h-20 rounded-full bg-surface-mid border border-warm-border/30 flex items-center justify-center mx-auto mb-8">
+                        <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center border border-warm-border/30 bg-surface-mid rounded-none">
                             <User size={32} className="text-warm-muted/40" />
                         </div>
                         <h2 className="font-serif text-5xl text-warm-dark mb-4">
@@ -269,14 +269,14 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                                         handleCreate();
                                     }
                                 }}
-                                className="inline-flex items-center gap-2 px-8 py-3.5 glass-btn-primary rounded-xl text-sm font-serif tracking-wide"
+                                className="inline-flex items-center gap-2 px-8 py-3.5 glass-btn-primary text-sm font-serif tracking-wide rounded-none"
                             >
                                 <Plus size={16} />
                                 {activeArchive ? 'Open editor' : 'Create memorial'}
                             </button>
                             <Link
                                 href={`/dashboard/preservation/${userId}`}
-                                className="inline-flex items-center gap-2 rounded-xl border border-warm-border/30 px-6 py-3 text-sm text-warm-dark transition-colors hover:bg-white"
+                                className="inline-flex items-center gap-2 border border-warm-border/30 px-6 py-3 text-sm text-warm-dark transition-colors hover:bg-white rounded-none"
                             >
                                 <Shield size={15} />
                                 Review preservation
@@ -309,14 +309,14 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => restore(m.id)}
-                                            className="p-2 text-warm-muted hover:text-warm-dark rounded-lg hover:bg-surface-mid transition-colors"
+                                            className="p-2 text-warm-muted hover:text-warm-dark hover:bg-surface-mid transition-colors rounded-none"
                                             title="Restore"
                                         >
                                             <RefreshCcw size={15} />
                                         </button>
                                         <button
                                             onClick={() => permanentDelete(m.id)}
-                                            className="p-2 text-red-400/50 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                                            className="p-2 text-red-400/50 hover:text-red-600 hover:bg-red-50 transition-colors rounded-none"
                                             title="Delete permanently"
                                         >
                                             <Trash2 size={15} />
@@ -449,12 +449,12 @@ function ActiveArchiveView({
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0 mt-2">
-                                    <span className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-full bg-olive/10 text-olive border border-olive/20 font-serif italic">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-olive badge-live" />
+                                    <span className="flex items-center gap-1.5 border border-olive/20 bg-olive/10 px-3 py-1.5 text-[11px] font-serif italic text-olive rounded-none">
+                                        <span className="h-1.5 w-1.5 rounded-none bg-olive badge-live" />
                                         Live
                                     </span>
                                     {isPreserved && (
-                                        <span className="flex items-center gap-1.5 text-[11px] px-3 py-1.5 rounded-full bg-warm-brown/10 text-warm-brown border border-warm-brown/20 font-serif italic badge-glow">
+                                        <span className="flex items-center gap-1.5 border border-warm-brown/20 bg-warm-brown/10 px-3 py-1.5 text-[11px] font-serif italic text-warm-brown badge-glow rounded-none">
                                             <Shield size={11} />
                                             Preserved
                                         </span>
@@ -481,14 +481,14 @@ function ActiveArchiveView({
                         <div className="flex flex-wrap items-center gap-2.5 mt-10">
                             <Link
                                 href={`/person/${archive.id}`}
-                                className="flex items-center gap-2 px-6 py-2.5 glass-btn-primary rounded-lg text-sm font-serif tracking-wide"
+                                className="flex items-center gap-2 px-6 py-2.5 glass-btn-primary text-sm font-serif tracking-wide rounded-none"
                             >
                                 <Eye size={14} />
                                 View
                             </Link>
                             <Link
                                 href={`/create?id=${archive.id}&mode=personal`}
-                                className="flex items-center gap-2 px-6 py-2.5 border border-warm-border/30 text-warm-dark rounded-lg text-sm font-serif italic hover:bg-surface-mid transition-colors"
+                                className="flex items-center gap-2 border border-warm-border/30 px-6 py-2.5 text-sm font-serif italic text-warm-dark transition-colors hover:bg-surface-mid rounded-none"
                             >
                                 <Edit size={14} />
                                 Edit
@@ -496,7 +496,7 @@ function ActiveArchiveView({
                             {!isPreserved && (
                                 <button
                                     onClick={() => onDelete(archive.id)}
-                                    className="ml-auto p-2.5 text-warm-muted/40 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+                                    className="ml-auto p-2.5 text-warm-muted/40 hover:text-red-500 hover:bg-red-50 transition-colors rounded-none"
                                     title="Remove archive"
                                 >
                                     <Trash2 size={14} />
@@ -545,7 +545,7 @@ function ActiveArchiveView({
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="rounded-3xl border border-warm-border/25 bg-white p-6">
+                        <div className="border border-warm-border/25 bg-white p-6 rounded-none">
                             <h4 className="font-serif italic text-base text-warm-dark mb-4">Current state</h4>
                             <div className="space-y-4">
                                 <StatusRow label="State" value={isPreserved ? 'Preserved on Arweave' : 'Active'} />
@@ -556,12 +556,12 @@ function ActiveArchiveView({
                             </div>
                         </div>
 
-                        <div className="rounded-3xl border border-warm-border/25 bg-white p-6">
+                        <div className="border border-warm-border/25 bg-white p-6 rounded-none">
                             <h4 className="font-serif italic text-base text-warm-dark mb-4">Next steps</h4>
                             <div className="space-y-3">
                                 <Link
                                     href={`/dashboard/preservation/${userId}`}
-                                    className="flex items-center justify-between gap-3 rounded-xl border border-warm-border/20 px-4 py-3 text-sm text-warm-dark transition-colors hover:bg-surface-mid/50"
+                                    className="flex items-center justify-between gap-3 border border-warm-border/20 px-4 py-3 text-sm text-warm-dark transition-colors hover:bg-surface-mid/50 rounded-none"
                                 >
                                     <div>
                                         <p className="font-serif">Preservation details</p>
@@ -571,7 +571,7 @@ function ActiveArchiveView({
                                 </Link>
                                 <Link
                                     href={`/person/${archive.id}`}
-                                    className="flex items-center justify-between gap-3 rounded-xl border border-warm-border/20 px-4 py-3 text-sm text-warm-dark transition-colors hover:bg-surface-mid/50"
+                                    className="flex items-center justify-between gap-3 border border-warm-border/20 px-4 py-3 text-sm text-warm-dark transition-colors hover:bg-surface-mid/50 rounded-none"
                                 >
                                     <div>
                                         <p className="font-serif">Live memorial</p>
@@ -582,10 +582,10 @@ function ActiveArchiveView({
                                 <button
                                     onClick={handleExportArchive}
                                     disabled={isExporting}
-                                    className="w-full flex items-center justify-between gap-3 rounded-xl border border-warm-border/20 px-4 py-3 text-left text-sm text-warm-dark transition-colors hover:bg-surface-mid/50 disabled:opacity-60 disabled:cursor-wait"
+                                    className="w-full flex items-center justify-between gap-3 border border-warm-border/20 px-4 py-3 text-left text-sm text-warm-dark transition-colors hover:bg-surface-mid/50 disabled:opacity-60 disabled:cursor-wait rounded-none"
                                 >
                                     <div className="flex items-start gap-3">
-                                        <div className="mt-0.5 w-8 h-8 rounded-lg bg-surface-mid flex items-center justify-center">
+                                        <div className="mt-0.5 flex h-8 w-8 items-center justify-center bg-surface-mid rounded-none">
                                             {isExporting ? <Loader2 size={14} className="text-warm-muted animate-spin" /> : <Download size={14} className="text-warm-muted" />}
                                         </div>
                                         <div>
@@ -652,7 +652,7 @@ function ActiveArchiveView({
 
 function MetricCard({ label, value, helper }: { label: string; value: number; helper: string }) {
     return (
-        <div className="rounded-3xl border border-warm-border/30 bg-white px-5 py-5 shadow-sm">
+        <div className="border border-warm-border/30 bg-white px-5 py-5 shadow-sm rounded-none">
             <p className="text-[11px] uppercase tracking-[0.16em] text-warm-outline">{label}</p>
             <p className="mt-3 font-serif text-4xl text-warm-dark">{value}</p>
             <p className="mt-2 text-xs text-warm-muted">{helper}</p>
@@ -664,7 +664,7 @@ function QuickAction({ href, icon: Icon, label, accent }: { href: string; icon: 
     return (
         <Link
             href={href}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-serif italic transition-all ${
+            className={`flex items-center gap-2 px-5 py-2.5 text-sm font-serif italic transition-all rounded-none ${
                 accent
                     ? 'bg-olive/10 text-olive border border-olive/20 hover:bg-olive/20'
                     : 'bg-white text-warm-muted border border-warm-border/30 hover:bg-surface-mid hover:text-warm-dark'
@@ -690,9 +690,9 @@ function ShareButton({
     return (
         <button
             onClick={onClick}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-surface-mid transition-colors text-left group"
+            className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-mid rounded-none"
         >
-            <div className="w-8 h-8 rounded-lg bg-surface-mid flex items-center justify-center flex-shrink-0 group-hover:bg-surface-high transition-colors">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center bg-surface-mid transition-colors group-hover:bg-surface-high rounded-none">
                 <Icon size={14} className="text-warm-muted" />
             </div>
             <div className="flex-1 min-w-0">

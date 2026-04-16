@@ -50,7 +50,7 @@ export default function AbandonedArchivesPage() {
         <div className="min-h-screen bg-slate-50 p-8">
             <div className="max-w-6xl mx-auto">
                 <div className="flex items-center gap-4 mb-8">
-                    <Link href="/admin" className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-100">
+                    <Link href="/admin" className="border border-slate-200 bg-white p-2 hover:bg-slate-100 rounded-none">
                         <ArrowLeft size={20} className="text-slate-600" />
                     </Link>
                     <div>
@@ -62,11 +62,11 @@ export default function AbandonedArchivesPage() {
                 {loading ? (
                     <div className="text-center py-20">Loading report...</div>
                 ) : records.length === 0 ? (
-                    <div className="bg-white p-12 rounded-xl border border-slate-200 text-center">
+                    <div className="border border-slate-200 bg-white p-12 text-center rounded-none">
                         <p className="text-slate-500">No abandoned archives found. Good news!</p>
                     </div>
                 ) : (
-                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                    <div className="overflow-hidden border border-slate-200 bg-white shadow-sm rounded-none">
                         <table className="w-full">
                             <thead className="bg-slate-50 border-b border-slate-200">
                                 <tr>
@@ -89,14 +89,14 @@ export default function AbandonedArchivesPage() {
                                             <div className="text-xs text-slate-500">{record.ownerEmail}</div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getRiskColor(record.riskLevel)}`}>
+                                            <span className={`inline-flex items-center gap-1.5 border px-2.5 py-1 text-xs font-medium ${getRiskColor(record.riskLevel)} rounded-none`}>
                                                 <Clock size={12} />
                                                 {record.daysInactive} days
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-2">
-                                                <div className="w-16 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                                <div className="h-2 w-16 overflow-hidden bg-slate-200 rounded-none">
                                                     <div className="h-full bg-blue-500" style={{ width: `${record.progress}%` }} />
                                                 </div>
                                                 <span className="text-xs text-slate-600">{record.progress}%</span>
@@ -106,14 +106,14 @@ export default function AbandonedArchivesPage() {
                                             <div className="flex gap-2">
                                                 <a
                                                     href={`mailto:${record.ownerEmail}?subject=Help with your ULUMAE archive`}
-                                                    className="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                    className="p-2 text-slate-600 transition-colors hover:bg-blue-50 hover:text-blue-600 rounded-none"
                                                     title="Send Email Nudge"
                                                 >
                                                     <Mail size={18} />
                                                 </a>
                                                 {record.riskLevel === 'critical' && (
                                                     <button
-                                                        className="p-2 text-slate-600 hover:text-olive hover:bg-olive/10 rounded-lg transition-colors"
+                                                        className="p-2 text-slate-600 transition-colors hover:bg-olive/10 hover:text-olive rounded-none"
                                                         title="Schedule Support Call"
                                                         onClick={() => alert('Feature: Integrate Calendly link sending here')}
                                                     >

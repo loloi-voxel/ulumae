@@ -98,7 +98,7 @@ function ArchiveViewContent({ memorialId }: { memorialId: string }) {
           <div className="flex items-center gap-4 min-w-0">
             <button
               onClick={() => router.push(`/archive/${memorialId}`)}
-              className="p-2 hover:bg-warm-border/10 rounded-lg transition-colors"
+              className="p-2 hover:bg-warm-border/10 transition-colors rounded-none"
             >
               <ArrowLeft size={20} className="text-warm-dark/60" />
             </button>
@@ -111,7 +111,7 @@ function ArchiveViewContent({ memorialId }: { memorialId: string }) {
           {roleData.capabilities.canReview && (
             <button
               onClick={() => openDrawer('all')}
-              className="inline-flex items-center gap-2 px-4 py-2 border border-warm-border/30 rounded-xl text-sm text-warm-dark/70 hover:bg-warm-border/10 transition-colors font-sans"
+              className="inline-flex items-center gap-2 border border-warm-border/30 px-4 py-2 text-sm font-sans text-warm-dark/70 transition-colors hover:bg-warm-border/10 rounded-none"
             >
               <Shield size={16} />
               Review pending contributions

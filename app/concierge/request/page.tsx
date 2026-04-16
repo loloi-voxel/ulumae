@@ -63,7 +63,7 @@ export default function ConciergeRequestPage() {
                             </button>
                         </form>
                     ) : (
-                        <div className="rounded-[1.4rem] border border-olive/20 bg-olive/10 px-5 py-5 text-sm text-olive">
+                        <div className="rounded-none border border-olive/20 bg-olive/10 px-5 py-5 text-sm text-olive">
                             <div className="flex items-center gap-2">
                                 <Mail size={18} />
                                 Thank you. We&apos;ve added you to the priority list.

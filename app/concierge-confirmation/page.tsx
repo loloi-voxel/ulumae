@@ -25,7 +25,7 @@ export default function ConciergeConfirmationPage() {
             />
 
             <ExperiencePanel className="mx-auto max-w-3xl text-center">
-                <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-olive/10">
+                    <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-none bg-olive/10">
                     <Sparkles size={28} className="text-olive" />
                 </div>
                 <p className="mx-auto max-w-2xl text-sm leading-relaxed text-warm-muted">
