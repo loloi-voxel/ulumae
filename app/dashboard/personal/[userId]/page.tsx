@@ -236,8 +236,26 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                 </div>
 
                 {loading ? (
-                    <div className="glass-card px-8 py-16 text-center rounded-none">
-                        <Loader2 size={28} className="text-warm-muted/40 animate-spin mx-auto" />
+                    <div className="space-y-6 animate-pulse" aria-label="Loading archive">
+                        <div className="glass-card p-8 rounded-none">
+                            <div className="flex gap-6">
+                                <div className="h-28 w-28 bg-surface-mid rounded-none flex-shrink-0" />
+                                <div className="flex-1 space-y-3">
+                                    <div className="h-8 w-2/3 bg-surface-mid rounded-none" />
+                                    <div className="h-4 w-1/3 bg-surface-mid/70 rounded-none" />
+                                    <div className="h-4 w-1/4 bg-surface-mid/70 rounded-none" />
+                                    <div className="pt-4 flex gap-2">
+                                        <div className="h-10 w-36 bg-surface-mid rounded-none" />
+                                        <div className="h-10 w-36 bg-surface-mid/70 rounded-none" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-8 border border-warm-border/30 bg-white px-6 py-4 rounded-none">
+                            {[0, 1, 2, 3].map((i) => (
+                                <div key={i} className="h-6 w-24 bg-surface-mid/70 rounded-none" />
+                            ))}
+                        </div>
                     </div>
                 ) : activeArchive && activeArchive.full_name ? (
                     <ActiveArchiveView
@@ -274,13 +292,6 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                                 <Plus size={16} />
                                 {activeArchive ? 'Open editor' : 'Create memorial'}
                             </button>
-                            <Link
-                                href={`/dashboard/preservation/${userId}`}
-                                className="inline-flex items-center gap-2 border border-warm-border/30 px-6 py-3 text-sm text-warm-dark transition-colors hover:bg-white rounded-none"
-                            >
-                                <Shield size={15} />
-                                Review preservation
-                            </Link>
                         </div>
                     </div>
                 )}
@@ -309,6 +320,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => restore(m.id)}
+                                            aria-label="Restore archive"
                                             className="p-2 text-warm-muted hover:text-warm-dark hover:bg-surface-mid transition-colors rounded-none"
                                             title="Restore"
                                         >
@@ -316,6 +328,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                                         </button>
                                         <button
                                             onClick={() => permanentDelete(m.id)}
+                                            aria-label="Delete permanently"
                                             className="p-2 text-red-400/50 hover:text-red-600 hover:bg-red-50 transition-colors rounded-none"
                                             title="Delete permanently"
                                         >
@@ -496,6 +509,7 @@ function ActiveArchiveView({
                             {!isPreserved && (
                                 <button
                                     onClick={() => onDelete(archive.id)}
+                                    aria-label="Remove archive"
                                     className="ml-auto p-2.5 text-warm-muted/40 hover:text-red-500 hover:bg-red-50 transition-colors rounded-none"
                                     title="Remove archive"
                                 >
@@ -507,11 +521,11 @@ function ActiveArchiveView({
                 </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <MetricCard label="Photos" value={stats.photos} helper="Gallery and interactive media" />
-                <MetricCard label="Videos" value={stats.videos} helper="Recorded memories and clips" />
-                <MetricCard label="Stories" value={stats.memories} helper="Shared memories and impact stories" />
-                <MetricCard label="Chapters" value={stats.chapters} helper="Structured life-story sections" />
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-2 border border-warm-border/30 bg-white px-6 py-4 rounded-none">
+                <MetricInline label="Photos" value={stats.photos} />
+                <MetricInline label="Videos" value={stats.videos} />
+                <MetricInline label="Stories" value={stats.memories} />
+                <MetricInline label="Chapters" value={stats.chapters} />
             </div>
 
             {/* ── Witnesses ── */}
@@ -541,25 +555,26 @@ function ActiveArchiveView({
                         </div>
 
                         <div className="border border-warm-border/25 bg-white p-6 rounded-none">
-                            <h4 className="font-serif italic text-base text-warm-dark mb-4">Next steps</h4>
-                            <div className="space-y-3">
-                                <button
-                                    onClick={handleExportArchive}
-                                    disabled={isExporting}
-                                    className="w-full flex items-center justify-between gap-3 border border-warm-border/20 px-4 py-3 text-left text-sm text-warm-dark transition-colors hover:bg-surface-mid/50 disabled:opacity-60 disabled:cursor-wait rounded-none"
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <div className="mt-0.5 flex h-8 w-8 items-center justify-center bg-surface-mid rounded-none">
-                                            {isExporting ? <Loader2 size={14} className="text-warm-muted animate-spin" /> : <Download size={14} className="text-warm-muted" />}
-                                        </div>
-                                        <div>
-                                            <p className="font-serif">{isExporting ? 'Generating portable archive...' : 'Portable archive export'}</p>
-                                            <p className="text-xs text-warm-outline">Download a full offline ZIP copy of this memorial</p>
-                                        </div>
+                            <h4 className="font-serif italic text-base text-warm-dark mb-4">Export this archive</h4>
+                            <p className="text-xs text-warm-muted mb-4 leading-relaxed">
+                                Download a complete offline copy. Useful for backups and sharing with people who do not have an account.
+                            </p>
+                            <button
+                                onClick={handleExportArchive}
+                                disabled={isExporting}
+                                className="w-full flex items-center justify-between gap-3 border border-warm-border/20 px-4 py-3 text-left text-sm text-warm-dark transition-colors hover:bg-surface-mid/50 disabled:opacity-60 disabled:cursor-wait rounded-none"
+                            >
+                                <div className="flex items-start gap-3">
+                                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center bg-surface-mid rounded-none">
+                                        {isExporting ? <Loader2 size={14} className="text-warm-muted animate-spin" /> : <Download size={14} className="text-warm-muted" />}
                                     </div>
-                                    <ChevronRight size={15} className="text-warm-outline flex-shrink-0" />
-                                </button>
-                            </div>
+                                    <div>
+                                        <p className="font-serif">{isExporting ? 'Generating portable archive...' : 'Portable archive export'}</p>
+                                        <p className="text-xs text-warm-outline">Full offline ZIP copy of this memorial</p>
+                                    </div>
+                                </div>
+                                <ChevronRight size={15} className="text-warm-outline flex-shrink-0" />
+                            </button>
                         </div>
                     </div>
 
@@ -614,12 +629,11 @@ function ActiveArchiveView({
 /*  Small components                                               */
 /* ─────────────────────────────────────────────────────────────── */
 
-function MetricCard({ label, value, helper }: { label: string; value: number; helper: string }) {
+function MetricInline({ label, value }: { label: string; value: number }) {
     return (
-        <div className="border border-warm-border/30 bg-white px-5 py-5 shadow-sm rounded-none">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-warm-outline">{label}</p>
-            <p className="mt-3 font-serif text-4xl text-warm-dark">{value}</p>
-            <p className="mt-2 text-xs text-warm-muted">{helper}</p>
+        <div className="flex items-baseline gap-2">
+            <span className="font-serif text-2xl text-warm-dark">{value}</span>
+            <span className="text-[11px] uppercase tracking-[0.16em] text-warm-outline">{label}</span>
         </div>
     );
 }

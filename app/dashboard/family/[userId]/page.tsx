@@ -3,7 +3,7 @@
 'use client';
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, Edit, Trash2, User, Loader2, Network, X, Search, Filter, RefreshCcw, AlertTriangle, Archive, Clock, Shield, Wifi, BellDot, CheckCircle2, History, MessageSquareText, ChevronDown } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, User, Loader2, Network, X, Search, Filter, RefreshCcw, AlertTriangle, Archive, Wifi, BellDot, History, MessageSquareText, ChevronDown } from 'lucide-react';
 import { supabase, Memorial } from '@/lib/supabase';
 import FamilyLinker from '@/components/FamilyLinker';
 import AnchorPanel from '@/components/AnchorPanel';
@@ -562,7 +562,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                         <div className="flex gap-3">
                             <button
                                 onClick={handleCreate}
-                                className="px-5 py-3 rounded-lg font-sans font-semibold flex items-center gap-2 glass-btn-primary text-sm"
+                                className="px-5 py-3 rounded-none font-sans font-semibold flex items-center gap-2 glass-btn-primary text-sm"
                             >
                                 <Plus size={18} />
                                 Create Memorial
@@ -588,7 +588,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                 placeholder="Search by name..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-12 pr-4 py-3 glass-input rounded-xl"
+                                className="w-full pl-12 pr-4 py-3 glass-input rounded-none"
                             />
                         </div>
                         <div className="relative">
@@ -596,7 +596,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                             <select
                                 value={filterStatus}
                                 onChange={(e) => setFilterStatus(e.target.value as any)}
-                                className="pl-12 pr-8 py-3 glass-input rounded-xl appearance-none cursor-pointer"
+                                className="pl-12 pr-8 py-3 glass-input rounded-none appearance-none cursor-pointer"
                             >
                                 <option value="all">All Memorials</option>
                                 <option value="draft">Preview Archives</option>
@@ -606,18 +606,46 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                     </div>
                 )}
 
+                {/* IN-PAGE TABS — jump to sections on Overview */}
+                {!loading && realMemorials.length > 0 && (
+                    <div className="mb-8 flex flex-wrap gap-2 border-b border-warm-border/30 pb-3">
+                        <a href="#members" className="inline-flex items-center gap-2 border border-warm-border/30 bg-white px-4 py-2 text-sm text-warm-dark transition-colors hover:bg-surface-mid rounded-none">
+                            <User size={14} />
+                            Members
+                        </a>
+                        <a href="#activity" className="inline-flex items-center gap-2 border border-warm-border/30 bg-white px-4 py-2 text-sm text-warm-dark transition-colors hover:bg-surface-mid rounded-none">
+                            <History size={14} />
+                            Activity
+                            {pendingRequestCount > 0 && (
+                                <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-semibold bg-warm-brown/15 text-warm-brown rounded-full">
+                                    {pendingRequestCount}
+                                </span>
+                            )}
+                        </a>
+                    </div>
+                )}
+
                 {loading ? (
-                    <div className="text-center py-20">
-                        <Loader2 size={48} className="text-olive animate-spin mx-auto mb-4" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" aria-label="Loading memorials">
+                        {[0, 1, 2, 3].map((i) => (
+                            <div key={i} className="bg-white border border-warm-border/30 rounded-none overflow-hidden animate-pulse">
+                                <div className="h-48 bg-surface-mid" />
+                                <div className="p-5">
+                                    <div className="h-5 w-2/3 bg-surface-mid mb-2 rounded-none" />
+                                    <div className="h-3 w-1/2 bg-surface-mid/70 mb-4 rounded-none" />
+                                    <div className="h-8 bg-surface-mid rounded-none" />
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 ) : realMemorials.length === 0 ? (
                     <div className="text-center py-20">
-                        <div className="w-24 h-24 bg-surface-mid rounded-full flex items-center justify-center mx-auto mb-6">
+                        <div className="w-24 h-24 bg-surface-mid rounded-none flex items-center justify-center mx-auto mb-6">
                             <User size={48} className="text-warm-muted" />
                         </div>
                         <h2 className="font-serif text-3xl text-warm-dark mb-3">Create Your First Memorial</h2>
                         <p className="text-warm-muted font-sans mb-6">Begin preserving your family&apos;s legacy</p>
-                        <button onClick={handleCreate} className="inline-flex items-center gap-2 px-6 py-3 glass-btn-primary rounded-lg font-sans font-semibold text-sm">
+                        <button onClick={handleCreate} className="inline-flex items-center gap-2 px-6 py-3 glass-btn-primary rounded-none font-sans font-semibold text-sm">
                             <Plus size={20} />
                             Create
                         </button>
@@ -627,9 +655,9 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                         {/* FAMILY ROW: Visual Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                             {filteredMemorials.map((memorial) => (
-                                <div key={memorial.id} className="bg-white border border-warm-border/30 rounded-xl overflow-hidden transition-all group hover:border-warm-border/50 hover:shadow-lg">
+                                <div key={memorial.id} className="bg-white border border-warm-border/30 rounded-none overflow-hidden transition-all group hover:border-warm-border/50">
                                     {/* Profile Photo */}
-                                    <div className="relative h-48 bg-gradient-to-br from-surface-mid to-surface-high">
+                                    <div className="relative h-48 bg-surface-mid">
                                         {memorial.profile_photo_url ? (
                                             <img src={memorial.profile_photo_url} alt="" className="w-full h-full object-cover" />
                                         ) : (
@@ -665,28 +693,34 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
 
                                         {/* Actions */}
                                         <div className="flex gap-2">
-                                            <Link href={`/person/${memorial.id}`} className="flex-1 py-2 px-3 bg-surface-mid rounded-lg font-sans font-medium text-center text-sm flex items-center justify-center gap-1 text-warm-dark hover:bg-surface-high transition-colors">
+                                            <Link href={`/person/${memorial.id}`} className="flex-1 py-2 px-3 bg-surface-mid rounded-none font-sans font-medium text-center text-sm flex items-center justify-center gap-1 text-warm-dark hover:bg-surface-high transition-colors">
                                                 <Eye size={14} /> View
                                             </Link>
-                                            <Link href={`/create?id=${memorial.id}&mode=family`} className="flex-1 py-2 px-3 bg-surface-mid rounded-lg font-sans font-medium text-center text-sm flex items-center justify-center gap-1 text-warm-dark hover:bg-surface-high transition-colors">
+                                            <Link href={`/create?id=${memorial.id}&mode=family`} className="flex-1 py-2 px-3 bg-surface-mid rounded-none font-sans font-medium text-center text-sm flex items-center justify-center gap-1 text-warm-dark hover:bg-surface-high transition-colors">
                                                 <Edit size={14} /> Edit
                                             </Link>
                                             <button
                                                 onClick={() => setMemberManagerMemorial(memorial)}
-                                                className="py-2 px-3 bg-surface-mid rounded-lg text-warm-muted hover:bg-surface-high transition-colors"
+                                                aria-label="Manage members"
+                                                className="py-2 px-3 bg-surface-mid rounded-none text-warm-muted hover:bg-surface-high transition-colors"
                                                 title="Manage members"
                                             >
                                                 <User size={14} />
                                             </button>
                                             <button
                                                 onClick={() => setManagingId(memorial.id)}
-                                                className="py-2 px-3 bg-surface-mid rounded-lg text-warm-muted hover:bg-surface-high transition-colors"
+                                                aria-label="Manage family connections"
+                                                className="py-2 px-3 bg-surface-mid rounded-none text-warm-muted hover:bg-surface-high transition-colors"
                                                 title="Manage family connections"
                                             >
                                                 <Network size={14} />
                                             </button>
                                             {(memorial as any).preservation_state !== 'preserved' && (
-                                                <button onClick={() => softDeleteMemorial(memorial.id)} className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg transition-colors">
+                                                <button
+                                                    onClick={() => softDeleteMemorial(memorial.id)}
+                                                    aria-label="Delete memorial"
+                                                    className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-500 rounded-none transition-colors"
+                                                >
                                                     <Trash2 size={14} />
                                                 </button>
                                             )}
@@ -913,6 +947,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                             <h3 className="font-serif text-lg text-warm-dark">Manage Family Connections</h3>
                             <button
                                 onClick={() => setManagingId(null)}
+                                aria-label="Close"
                                 className="p-2 hover:bg-surface-high transition-colors rounded-none"
                             >
                                 <X size={20} className="text-warm-muted" />

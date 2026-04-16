@@ -75,9 +75,9 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                     </div>
 
                     {!preservationUnlocked && (
-                        <div className="mb-6 rounded-3xl border border-warm-brown/25 bg-warm-brown/5 px-6 py-5">
+                        <div className="mb-6 rounded-none border border-warm-brown/25 bg-warm-brown/5 px-6 py-5">
                             <div className="flex items-start gap-3">
-                                <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-warm-brown">
+                                <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-none bg-white text-warm-brown">
                                     <Lock size={18} />
                                 </div>
                                 <div className="flex-1">
@@ -86,7 +86,7 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                                         You can review the package rules now, but permanent preservation activates only after moving from Draft into a paid Personal or Family plan.
                                     </p>
                                     <div className="mt-4">
-                                        <Link href="/choice-pricing" className="glass-btn-primary inline-flex rounded-xl px-4 py-2 text-sm font-medium text-white">
+                                        <Link href="/choice-pricing" className="glass-btn-primary inline-flex rounded-none px-4 py-2 text-sm font-medium text-white">
                                             Review Upgrade Options
                                         </Link>
                                     </div>
@@ -96,9 +96,9 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                     )}
 
                     <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-                        <section className="glass-card rounded-3xl p-6">
+                        <section className="glass-card rounded-none p-6">
                             <div className="mb-5 flex items-center gap-3">
-                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-olive/10 text-olive">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-none bg-olive/10 text-olive">
                                     <Archive size={20} />
                                 </div>
                                 <div>
@@ -108,7 +108,7 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                             </div>
                             <div className="space-y-3">
                                 {includedItems.map((item) => (
-                                    <div key={item} className="rounded-2xl border border-warm-border/30 bg-white px-4 py-3 text-sm text-warm-dark/85">
+                                    <div key={item} className="rounded-none border border-warm-border/30 bg-white px-4 py-3 text-sm text-warm-dark/85">
                                         <div className="flex items-start gap-2">
                                             <CheckCircle2 size={15} className="mt-0.5 text-olive flex-shrink-0" />
                                             <span>{item}</span>
@@ -118,9 +118,9 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                             </div>
                         </section>
 
-                        <section className="glass-card rounded-3xl p-6">
+                        <section className="glass-card rounded-none p-6">
                             <div className="mb-5 flex items-center gap-3">
-                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-warm-dark/10 text-warm-dark">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-none bg-warm-dark/10 text-warm-dark">
                                     <HardDrive size={20} />
                                 </div>
                                 <div>
@@ -128,7 +128,7 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                                     <p className="text-xs uppercase tracking-[0.14em] text-warm-outline">Clear limits and media handling</p>
                                 </div>
                             </div>
-                            <div className="rounded-2xl border border-warm-border/30 bg-white px-5 py-5">
+                            <div className="rounded-none border border-warm-border/30 bg-white px-5 py-5">
                                 <p className="text-[11px] uppercase tracking-[0.14em] text-warm-outline">Maximum Storage</p>
                                 <p className="mt-2 font-serif text-3xl text-warm-dark">50 GB</p>
                                 <p className="mt-2 text-sm text-warm-muted">
@@ -136,7 +136,7 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                                 </p>
                             </div>
                             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                <div className="rounded-2xl border border-warm-border/30 bg-white px-4 py-4">
+                                <div className="rounded-none border border-warm-border/30 bg-white px-4 py-4">
                                     <div className="flex items-center gap-2 text-sm text-warm-dark">
                                         <ImageIcon size={14} className="text-olive" />
                                         Images
@@ -145,7 +145,7 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                                         Profile and Cover are included defaults. Other images are preserved only when explicitly packaged.
                                     </p>
                                 </div>
-                                <div className="rounded-2xl border border-warm-border/30 bg-white px-4 py-4">
+                                <div className="rounded-none border border-warm-border/30 bg-white px-4 py-4">
                                     <div className="flex items-center gap-2 text-sm text-warm-dark">
                                         <Video size={14} className="text-olive" />
                                         Video & Audio
@@ -159,9 +159,9 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                     </div>
 
                     <div className="mt-6 grid gap-6 lg:grid-cols-2">
-                        <section className="glass-card rounded-3xl p-6">
+                        <section className="glass-card rounded-none p-6">
                             <div className="mb-5 flex items-center gap-3">
-                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-warm-brown/10 text-warm-brown">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-none bg-warm-brown/10 text-warm-brown">
                                     <Shield size={20} />
                                 </div>
                                 <div>
@@ -171,7 +171,7 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                             </div>
                             <div className="space-y-3">
                                 {metadataOnlyItems.map((item) => (
-                                    <div key={item} className="rounded-2xl border border-warm-border/30 bg-white px-4 py-3 text-sm text-warm-dark/85">
+                                    <div key={item} className="rounded-none border border-warm-border/30 bg-white px-4 py-3 text-sm text-warm-dark/85">
                                         <div className="flex items-start gap-2">
                                             <Lock size={15} className="mt-0.5 text-warm-brown flex-shrink-0" />
                                             <span>{item}</span>
@@ -181,9 +181,9 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                             </div>
                         </section>
 
-                        <section className="glass-card rounded-3xl p-6">
+                        <section className="glass-card rounded-none p-6">
                             <div className="mb-5 flex items-center gap-3">
-                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-olive/10 text-olive">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-none bg-olive/10 text-olive">
                                     <Archive size={20} />
                                 </div>
                                 <div>
@@ -193,7 +193,7 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                             </div>
                             <div className="space-y-3">
                                 {optionalMediaItems.map((item) => (
-                                    <div key={item} className="rounded-2xl border border-warm-border/30 bg-white px-4 py-3 text-sm text-warm-dark/85">
+                                    <div key={item} className="rounded-none border border-warm-border/30 bg-white px-4 py-3 text-sm text-warm-dark/85">
                                         <div className="flex items-start gap-2">
                                             <CheckCircle2 size={15} className="mt-0.5 text-olive flex-shrink-0" />
                                             <span>{item}</span>
@@ -201,7 +201,7 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                                     </div>
                                 ))}
                             </div>
-                            <div className="mt-4 rounded-2xl border border-warm-border/30 bg-surface-mid/40 px-4 py-4 text-sm text-warm-muted">
+                            <div className="mt-4 rounded-none border border-warm-border/30 bg-surface-mid/40 px-4 py-4 text-sm text-warm-muted">
                                 The preservation layer always keeps the memorial readable even when large media remains metadata-only. Titles, captions, years, relationships, hashes, and storage references remain part of the preserved record.
                             </div>
                         </section>

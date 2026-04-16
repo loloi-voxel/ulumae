@@ -7,7 +7,9 @@ import {
     Archive,
     ChevronLeft,
     ChevronRight,
+    HelpCircle,
     LayoutDashboard,
+    Mail,
     Menu,
     Settings,
     Shield,
@@ -188,7 +190,7 @@ function SidebarContent({
                 </div>
             </div>
 
-            <nav className="flex-1 px-3 pb-4">
+            <nav className="flex-1 px-3 pb-4 flex flex-col">
                 <div className="space-y-2">
                     {items.map((item) => {
                         const Icon = item.icon;
@@ -223,6 +225,28 @@ function SidebarContent({
                             </Link>
                         );
                     })}
+                </div>
+
+                <div className="mt-auto pt-6 border-t border-warm-border/20">
+                    <p className="px-4 mb-2 text-[10px] uppercase tracking-[0.18em] text-warm-outline">Need help?</p>
+                    <div className="space-y-1">
+                        <Link
+                            href="/faq"
+                            onClick={onNavigate}
+                            className="flex items-center gap-3 px-4 py-2 text-xs text-warm-dark/70 transition-colors hover:bg-surface-mid/40 rounded-none"
+                        >
+                            <HelpCircle size={14} className="text-warm-outline" />
+                            FAQ
+                        </Link>
+                        <Link
+                            href="/contact"
+                            onClick={onNavigate}
+                            className="flex items-center gap-3 px-4 py-2 text-xs text-warm-dark/70 transition-colors hover:bg-surface-mid/40 rounded-none"
+                        >
+                            <Mail size={14} className="text-warm-outline" />
+                            Contact support
+                        </Link>
+                    </div>
                 </div>
             </nav>
         </div>

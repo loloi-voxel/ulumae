@@ -2,14 +2,14 @@
 
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { Plus, Edit, Trash2, FileEdit, Loader2, RefreshCcw, AlertTriangle, Shield } from 'lucide-react';
+import { Plus, Edit, Trash2, FileEdit, RefreshCcw, AlertTriangle, Shield } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Memorial } from '@/lib/supabase';
 import { createClient } from '@/utils/supabase/client';
 import { getPlanDashboardPath, useAuth } from '@/components/providers/AuthProvider';
 import DashboardShell from '@/components/dashboard/DashboardShell';
 import { permanentlyDeleteMemorial, updateMemorialTrashState } from '@/lib/memorialClientActions';
-import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
+import { SOFT_DELETE_RETENTION_DAYS, PLAN_PRICES_USD } from '@/lib/constants';
 
 export default function DraftDashboard({ params }: { params: Promise<{ userId: string }> }) {
     const unwrappedParams = use(params);
@@ -125,29 +125,31 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
     const hasDraftAccess = !auth.loading && auth.authenticated && !auth.hasPaid;
     if (!hasDraftAccess) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-warm-dark/5 via-surface-low to-warm-border/20 flex items-center justify-center">
+            <div className="min-h-screen bg-surface-low flex items-center justify-center">
                 <div className="text-center">
-                    <div className="w-12 h-12 border-2 border-warm-border/30 border-t-warm-dark/40 rounded-full animate-spin mx-auto mb-4" />
+                    <div className="w-12 h-12 border-2 border-warm-border/30 border-t-warm-dark/40 rounded-none animate-spin mx-auto mb-4" />
                     <p className="text-warm-dark/50 text-sm">Verifying access...</p>
                 </div>
             </div>
         );
     }
 
+    const personalPrice = PLAN_PRICES_USD.personal.toLocaleString();
+
     return (
         <DashboardShell userId={userId}>
-        <div className="min-h-screen bg-gradient-to-br from-warm-dark/5 via-surface-low to-warm-border/20">
-            <div className="bg-white border-b border-warm-border/30 shadow-sm">
+        <div className="min-h-screen bg-surface-low">
+            <div className="bg-white border-b border-warm-border/30">
                 <div className="max-w-7xl mx-auto px-6 py-6">
                     <div className="flex items-center justify-between">
                         <div>
                             <div className="flex items-center gap-3 mb-2">
                                 <h1 className="font-serif text-4xl text-warm-dark">My Archives</h1>
-                                <span className="px-3 py-1 bg-warm-dark/10 text-warm-dark/60 text-xs font-semibold rounded-full uppercase tracking-wide">
+                                <span className="px-3 py-1 bg-warm-dark/10 text-warm-dark/60 text-xs font-semibold rounded-none uppercase tracking-wide">
                                     Private Preview
                                 </span>
                             </div>
-                            <p className="text-warm-dark/60">Your private preview archives — preserve one when you are ready to make it permanent</p>
+                            <p className="text-warm-dark/60">Your private preview archives &mdash; preserve one when you are ready to make it permanent</p>
                         </div>
 
                         <div className="flex items-center gap-3">
@@ -160,16 +162,19 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
                                             router.push('/seal-confirmation');
                                         }
                                     }}
-                                    className="glass-btn-primary px-5 py-2.5 rounded-lg font-semibold flex items-center gap-2 border-2 border-olive text-olive hover:bg-olive/10 transition-all text-sm"
+                                    className="px-5 py-2.5 rounded-none flex items-center gap-3 border border-olive/40 bg-white text-olive hover:bg-olive/5 transition-all text-sm"
                                 >
                                     <Shield size={18} />
-                                    Preserve an archive
+                                    <span className="flex flex-col items-start leading-tight">
+                                        <span className="font-semibold">Preserve an archive</span>
+                                        <span className="text-[10px] tracking-wide text-olive/70">From ${personalPrice} &middot; one-time</span>
+                                    </span>
                                 </button>
                             )}
 
                             <button
                                 onClick={handleCreate}
-                                className="glass-btn-dark px-6 py-3 rounded-lg font-semibold flex items-center gap-2 bg-gradient-to-r from-warm-dark/80 to-warm-dark hover:shadow-lg text-surface-low"
+                                className="glass-btn-dark px-6 py-3 rounded-none font-semibold flex items-center gap-2 bg-warm-dark hover:bg-warm-dark/90 text-surface-low"
                             >
                                 <Plus size={20} />
                                 New Archive
@@ -181,19 +186,28 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
 
             <div className="max-w-7xl mx-auto px-6 py-8">
                 {loading ? (
-                    <div className="text-center py-20">
-                        <Loader2 size={48} className="text-warm-dark/30 animate-spin mx-auto mb-4" />
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" aria-label="Loading archives">
+                        {[0, 1, 2].map((i) => (
+                            <div key={i} className="bg-white border border-warm-border/30 rounded-none overflow-hidden animate-pulse">
+                                <div className="h-48 bg-surface-mid" />
+                                <div className="p-6">
+                                    <div className="h-6 w-3/4 bg-surface-mid mb-3 rounded-none" />
+                                    <div className="h-3 w-1/2 bg-surface-mid/70 mb-6 rounded-none" />
+                                    <div className="h-9 bg-surface-mid rounded-none" />
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 ) : memorials.length === 0 ? (
                     <div className="text-center py-20">
-                        <div className="w-24 h-24 bg-warm-dark/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <div className="w-24 h-24 bg-warm-dark/5 rounded-none flex items-center justify-center mx-auto mb-6">
                             <FileEdit size={48} className="text-warm-dark/30" />
                         </div>
                         <h2 className="font-serif text-3xl text-warm-dark mb-3">Start Your First Archive</h2>
                         <p className="text-warm-dark/50 mb-6 max-w-sm mx-auto">
                             Build your memorial at your own pace. No payment required to get started.
                         </p>
-                        <button onClick={handleCreate} className="glass-btn-dark inline-flex items-center gap-2 px-6 py-3 bg-warm-dark/80 hover:bg-warm-dark text-surface-low rounded-lg font-semibold">
+                        <button onClick={handleCreate} className="glass-btn-dark inline-flex items-center gap-2 px-6 py-3 bg-warm-dark/80 hover:bg-warm-dark text-surface-low rounded-none font-semibold">
                             <Plus size={20} />
                             Create Archive
                         </button>
@@ -201,9 +215,9 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {memorials.map((memorial) => (
-                            <div key={memorial.id} className="bg-white rounded-xl shadow-sm border border-warm-border/30 overflow-hidden">
+                            <div key={memorial.id} className="bg-white rounded-none border border-warm-border/30 overflow-hidden">
                                 {/* Preview watermark overlay on thumbnail */}
-                                <div className="relative h-48 bg-gradient-to-br from-warm-dark/5 to-warm-dark/10">
+                                <div className="relative h-48 bg-surface-mid">
                                     {memorial.profile_photo_url ? (
                                         <>
                                             <img src={memorial.profile_photo_url} alt="" className="w-full h-full object-cover opacity-60" />
@@ -218,10 +232,6 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
                                             <FileEdit size={64} className="text-warm-dark/20" />
                                         </div>
                                     )}
-                                    {/* Preview badge */}
-                                    <div className="absolute top-3 left-3 px-2 py-1 bg-warm-dark/70 text-surface-low text-xs font-semibold rounded-md">
-                                        PREVIEW
-                                    </div>
                                 </div>
                                 <div className="p-6">
                                     <h3 className="font-serif text-2xl text-warm-dark mb-2">{memorial.full_name || 'Untitled Archive'}</h3>
@@ -231,13 +241,14 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
                                     <div className="flex gap-2">
                                         <Link
                                             href={`/create?id=${memorial.id}&mode=draft`}
-                                            className="glass-btn-primary flex-1 py-2 px-3 bg-warm-dark/10 hover:bg-warm-dark/20 text-warm-dark rounded-lg font-medium text-center text-sm"
+                                            className="flex-1 py-2 px-3 bg-warm-dark/10 hover:bg-warm-dark/20 text-warm-dark rounded-none font-medium text-center text-sm"
                                         >
                                             <Edit size={16} className="inline mr-1" />Edit
                                         </Link>
                                         <button
                                             onClick={() => softDeleteMemorial(memorial.id)}
-                                            className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg"
+                                            aria-label="Delete archive"
+                                            className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-none"
                                             title="Delete archive"
                                         >
                                             <Trash2 size={16} />
@@ -261,7 +272,7 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-75">
                             {deletedMemorials.map((memorial) => (
-                                <div key={memorial.id} className="bg-warm-border/10 rounded-xl border border-warm-border/30 p-4 flex items-center justify-between">
+                                <div key={memorial.id} className="bg-warm-border/10 rounded-none border border-warm-border/30 p-4 flex items-center justify-between">
                                     <div>
                                         <p className="font-medium text-warm-dark">{memorial.full_name || 'Untitled Archive'}</p>
                                         <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
@@ -272,14 +283,16 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
                                     <div className="flex gap-2">
                                         <button
                                             onClick={() => restoreMemorial(memorial.id)}
-                                            className="p-2 bg-white border border-warm-dark/20 text-warm-dark/60 rounded-lg hover:bg-warm-dark/10 transition-colors"
+                                            aria-label="Restore archive"
+                                            className="p-2 bg-white border border-warm-dark/20 text-warm-dark/60 rounded-none hover:bg-warm-dark/10 transition-colors"
                                             title="Restore"
                                         >
                                             <RefreshCcw size={18} />
                                         </button>
                                         <button
                                             onClick={() => permanentDeleteMemorial(memorial.id)}
-                                            className="p-2 bg-red-50 border border-red-200 text-red-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                            aria-label="Delete permanently"
+                                            className="p-2 bg-red-50 border border-red-200 text-red-400 hover:text-red-600 hover:bg-red-100 rounded-none transition-colors"
                                             title="Delete permanently"
                                         >
                                             <Trash2 size={18} />

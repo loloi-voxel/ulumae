@@ -171,13 +171,19 @@ function SealConfirmationContent() {
                 </div>
 
                 <div className="max-w-4xl mx-auto px-6 py-16">
-                    <div className="text-center mb-12">
+                    <div className="text-center mb-10">
                         <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline mb-4">Preserve an archive</p>
                         <h1 className="font-serif text-4xl md:text-5xl text-warm-dark mb-4">
-                            Which archive do you want to preserve?
+                            Choose one archive to make permanent
                         </h1>
                         <p className="font-serif italic text-lg text-warm-muted max-w-2xl mx-auto">
-                            You have several drafts. Choose the one you are ready to seal — you can return for the others later.
+                            You have several drafts. Only the one you pick will be sealed and preserved &mdash; the others stay as private drafts you can edit or preserve later.
+                        </p>
+                    </div>
+
+                    <div className="max-w-2xl mx-auto mb-10 border border-warm-brown/20 bg-warm-brown/5 px-5 py-4 text-sm text-warm-dark/80 rounded-none">
+                        <p className="font-serif">
+                            <span className="font-semibold">Sealing is permanent.</span> Once an archive is preserved, it is published on the blockchain and cannot be removed. Take a moment before choosing.
                         </p>
                     </div>
 

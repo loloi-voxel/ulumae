@@ -49,9 +49,9 @@ export default function DashboardSuccessionPage({ params }: { params: Promise<{ 
                     </div>
 
                     <div className="grid gap-6 lg:grid-cols-[0.92fr_1.08fr]">
-                        <section className="glass-card rounded-3xl p-6">
+                        <section className="glass-card rounded-none p-6">
                             <div className="mb-5 flex items-center gap-3">
-                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-olive/10 text-olive">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-none bg-olive/10 text-olive">
                                     <UserCheck size={20} />
                                 </div>
                                 <div>
@@ -61,36 +61,36 @@ export default function DashboardSuccessionPage({ params }: { params: Promise<{ 
                             </div>
 
                             <div className="space-y-3">
-                                <div className="rounded-2xl border border-warm-border/30 bg-white px-4 py-4">
+                                <div className="rounded-none border border-warm-border/30 bg-white px-4 py-4">
                                     <div className="flex items-center gap-2 text-sm text-warm-dark">
                                         <UserCheck size={14} className="text-olive" />
-                                        Designate one trusted successor
+                                        Pick one trusted successor
                                     </div>
                                     <p className="mt-2 text-sm text-warm-muted">
-                                        The successor becomes the person we contact when the succession process needs to begin.
+                                        This is the person we reach out to when it is time to transfer stewardship of your archive.
                                     </p>
                                 </div>
-                                <div className="rounded-2xl border border-warm-border/30 bg-white px-4 py-4">
+                                <div className="rounded-none border border-warm-border/30 bg-white px-4 py-4">
                                     <div className="flex items-center gap-2 text-sm text-warm-dark">
                                         <Clock size={14} className="text-olive" />
-                                        Manage the dead man&apos;s switch
+                                        Set the dead man&apos;s switch
                                     </div>
                                     <p className="mt-2 text-sm text-warm-muted">
-                                        When enabled, the system checks that you are still managing the account before any successor outreach happens.
+                                        We periodically confirm you are still managing the account. Outreach to your successor only begins if you stop responding.
                                     </p>
                                 </div>
-                                <div className="rounded-2xl border border-warm-border/30 bg-white px-4 py-4">
+                                <div className="rounded-none border border-warm-border/30 bg-white px-4 py-4">
                                     <div className="flex items-center gap-2 text-sm text-warm-dark">
                                         <Shield size={14} className="text-olive" />
-                                        Keep stewardship separate from editing
+                                        Stewardship is account-level
                                     </div>
                                     <p className="mt-2 text-sm text-warm-muted">
-                                        This section is account-level, so it is easier to understand than burying succession setup inside a single archive dashboard.
+                                        One successor covers every archive you own, so your succession plan stays consistent across Personal and Family workspaces.
                                     </p>
                                 </div>
                             </div>
 
-                            <div className="mt-4 rounded-2xl border border-warm-border/30 bg-surface-mid/40 px-4 py-4 text-sm text-warm-muted">
+                            <div className="mt-4 rounded-none border border-warm-border/30 bg-surface-mid/40 px-4 py-4 text-sm text-warm-muted">
                                 Need to edit a memorial right now? Go back to{' '}
                                 <Link href={auth.plan === 'family' || auth.plan === 'concierge' ? `/dashboard/family/${userId}` : auth.plan === 'personal' ? `/dashboard/personal/${userId}` : `/dashboard/draft/${userId}`} className="text-warm-dark underline underline-offset-2">
                                     My Archives
@@ -99,7 +99,7 @@ export default function DashboardSuccessionPage({ params }: { params: Promise<{ 
                             </div>
                         </section>
 
-                        <section className="glass-card rounded-3xl p-0 overflow-hidden">
+                        <section className="glass-card rounded-none p-0 overflow-hidden">
                             <SuccessorSettings userId={userId} />
                         </section>
                     </div>
