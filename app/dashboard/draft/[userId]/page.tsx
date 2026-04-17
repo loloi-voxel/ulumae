@@ -8,8 +8,13 @@ import { Memorial } from '@/lib/supabase';
 import { createClient } from '@/utils/supabase/client';
 import { getPlanDashboardPath, useAuth } from '@/components/providers/AuthProvider';
 import DashboardShell from '@/components/dashboard/DashboardShell';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 import { permanentlyDeleteMemorial, updateMemorialTrashState } from '@/lib/memorialClientActions';
 import { SOFT_DELETE_RETENTION_DAYS, PLAN_PRICES_USD } from '@/lib/constants';
+
+type PendingConfirm =
+    | { kind: 'soft-delete'; id: string }
+    | { kind: 'permanent-delete'; id: string; stage: 1 | 2 };
 
 export default function DraftDashboard({ params }: { params: Promise<{ userId: string }> }) {
     const unwrappedParams = use(params);
@@ -19,6 +24,8 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
     const [memorials, setMemorials] = useState<Memorial[]>([]);
     const [deletedMemorials, setDeletedMemorials] = useState<Memorial[]>([]);
     const [loading, setLoading] = useState(true);
+    const [skeletonCount, setSkeletonCount] = useState(2);
+    const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
 
     // Auth guard: verify user identity and redirect if they have a paid plan
     useEffect(() => {
@@ -39,6 +46,10 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
     }, [auth.loading, auth.authenticated, auth.user, auth.hasPaid, auth.plan, userId, router]);
 
     useEffect(() => {
+        try {
+            const stored = sessionStorage.getItem(`draft-count-${userId}`);
+            if (stored) setSkeletonCount(Math.max(1, Math.min(parseInt(stored, 10) || 2, 6)));
+        } catch { /* sessionStorage unavailable */ }
         loadMemorials();
     }, [userId]);
 
@@ -55,8 +66,10 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
         if (error) console.error('Error:', error);
 
         if (data) {
-            setMemorials(data.filter(m => !m.deleted));
+            const active = data.filter(m => !m.deleted);
+            setMemorials(active);
             setDeletedMemorials(data.filter(m => m.deleted));
+            try { sessionStorage.setItem(`draft-count-${userId}`, String(active.length || 1)); } catch { /* noop */ }
         }
         setLoading(false);
     };
@@ -79,16 +92,8 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
         window.location.href = '/create?mode=draft';
     };
 
-    const softDeleteMemorial = async (id: string) => {
-        if (!confirm(`Are you sure you want to delete this archive? It will be moved to the trash for ${SOFT_DELETE_RETENTION_DAYS} days.`)) return;
-
-        try {
-            await updateMemorialTrashState(id, 'delete');
-            loadMemorials();
-        } catch (error) {
-            alert('Error deleting archive');
-            console.error(error);
-        }
+    const softDeleteMemorial = (id: string) => {
+        setPendingConfirm({ kind: 'soft-delete', id });
     };
 
     const restoreMemorial = async (id: string) => {
@@ -101,14 +106,37 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
         }
     };
 
-    const permanentDeleteMemorial = async (id: string) => {
-        if (!confirm('Are you sure you want to permanently delete this archive? This action cannot be undone.')) return;
-        if (!confirm('This is irreversible. The archive and all its content will be lost forever. Continue?')) return;
-        try {
-            await permanentlyDeleteMemorial(id);
-            loadMemorials();
-        } catch {
-            alert('Error permanently deleting archive. Please try again.');
+    const permanentDeleteMemorial = (id: string) => {
+        setPendingConfirm({ kind: 'permanent-delete', id, stage: 1 });
+    };
+
+    const handleConfirm = async () => {
+        if (!pendingConfirm) return;
+        if (pendingConfirm.kind === 'soft-delete') {
+            const id = pendingConfirm.id;
+            setPendingConfirm(null);
+            try {
+                await updateMemorialTrashState(id, 'delete');
+                loadMemorials();
+            } catch (error) {
+                alert('Error deleting archive');
+                console.error(error);
+            }
+            return;
+        }
+        if (pendingConfirm.kind === 'permanent-delete' && pendingConfirm.stage === 1) {
+            setPendingConfirm({ kind: 'permanent-delete', id: pendingConfirm.id, stage: 2 });
+            return;
+        }
+        if (pendingConfirm.kind === 'permanent-delete' && pendingConfirm.stage === 2) {
+            const id = pendingConfirm.id;
+            setPendingConfirm(null);
+            try {
+                await permanentlyDeleteMemorial(id);
+                loadMemorials();
+            } catch {
+                alert('Error permanently deleting archive. Please try again.');
+            }
         }
     };
 
@@ -140,19 +168,19 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
         <DashboardShell userId={userId}>
         <div className="min-h-screen bg-surface-low">
             <div className="bg-white border-b border-warm-border/30">
-                <div className="max-w-7xl mx-auto px-6 py-6">
-                    <div className="flex items-center justify-between">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <div className="flex items-center gap-3 mb-2">
-                                <h1 className="font-serif text-4xl text-warm-dark">My Archives</h1>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-2">
+                                <h1 className="font-serif text-3xl sm:text-4xl text-warm-dark">My Archives</h1>
                                 <span className="px-3 py-1 bg-warm-dark/10 text-warm-dark/60 text-xs font-semibold rounded-none uppercase tracking-wide">
                                     Private Preview
                                 </span>
                             </div>
-                            <p className="text-warm-dark/60">Your private preview archives &mdash; preserve one when you are ready to make it permanent</p>
+                            <p className="text-sm sm:text-base text-warm-dark/60">Your private preview archives &mdash; preserve one when you are ready to make it permanent</p>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
                             {memorials.length > 0 && (
                                 <button
                                     onClick={() => {
@@ -162,22 +190,22 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
                                             router.push('/seal-confirmation');
                                         }
                                     }}
-                                    className="px-5 py-2.5 rounded-none flex items-center gap-3 border border-olive/40 bg-white text-olive hover:bg-olive/5 transition-all text-sm"
+                                    className="px-4 sm:px-5 py-2.5 rounded-none flex items-center gap-2 sm:gap-3 border border-olive/40 bg-white text-olive hover:bg-olive/5 transition-all text-sm"
                                 >
                                     <Shield size={18} />
                                     <span className="flex flex-col items-start leading-tight">
                                         <span className="font-semibold">Preserve an archive</span>
-                                        <span className="text-[10px] tracking-wide text-olive/70">From ${personalPrice} &middot; one-time</span>
+                                        <span className="hidden sm:inline text-[10px] tracking-wide text-olive/70">From ${personalPrice} &middot; one-time</span>
                                     </span>
                                 </button>
                             )}
 
                             <button
                                 onClick={handleCreate}
-                                className="glass-btn-dark px-6 py-3 rounded-none font-semibold flex items-center gap-2 bg-warm-dark hover:bg-warm-dark/90 text-surface-low"
+                                className="glass-btn-dark px-4 sm:px-6 py-3 rounded-none font-semibold flex items-center gap-2 bg-warm-dark hover:bg-warm-dark/90 text-surface-low text-sm sm:text-base"
                             >
                                 <Plus size={20} />
-                                New Archive
+                                <span className="whitespace-nowrap">New Archive</span>
                             </button>
                         </div>
                     </div>
@@ -187,7 +215,7 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
             <div className="max-w-7xl mx-auto px-6 py-8">
                 {loading ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" aria-label="Loading archives">
-                        {[0, 1, 2].map((i) => (
+                        {Array.from({ length: skeletonCount }).map((_, i) => (
                             <div key={i} className="bg-white border border-warm-border/30 rounded-none overflow-hidden animate-pulse">
                                 <div className="h-48 bg-surface-mid" />
                                 <div className="p-6">
@@ -305,6 +333,33 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
                 )}
             </div>
         </div>
+        <ConfirmDialog
+            open={pendingConfirm !== null}
+            variant="danger"
+            title={
+                pendingConfirm?.kind === 'soft-delete'
+                    ? 'Move this archive to the trash?'
+                    : pendingConfirm?.kind === 'permanent-delete' && pendingConfirm.stage === 1
+                        ? 'Permanently delete this archive?'
+                        : 'This is irreversible'
+            }
+            description={
+                pendingConfirm?.kind === 'soft-delete'
+                    ? `It will be moved to the trash for ${SOFT_DELETE_RETENTION_DAYS} days. You can restore it until then.`
+                    : pendingConfirm?.kind === 'permanent-delete' && pendingConfirm.stage === 1
+                        ? 'This action cannot be undone. The archive and all its content will be lost forever.'
+                        : 'Last chance. Once confirmed, the archive and all its content are gone forever.'
+            }
+            confirmLabel={
+                pendingConfirm?.kind === 'soft-delete'
+                    ? 'Move to trash'
+                    : pendingConfirm?.kind === 'permanent-delete' && pendingConfirm.stage === 1
+                        ? 'Continue'
+                        : 'Delete forever'
+            }
+            onConfirm={handleConfirm}
+            onCancel={() => setPendingConfirm(null)}
+        />
         </DashboardShell>
     );
 }

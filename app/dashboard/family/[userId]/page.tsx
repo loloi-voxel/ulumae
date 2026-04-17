@@ -9,6 +9,7 @@ import FamilyLinker from '@/components/FamilyLinker';
 import AnchorPanel from '@/components/AnchorPanel';
 import ManageWitnessesModal from '@/app/dashboard/[userId]/_components/ManageWitnessesModal';
 import DashboardShell from '@/components/dashboard/DashboardShell';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -16,26 +17,6 @@ import NotificationCenter from './_components/NotificationCenter';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
 import { useNotifications } from '@/hooks/useNotifications';
 import { permanentlyDeleteMemorial, updateMemorialTrashState } from '@/lib/memorialClientActions';
-
-interface PendingCreationRequest {
-    id: string;
-    sourceMemorialId: string;
-    sourceMemorialName: string;
-    requesterEmail: string;
-    proposedName: string | null;
-    requestMessage: string;
-    createdAt: string;
-}
-
-interface PendingAccessRequest {
-    id: string;
-    memorialId: string;
-    memorialName: string;
-    requesterEmail: string;
-    requestedRole: string;
-    requestMessage: string;
-    createdAt: string;
-}
 
 interface FamilyActivityItem {
     id: string;
@@ -73,14 +54,15 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
     const [memorials, setMemorials] = useState<Memorial[]>([]);
     const [deletedMemorials, setDeletedMemorials] = useState<Memorial[]>([]);
     const [loading, setLoading] = useState(true);
+    const [skeletonCount, setSkeletonCount] = useState(3);
+    const [pendingConfirm, setPendingConfirm] = useState<
+        | { kind: 'soft-delete'; id: string; sharedCount: number }
+        | { kind: 'permanent-delete'; id: string; stage: 1 | 2 }
+        | null
+    >(null);
     const [managingId, setManagingId] = useState<string | null>(null);
     const [memberManagerMemorial, setMemberManagerMemorial] = useState<Memorial | null>(null);
     const [showWelcome, setShowWelcome] = useState(false);
-    const [pendingCreationRequests, setPendingCreationRequests] = useState<PendingCreationRequest[]>([]);
-    const [pendingAccessRequests, setPendingAccessRequests] = useState<PendingAccessRequest[]>([]);
-    const [recentActivity, setRecentActivity] = useState<FamilyActivityItem[]>([]);
-    const [summaryLoading, setSummaryLoading] = useState(true);
-    const [summaryError, setSummaryError] = useState<string | null>(null);
     const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -113,6 +95,10 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
     }, [auth.loading, auth.authenticated, auth.user, auth.plan, userId, router]);
 
     useEffect(() => {
+        try {
+            const stored = sessionStorage.getItem(`family-count-${userId}`);
+            if (stored) setSkeletonCount(Math.max(1, Math.min(parseInt(stored, 10) || 3, 8)));
+        } catch { /* sessionStorage unavailable */ }
         loadMemorials();
         if (searchParams.get('welcome') === 'true') {
             setShowWelcome(true);
@@ -180,108 +166,9 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
             const activeMemorials = data.filter(m => !m.deleted);
             setMemorials(activeMemorials);
             setDeletedMemorials(data.filter(m => m.deleted));
-        } else {
-            setPendingCreationRequests([]);
-            setPendingAccessRequests([]);
-            setRecentActivity([]);
+            try { sessionStorage.setItem(`family-count-${userId}`, String(activeMemorials.length || 1)); } catch { /* noop */ }
         }
         setLoading(false);
-    };
-
-    const loadFamilySummary = async (activeMemorials: Memorial[]) => {
-        if (!activeMemorials.length) {
-            setPendingCreationRequests([]);
-            setPendingAccessRequests([]);
-            setRecentActivity([]);
-            setSummaryLoading(false);
-            setSummaryError(null);
-            return;
-        }
-
-        setSummaryLoading(true);
-        setSummaryError(null);
-
-        try {
-            const primaryMemorialId = activeMemorials[0].id;
-
-            const creationPromise = fetch(`/api/archive/${primaryMemorialId}/creation-requests`, {
-                cache: 'no-store',
-            }).then(async (response) => {
-                const payload = await response.json();
-                if (!response.ok) {
-                    throw new Error(payload.error || 'Could not load memorial requests.');
-                }
-                return payload.requests || [];
-            });
-
-            const accessPromises = activeMemorials.map((memorial) =>
-                fetch(`/api/memorials/${memorial.id}/access-request`, {
-                    cache: 'no-store',
-                }).then(async (response) => {
-                    const payload = await response.json();
-                    if (!response.ok) {
-                        throw new Error(payload.error || 'Could not load access requests.');
-                    }
-                    return (payload.requests || []).map((request: any) => ({
-                        ...request,
-                        memorialId: memorial.id,
-                        memorialName: memorial.full_name || 'Untitled',
-                    }));
-                })
-            );
-
-// ... (around line 202)
-            const activityPromises = activeMemorials.map((memorial) =>
-                fetch(`/api/memorials/${memorial.id}/activity?limit=10`, {
-                    cache: 'no-store',
-                }).then(async (response) => {
-                    const payload = await response.json();
-                    if (!response.ok) {
-                        throw new Error(payload.error || 'Could not load activity.');
-                    }
-                    return (payload.activity || []).map((item: any) => ({
-                        id: item.id,
-                        memorialId: memorial.id,
-                        memorialName: memorial.full_name || 'Untitled',
-                        createdAt: item.createdAt,
-                        createdByName: item.actorEmail || 'Someone',
-                        changeSummary: item.summary || 'Archive updated',
-                    }));
-                })
-            );
-// ...
-
-            const [creationRequests, accessRequestsGroups, activityGroups] = await Promise.all([
-                creationPromise,
-                Promise.all(accessPromises),
-                Promise.all(activityPromises),
-            ]);
-
-            setPendingCreationRequests(
-                creationRequests.map((request: any) => ({
-                    id: request.id,
-                    sourceMemorialId: request.sourceMemorialId,
-                    sourceMemorialName: request.sourceMemorialName,
-                    requesterEmail: request.email,
-                    proposedName: request.proposedName,
-                    requestMessage: request.requestMessage || '',
-                    createdAt: request.createdAt,
-                }))
-            );
-
-            setPendingAccessRequests(accessRequestsGroups.flat());
-            setRecentActivity(
-                activityGroups
-                    .flat()
-                    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
-                    .slice(0, 8)
-            );
-        } catch (error: any) {
-            console.error('[family-dashboard-summary]', error);
-            setSummaryError(error.message || 'Could not load the steward summary.');
-        } finally {
-            setSummaryLoading(false);
-        }
     };
 
     const handleCreationRequestDecision = async (
@@ -359,21 +246,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
             .eq('memorial_id', id)
             .neq('user_id', userId);
 
-        let confirmMessage = `Are you sure you want to delete this memorial? It will be moved to the trash for ${SOFT_DELETE_RETENTION_DAYS} days.`;
-
-        if (count && count > 0) {
-            confirmMessage = `WARNING: This archive contains contributions from ${count} other people.\n\nAre you sure you want to delete it? They will lose access to their contributions.`;
-        }
-
-        if (!confirm(confirmMessage)) return;
-
-        try {
-            await updateMemorialTrashState(id, 'delete');
-            loadMemorials();
-        } catch (error) {
-            alert('Error deleting memorial');
-            console.error(error);
-        }
+        setPendingConfirm({ kind: 'soft-delete', id, sharedCount: count || 0 });
     };
 
     const restoreMemorial = async (id: string) => {
@@ -386,14 +259,37 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
         }
     };
 
-    const permanentDeleteMemorial = async (id: string) => {
-        if (!confirm('Are you sure you want to permanently delete this memorial? This action cannot be undone.')) return;
-        if (!confirm('This is irreversible. The memorial and all its content will be lost forever. Continue?')) return;
-        try {
-            await permanentlyDeleteMemorial(id);
-            loadMemorials();
-        } catch {
-            alert('Error permanently deleting memorial. Please try again.');
+    const permanentDeleteMemorial = (id: string) => {
+        setPendingConfirm({ kind: 'permanent-delete', id, stage: 1 });
+    };
+
+    const handleConfirmDestructive = async () => {
+        if (!pendingConfirm) return;
+        if (pendingConfirm.kind === 'soft-delete') {
+            const id = pendingConfirm.id;
+            setPendingConfirm(null);
+            try {
+                await updateMemorialTrashState(id, 'delete');
+                loadMemorials();
+            } catch (error) {
+                alert('Error deleting memorial');
+                console.error(error);
+            }
+            return;
+        }
+        if (pendingConfirm.kind === 'permanent-delete' && pendingConfirm.stage === 1) {
+            setPendingConfirm({ kind: 'permanent-delete', id: pendingConfirm.id, stage: 2 });
+            return;
+        }
+        if (pendingConfirm.kind === 'permanent-delete' && pendingConfirm.stage === 2) {
+            const id = pendingConfirm.id;
+            setPendingConfirm(null);
+            try {
+                await permanentlyDeleteMemorial(id);
+                loadMemorials();
+            } catch {
+                alert('Error permanently deleting memorial. Please try again.');
+            }
         }
     };
 
@@ -606,14 +502,22 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                     </div>
                 )}
 
-                {/* IN-PAGE TABS — jump to sections on Overview */}
+                {/* IN-PAGE TABS — smooth scroll to sections on Overview */}
                 {!loading && realMemorials.length > 0 && (
                     <div className="mb-8 flex flex-wrap gap-2 border-b border-warm-border/30 pb-3">
-                        <a href="#members" className="inline-flex items-center gap-2 border border-warm-border/30 bg-white px-4 py-2 text-sm text-warm-dark transition-colors hover:bg-surface-mid rounded-none">
+                        <button
+                            type="button"
+                            onClick={() => document.getElementById('members')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                            className="inline-flex items-center gap-2 border border-warm-border/30 bg-white px-4 py-2 text-sm text-warm-dark transition-colors hover:bg-surface-mid rounded-none"
+                        >
                             <User size={14} />
                             Members
-                        </a>
-                        <a href="#activity" className="inline-flex items-center gap-2 border border-warm-border/30 bg-white px-4 py-2 text-sm text-warm-dark transition-colors hover:bg-surface-mid rounded-none">
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => document.getElementById('activity')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                            className="inline-flex items-center gap-2 border border-warm-border/30 bg-white px-4 py-2 text-sm text-warm-dark transition-colors hover:bg-surface-mid rounded-none"
+                        >
                             <History size={14} />
                             Activity
                             {pendingRequestCount > 0 && (
@@ -621,13 +525,13 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                     {pendingRequestCount}
                                 </span>
                             )}
-                        </a>
+                        </button>
                     </div>
                 )}
 
                 {loading ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" aria-label="Loading memorials">
-                        {[0, 1, 2, 3].map((i) => (
+                        {Array.from({ length: skeletonCount }).map((_, i) => (
                             <div key={i} className="bg-white border border-warm-border/30 rounded-none overflow-hidden animate-pulse">
                                 <div className="h-48 bg-surface-mid" />
                                 <div className="p-5">
@@ -973,6 +877,37 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                 />
             )}
         </div>
+        <ConfirmDialog
+            open={pendingConfirm !== null}
+            variant="danger"
+            title={
+                pendingConfirm?.kind === 'soft-delete'
+                    ? pendingConfirm.sharedCount > 0
+                        ? 'Delete this shared memorial?'
+                        : 'Move this memorial to the trash?'
+                    : pendingConfirm?.kind === 'permanent-delete' && pendingConfirm.stage === 1
+                        ? 'Permanently delete this memorial?'
+                        : 'This is irreversible'
+            }
+            description={
+                pendingConfirm?.kind === 'soft-delete'
+                    ? pendingConfirm.sharedCount > 0
+                        ? `This archive contains contributions from ${pendingConfirm.sharedCount} other ${pendingConfirm.sharedCount === 1 ? 'person' : 'people'}. They will lose access to their contributions.`
+                        : `It will be moved to the trash for ${SOFT_DELETE_RETENTION_DAYS} days. You can restore it until then.`
+                    : pendingConfirm?.kind === 'permanent-delete' && pendingConfirm.stage === 1
+                        ? 'This action cannot be undone. The memorial and all its content will be lost forever.'
+                        : 'Last chance. Once confirmed, the memorial and all its content are gone forever.'
+            }
+            confirmLabel={
+                pendingConfirm?.kind === 'soft-delete'
+                    ? 'Move to trash'
+                    : pendingConfirm?.kind === 'permanent-delete' && pendingConfirm.stage === 1
+                        ? 'Continue'
+                        : 'Delete forever'
+            }
+            onConfirm={handleConfirmDestructive}
+            onCancel={() => setPendingConfirm(null)}
+        />
         </DashboardShell>
     );
 }

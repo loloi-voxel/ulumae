@@ -56,9 +56,9 @@ export default function DashboardSettingsPage({ params }: { params: Promise<{ us
                     </div>
 
                     <div className="grid gap-6 lg:grid-cols-3">
-                        <section className="glass-card rounded-3xl p-6">
+                        <section className="glass-card rounded-none p-6">
                             <div className="mb-5 flex items-center gap-3">
-                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-olive/10 text-olive">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-none bg-olive/10 text-olive">
                                     <UserCircle2 size={20} />
                                 </div>
                                 <div>
@@ -67,23 +67,23 @@ export default function DashboardSettingsPage({ params }: { params: Promise<{ us
                                 </div>
                             </div>
                             <div className="space-y-4 text-sm text-warm-muted">
-                                <div className="rounded-2xl border border-warm-border/30 bg-white px-4 py-3">
+                                <div className="rounded-none border border-warm-border/30 bg-white px-4 py-3">
                                     <p className="text-[11px] uppercase tracking-[0.14em] text-warm-outline">Email</p>
                                     <div className="mt-2 flex items-center gap-2 text-warm-dark">
                                         <Mail size={14} className="text-warm-outline" />
                                         <span>{auth.user?.email}</span>
                                     </div>
                                 </div>
-                                <div className="rounded-2xl border border-warm-border/30 bg-white px-4 py-3">
+                                <div className="rounded-none border border-warm-border/30 bg-white px-4 py-3">
                                     <p className="text-[11px] uppercase tracking-[0.14em] text-warm-outline">User ID</p>
                                     <p className="mt-2 break-all font-mono text-xs text-warm-dark/70">{userId}</p>
                                 </div>
                             </div>
                         </section>
 
-                        <section className="glass-card rounded-3xl p-6">
+                        <section className="glass-card rounded-none p-6">
                             <div className="mb-5 flex items-center gap-3">
-                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-warm-brown/10 text-warm-brown">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-none bg-warm-brown/10 text-warm-brown">
                                     <CreditCard size={20} />
                                 </div>
                                 <div>
@@ -91,7 +91,7 @@ export default function DashboardSettingsPage({ params }: { params: Promise<{ us
                                     <p className="text-xs uppercase tracking-[0.14em] text-warm-outline">Plan and upgrades</p>
                                 </div>
                             </div>
-                            <div className="rounded-2xl border border-warm-border/30 bg-white px-4 py-4">
+                            <div className="rounded-none border border-warm-border/30 bg-white px-4 py-4">
                                 <p className="text-[11px] uppercase tracking-[0.14em] text-warm-outline">Current Plan</p>
                                 <p className="mt-2 font-serif text-2xl text-warm-dark">{planLabel}</p>
                                 <p className="mt-2 text-sm text-warm-muted">
@@ -105,22 +105,22 @@ export default function DashboardSettingsPage({ params }: { params: Promise<{ us
                             <div className="mt-4 flex flex-wrap gap-3">
                                 <Link
                                     href="/choice-pricing"
-                                    className="glass-btn inline-flex items-center rounded-xl px-4 py-2 text-sm font-medium text-warm-dark"
+                                    className="glass-btn inline-flex items-center rounded-none px-4 py-2 text-sm font-medium text-warm-dark"
                                 >
                                     Review Plans
                                 </Link>
                                 <Link
                                     href="/contact"
-                                    className="inline-flex items-center rounded-xl border border-warm-border/30 px-4 py-2 text-sm text-warm-muted transition-colors hover:bg-surface-mid/50 hover:text-warm-dark"
+                                    className="inline-flex items-center rounded-none border border-warm-border/30 px-4 py-2 text-sm text-warm-muted transition-colors hover:bg-surface-mid/50 hover:text-warm-dark"
                                 >
                                     Billing Help
                                 </Link>
                             </div>
                         </section>
 
-                        <section className="glass-card rounded-3xl p-6">
+                        <section className="glass-card rounded-none p-6">
                             <div className="mb-5 flex items-center gap-3">
-                                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-warm-dark/10 text-warm-dark">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-none bg-warm-dark/10 text-warm-dark">
                                     <Shield size={20} />
                                 </div>
                                 <div>
@@ -129,7 +129,7 @@ export default function DashboardSettingsPage({ params }: { params: Promise<{ us
                                 </div>
                             </div>
                             <div className="space-y-3">
-                                <div className="rounded-2xl border border-warm-border/30 bg-white px-4 py-3">
+                                <div className="rounded-none border border-warm-border/30 bg-white px-4 py-3">
                                     <div className="flex items-center gap-2 text-sm text-warm-dark">
                                         <Lock size={14} className="text-olive" />
                                         Supabase sessions with app-owned 2FA
@@ -138,7 +138,7 @@ export default function DashboardSettingsPage({ params }: { params: Promise<{ us
                                         Password sign-in still uses Supabase sessions, while second-factor verification is now handled by ULUMAE with authenticator apps and recovery codes.
                                     </p>
                                 </div>
-                                <div className="rounded-2xl border border-warm-border/30 bg-white px-4 py-3">
+                                <div className="rounded-none border border-warm-border/30 bg-white px-4 py-3">
                                     <div className="flex items-center gap-2 text-sm text-warm-dark">
                                         <Shield size={14} className="text-olive" />
                                         Plan-aware route protection
@@ -147,7 +147,7 @@ export default function DashboardSettingsPage({ params }: { params: Promise<{ us
                                         Family, Personal, and Draft workspaces redirect to the correct dashboard when the user does not match the required plan.
                                     </p>
                                 </div>
-                                <div className="rounded-2xl border border-warm-border/30 bg-white px-4 py-3">
+                                <div className="rounded-none border border-warm-border/30 bg-white px-4 py-3">
                                     <div className="flex items-center gap-2 text-sm text-warm-dark">
                                         <Shield size={14} className="text-olive" />
                                         Sensitive actions require owner-only confirmation
@@ -156,7 +156,7 @@ export default function DashboardSettingsPage({ params }: { params: Promise<{ us
                                         Archive deletion, restoration, member role changes, and preservation actions now stay behind server-validated ownership checks instead of trusting client input.
                                     </p>
                                 </div>
-                                <div className="rounded-2xl border border-warm-border/30 bg-white px-4 py-3">
+                                <div className="rounded-none border border-warm-border/30 bg-white px-4 py-3">
                                     <div className="flex items-center gap-2 text-sm text-warm-dark">
                                         <Shield size={14} className="text-olive" />
                                         Sessions, recovery, and trusted devices

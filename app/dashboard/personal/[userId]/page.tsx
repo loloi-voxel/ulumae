@@ -13,7 +13,12 @@ import { supabase, Memorial } from '@/lib/supabase';
 import { isPersonalPlan, useAuth } from '@/components/providers/AuthProvider';
 import PreservationStatus from '@/components/PreservationStatus';
 import DashboardShell from '@/components/dashboard/DashboardShell';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
+
+type PendingConfirm =
+    | { kind: 'soft-delete'; id: string }
+    | { kind: 'permanent-delete'; id: string; stage: 1 | 2 };
 
 function computeStats(memorial: Memorial) {
     const step7 = memorial.step7 as any;
@@ -58,6 +63,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
     const [loading, setLoading] = useState(true);
     const [showCheckinSuccess, setShowCheckinSuccess] = useState(false);
     const [showWelcome, setShowWelcome] = useState(false);
+    const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
     const searchParams = useSearchParams();
 
     const [planVerified, setPlanVerified] = useState(false);
@@ -151,18 +157,12 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
         window.location.href = '/create?mode=personal';
     };
 
-    const softDelete = async (id: string) => {
+    const softDelete = (id: string) => {
         if (activeArchive?.id === id && (activeArchive as any).preservation_state === 'preserved') {
             alert('This archive has been permanently preserved on the blockchain and cannot be removed.');
             return;
         }
-        if (!confirm(`Move this archive to Removed Archives? It will be permanently deleted after ${SOFT_DELETE_RETENTION_DAYS} days.`)) return;
-        try {
-            await apiSoftDelete(id, 'delete');
-            loadMemorials();
-        } catch {
-            alert('Error removing archive. Please try again.');
-        }
+        setPendingConfirm({ kind: 'soft-delete', id });
     };
 
     const restore = async (id: string) => {
@@ -178,15 +178,37 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
         }
     };
 
-    const permanentDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to permanently delete this archive? This action cannot be undone.')) return;
-        if (!confirm('This is irreversible. The archive and all its content will be lost forever. Continue?')) return;
-        try {
-            const res = await fetch(`/api/memorials/${id}/permanent-delete`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Operation failed');
-            loadMemorials();
-        } catch {
-            alert('Error permanently deleting archive. Please try again.');
+    const permanentDelete = (id: string) => {
+        setPendingConfirm({ kind: 'permanent-delete', id, stage: 1 });
+    };
+
+    const handleConfirm = async () => {
+        if (!pendingConfirm) return;
+        if (pendingConfirm.kind === 'soft-delete') {
+            const id = pendingConfirm.id;
+            setPendingConfirm(null);
+            try {
+                await apiSoftDelete(id, 'delete');
+                loadMemorials();
+            } catch {
+                alert('Error removing archive. Please try again.');
+            }
+            return;
+        }
+        if (pendingConfirm.kind === 'permanent-delete' && pendingConfirm.stage === 1) {
+            setPendingConfirm({ kind: 'permanent-delete', id: pendingConfirm.id, stage: 2 });
+            return;
+        }
+        if (pendingConfirm.kind === 'permanent-delete' && pendingConfirm.stage === 2) {
+            const id = pendingConfirm.id;
+            setPendingConfirm(null);
+            try {
+                const res = await fetch(`/api/memorials/${id}/permanent-delete`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Operation failed');
+                loadMemorials();
+            } catch {
+                alert('Error permanently deleting archive. Please try again.');
+            }
         }
     };
 
@@ -201,7 +223,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
             <div className="bg-surface-low min-h-screen flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 size={28} className="text-warm-muted/50 animate-spin mx-auto mb-4" />
-                    <p className="text-warm-muted text-xs tracking-widest uppercase font-serif italic">Verifying access</p>
+                    <p className="text-warm-muted text-xs tracking-widest uppercase font-serif">Verifying access</p>
                 </div>
             </div>
         );
@@ -216,13 +238,13 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                     <CheckCircle size={16} className="text-olive flex-shrink-0" />
                     <div>
                         <p className="text-sm text-warm-dark font-serif">Dead Man&apos;s Switch reset</p>
-                        <p className="text-xs text-warm-muted font-serif italic">Timer renewed for another year.</p>
+                        <p className="text-xs text-warm-muted font-serif">Timer renewed for another year.</p>
                     </div>
                 </div>
             )}
             {showWelcome && (
                 <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 glass-card px-6 py-4 animate-fade-in-up">
-                    <p className="text-base text-warm-muted font-serif italic">When you are ready, everything is here.</p>
+                    <p className="text-base text-warm-muted font-serif">When you are ready, everything is here.</p>
                 </div>
             )}
 
@@ -273,7 +295,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                         <h2 className="font-serif text-5xl text-warm-dark mb-4">
                             {activeArchive ? 'Create your memorial' : 'Begin your archive'}
                         </h2>
-                        <p className="font-serif italic text-lg text-warm-muted mb-10 max-w-2xl mx-auto">
+                        <p className="font-serif text-lg text-warm-muted mb-10 max-w-2xl mx-auto">
                             {activeArchive
                                 ? 'Your plan is active. Open the editor and start building the memorial.'
                                 : 'You can keep one personal archive here, then manage preservation and succession from the navigation when you are ready.'}
@@ -300,7 +322,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                 {deletedArchives.length > 0 && (
                     <div className="mt-20">
                         <div className="separator-warm mb-10" />
-                        <h3 className="text-xs uppercase tracking-widest text-warm-outline mb-6 font-serif italic flex items-center gap-2">
+                        <h3 className="text-xs uppercase tracking-widest text-warm-outline mb-6 font-serif flex items-center gap-2">
                             <Archive size={13} />
                             Removed Archives
                         </h3>
@@ -312,7 +334,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                                 >
                                     <div>
                                         <p className="text-sm text-warm-dark font-serif">{m.full_name || 'Untitled'}</p>
-                                        <p className="text-xs text-red-600/60 mt-0.5 flex items-center gap-1 font-serif italic">
+                                        <p className="text-xs text-red-600/60 mt-0.5 flex items-center gap-1 font-serif">
                                             <AlertTriangle size={11} />
                                             {getDaysRemaining(m.deleted_at!)} days remaining
                                         </p>
@@ -342,6 +364,33 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                 )}
             </div>
         </div>
+        <ConfirmDialog
+            open={pendingConfirm !== null}
+            variant="danger"
+            title={
+                pendingConfirm?.kind === 'soft-delete'
+                    ? 'Move this archive to Removed Archives?'
+                    : pendingConfirm?.kind === 'permanent-delete' && pendingConfirm.stage === 1
+                        ? 'Permanently delete this archive?'
+                        : 'This is irreversible'
+            }
+            description={
+                pendingConfirm?.kind === 'soft-delete'
+                    ? `It will be permanently deleted after ${SOFT_DELETE_RETENTION_DAYS} days. You can restore it until then.`
+                    : pendingConfirm?.kind === 'permanent-delete' && pendingConfirm.stage === 1
+                        ? 'This action cannot be undone. The archive and all its content will be lost forever.'
+                        : 'Last chance. Once confirmed, the archive and all its content are gone forever.'
+            }
+            confirmLabel={
+                pendingConfirm?.kind === 'soft-delete'
+                    ? 'Move to Removed'
+                    : pendingConfirm?.kind === 'permanent-delete' && pendingConfirm.stage === 1
+                        ? 'Continue'
+                        : 'Delete forever'
+            }
+            onConfirm={handleConfirm}
+            onCancel={() => setPendingConfirm(null)}
+        />
         </DashboardShell>
     );
 }
@@ -397,9 +446,14 @@ function ActiveArchiveView({
         window.open(`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}`, '_blank');
     };
 
-    const handleExportArchive = async () => {
-        if (!confirm('Generate the portable archive export? This can take a minute.')) return;
+    const [showExportConfirm, setShowExportConfirm] = useState(false);
 
+    const handleExportArchive = () => {
+        setShowExportConfirm(true);
+    };
+
+    const runExport = async () => {
+        setShowExportConfirm(false);
         try {
             setIsExporting(true);
 
@@ -428,6 +482,7 @@ function ActiveArchiveView({
     const totalContent = stats.photos + stats.videos + stats.memories + stats.chapters;
 
     return (
+        <>
         <div className="space-y-14">
 
             {/* ── Hero ── */}
@@ -458,16 +513,16 @@ function ActiveArchiveView({
                                         {archive.full_name || 'Unnamed Archive'}
                                     </h1>
                                     {dates && (
-                                        <p className="text-warm-muted text-base font-serif italic mt-3 tracking-wide">{dates}</p>
+                                        <p className="text-warm-muted text-base font-serif mt-3 tracking-wide">{dates}</p>
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0 mt-2">
-                                    <span className="flex items-center gap-1.5 border border-olive/20 bg-olive/10 px-3 py-1.5 text-[11px] font-serif italic text-olive rounded-none">
+                                    <span className="flex items-center gap-1.5 border border-olive/20 bg-olive/10 px-3 py-1.5 text-[11px] font-serif text-olive rounded-none">
                                         <span className="h-1.5 w-1.5 rounded-none bg-olive badge-live" />
                                         Live
                                     </span>
                                     {isPreserved && (
-                                        <span className="flex items-center gap-1.5 border border-warm-brown/20 bg-warm-brown/10 px-3 py-1.5 text-[11px] font-serif italic text-warm-brown badge-glow rounded-none">
+                                        <span className="flex items-center gap-1.5 border border-warm-brown/20 bg-warm-brown/10 px-3 py-1.5 text-[11px] font-serif text-warm-brown badge-glow rounded-none">
                                             <Shield size={11} />
                                             Preserved
                                         </span>
@@ -476,7 +531,7 @@ function ActiveArchiveView({
                             </div>
 
                             {/* Meta */}
-                            <div className="flex items-center gap-4 text-[11px] text-warm-outline font-serif italic mt-3">
+                            <div className="flex items-center gap-4 text-[11px] text-warm-outline font-serif mt-3">
                                 {sealedDate && (
                                     <span className="flex items-center gap-1">
                                         <Clock size={11} />
@@ -501,7 +556,7 @@ function ActiveArchiveView({
                             </Link>
                             <Link
                                 href={`/person/${archive.id}`}
-                                className="flex items-center gap-2 border border-warm-border/30 px-6 py-2.5 text-sm font-serif italic text-warm-dark transition-colors hover:bg-surface-mid rounded-none"
+                                className="flex items-center gap-2 border border-warm-border/30 px-6 py-2.5 text-sm font-serif text-warm-dark transition-colors hover:bg-surface-mid rounded-none"
                             >
                                 <Eye size={14} />
                                 View memorial
@@ -533,7 +588,7 @@ function ActiveArchiveView({
                 <div className="glass-card p-8 space-y-6">
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                         <div>
-                            <h3 className="font-serif italic text-lg text-warm-dark mb-2">
+                            <h3 className="font-serif text-lg text-warm-dark mb-2">
                                 Archive care
                             </h3>
                             <p className="text-sm text-warm-muted font-sans leading-relaxed max-w-2xl">
@@ -544,7 +599,7 @@ function ActiveArchiveView({
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="border border-warm-border/25 bg-white p-6 rounded-none">
-                            <h4 className="font-serif italic text-base text-warm-dark mb-4">Current state</h4>
+                            <h4 className="font-serif text-base text-warm-dark mb-4">Current state</h4>
                             <div className="space-y-4">
                                 <StatusRow label="State" value={isPreserved ? 'Preserved on Arweave' : 'Active'} />
                                 {sealedDate && <StatusRow label="Activated" value={sealedDate} />}
@@ -555,7 +610,7 @@ function ActiveArchiveView({
                         </div>
 
                         <div className="border border-warm-border/25 bg-white p-6 rounded-none">
-                            <h4 className="font-serif italic text-base text-warm-dark mb-4">Export this archive</h4>
+                            <h4 className="font-serif text-base text-warm-dark mb-4">Export this archive</h4>
                             <p className="text-xs text-warm-muted mb-4 leading-relaxed">
                                 Download a complete offline copy. Useful for backups and sharing with people who do not have an account.
                             </p>
@@ -590,7 +645,7 @@ function ActiveArchiveView({
 
                 <div className="glass-card p-8 space-y-6">
                     <div>
-                        <h3 className="font-serif italic text-lg text-warm-brown mb-2">
+                        <h3 className="font-serif text-lg text-warm-brown mb-2">
                             Share the memorial
                         </h3>
                         <p className="text-sm text-warm-muted font-sans leading-relaxed">
@@ -622,6 +677,15 @@ function ActiveArchiveView({
                 </div>
             </div>
         </div>
+        <ConfirmDialog
+            open={showExportConfirm}
+            title="Generate the portable archive export?"
+            description="This can take a minute to package your text, metadata, and included media into a downloadable archive."
+            confirmLabel="Generate export"
+            onConfirm={runExport}
+            onCancel={() => setShowExportConfirm(false)}
+        />
+        </>
     );
 }
 
@@ -659,7 +723,7 @@ function ShareButton({
             </div>
             <div className="flex-1 min-w-0">
                 <p className="text-sm text-warm-dark font-serif">{label}</p>
-                <p className="text-[11px] text-warm-outline font-serif italic">{sublabel}</p>
+                <p className="text-[11px] text-warm-outline font-serif">{sublabel}</p>
             </div>
             <ChevronRight size={14} className="text-warm-border group-hover:text-warm-muted transition-colors" />
         </button>
@@ -677,7 +741,7 @@ function StatusRow({
 }) {
     return (
         <div className="flex items-center justify-between gap-4">
-            <span className="text-xs text-warm-outline font-serif italic">{label}</span>
+            <span className="text-xs text-warm-outline font-serif">{label}</span>
             <div className="flex items-center gap-2">
                 <span className="text-xs text-warm-dark/80 font-serif">{value}</span>
                 {action}
