@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -9,6 +10,7 @@ import {
   Clock,
   Eye,
   Image as ImageIcon,
+  Layers,
   MessageCircle,
   Network,
   Plus,
@@ -18,6 +20,7 @@ import {
 import { useRoleSync } from '../_hooks/useRoleSync';
 import RoleBanner from './RoleBanner';
 import type { ArchiveRoleSnapshot } from '@/lib/archivePermissions';
+import ConnectedSpacesPanel from '@/components/dashboard/ConnectedSpacesPanel';
 
 interface ArchiveHubClientProps {
   roleData: ArchiveRoleSnapshot;
@@ -57,6 +60,20 @@ const TYPE_ICONS = {
 export default function ArchiveHubClient({ roleData, memorialId, userId }: ArchiveHubClientProps) {
   const router = useRouter();
   useRoleSync(memorialId, roleData, 'ready');
+  const [spacesOpen, setSpacesOpen] = useState(false);
+  const spacesRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!spacesOpen) return;
+    const onDocClick = (event: MouseEvent) => {
+      if (!spacesRef.current) return;
+      if (!spacesRef.current.contains(event.target as Node)) {
+        setSpacesOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [spacesOpen]);
 
   const {
     userRole,
@@ -97,10 +114,35 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
               </p>
             </div>
           </div>
-          <Link href={`/archive/${memorialId}/view`} className="experience-button experience-button-secondary text-[11px] tracking-[0.2em]">
-            <Eye size={16} />
-            View archive
-          </Link>
+          <div className="flex items-center gap-2">
+            <div className="relative" ref={spacesRef}>
+              <button
+                type="button"
+                onClick={() => setSpacesOpen((open) => !open)}
+                aria-expanded={spacesOpen}
+                aria-haspopup="menu"
+                className="experience-button experience-button-secondary text-[11px] tracking-[0.2em]"
+              >
+                <Layers size={16} />
+                Switch space
+              </button>
+              {spacesOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full z-30 mt-2 w-[min(22rem,90vw)] border border-warm-border/30 bg-white/95 backdrop-blur-sm shadow-lg p-4"
+                >
+                  <ConnectedSpacesPanel
+                    variant="list"
+                    emptyMessage="You are not connected to any other archives yet."
+                  />
+                </div>
+              )}
+            </div>
+            <Link href={`/person/${memorialId}`} className="experience-button experience-button-secondary text-[11px] tracking-[0.2em]">
+              <Eye size={16} />
+              View archive
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -159,7 +201,7 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
         <section>
           <h2 className="text-xs font-semibold text-warm-dark/40 uppercase tracking-wider mb-4 font-sans">Actions</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <QuickAction icon={Eye} label="View archive" onClick={() => router.push(`/archive/${memorialId}/view`)} primary />
+            <QuickAction icon={Eye} label="View archive" onClick={() => router.push(`/person/${memorialId}`)} primary />
             {capabilities.canContribute && (
               <QuickAction icon={MessageCircle} label="Share memory" onClick={() => router.push(`/archive/${memorialId}/contribute`)} />
             )}

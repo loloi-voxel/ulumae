@@ -252,11 +252,14 @@ function CreateMemorialPageContent() {
   const isPaidMode = effectiveMode === 'personal' || effectiveMode === 'family' || effectiveMode === 'concierge';
   const hasFullAccess = isPaidMode || memorialData.paid;
 
-  // Determine the correct dashboard path based on the memorial's actual mode
-  const dashboardPath = authUserId
-    ? getPlanDashboardPath(effectiveMode, authUserId)
-    : '/dashboard';
   const isMemorialOwner = !!authUserId && memorialOwnerId === authUserId;
+  // Determine the correct dashboard path based on the memorial's actual mode.
+  // Non-owners editing someone else's archive exit back to that archive's context.
+  const dashboardPath = authUserId
+    ? (authUserId && memorialOwnerId && !isMemorialOwner && currentMemorialId
+        ? `/archive/${currentMemorialId}`
+        : getPlanDashboardPath(effectiveMode, authUserId))
+    : '/dashboard';
 
   // 2. HELPER FOR BADGE UI — Step 1.1.1: Warm, human draft banner
   const ModeBadge = () => (

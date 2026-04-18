@@ -60,11 +60,15 @@ export default async function ArchivePage({
 
     const { data: memorial, error: memError } = await supabase
         .from('memorials')
-        .select('id, full_name, profile_photo_url, mode, user_id')
+        .select('id, full_name, profile_photo_url, mode, user_id, deleted')
         .eq('id', memorialId)
         .single();
 
     if (memError || !memorial) {
+        redirect('/dashboard');
+    }
+
+    if (memorial.deleted) {
         redirect('/dashboard');
     }
 

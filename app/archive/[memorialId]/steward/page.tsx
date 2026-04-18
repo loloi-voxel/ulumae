@@ -11,6 +11,7 @@ import {
 import { createClient } from '@/utils/supabase/client';
 import { useArchiveRole } from '../_hooks/useArchiveRole';
 import { useRoleSync } from '../_hooks/useRoleSync';
+import { getArchiveExitPath } from '@/lib/archiveNavigation';
 
 interface PendingContribution {
     id: string;
@@ -83,6 +84,15 @@ export default function StewardPage({
 
     const { data: roleData, loading: roleLoading, status: roleStatus } = useArchiveRole(memorialId);
     useRoleSync(memorialId, roleData, roleStatus);
+
+    const exitPath = roleData
+        ? getArchiveExitPath({
+            role: roleData.userRole,
+            plan: roleData.plan,
+            userId: roleData.currentUserId,
+            memorialId,
+        })
+        : `/archive/${memorialId}`;
 
     useEffect(() => {
         if (roleLoading || !roleData) return;
@@ -285,7 +295,7 @@ export default function StewardPage({
             <div className="border-b border-warm-border/20 bg-white sticky top-0 z-10">
                 <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
                     <button
-                        onClick={() => router.push(`/archive/${memorialId}`)}
+                        onClick={() => router.push(exitPath)}
                         className="p-2 hover:bg-warm-border/10 rounded-lg transition-colors"
                     >
                         <ArrowLeft size={20} className="text-warm-dark/60" />

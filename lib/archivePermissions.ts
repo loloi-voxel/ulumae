@@ -299,11 +299,11 @@ export async function getUserRole(
 ) {
   const { data: memorial, error } = await supabaseAdmin
     .from('memorials')
-    .select('id, user_id, mode')
+    .select('id, user_id, mode, deleted')
     .eq('id', memorialId)
     .maybeSingle();
 
-  if (error || !memorial) {
+  if (error || !memorial || memorial.deleted) {
     return null;
   }
 
@@ -317,11 +317,11 @@ export async function resolveArchivePermissionContext(
 ): Promise<ArchivePermissionResolution> {
   const { data: memorial, error: memorialError } = await supabaseAdmin
     .from('memorials')
-    .select('id, user_id, mode')
+    .select('id, user_id, mode, deleted')
     .eq('id', memorialId)
     .maybeSingle();
 
-  if (memorialError || !memorial) {
+  if (memorialError || !memorial || memorial.deleted) {
     return {
       memorialExists: false,
       context: null,

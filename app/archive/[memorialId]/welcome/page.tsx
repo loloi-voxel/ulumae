@@ -131,7 +131,7 @@ function WelcomeContent({ memorialId }: { memorialId: string }) {
             ctaLabel="View archive"
             ctaDisabled={archiveRichness === 'empty'}
             disabledNote="Content coming soon"
-            onClick={() => router.push(`/archive/${memorialId}/view`)}
+            onClick={() => router.push(`/person/${memorialId}`)}
             primary={archiveRichness !== 'empty'}
           />
 

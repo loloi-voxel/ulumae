@@ -39,6 +39,7 @@ export async function getOwnerFamilyMemorials(
         .select('id, full_name, birth_date, death_date, profile_photo_url, status, paid, updated_at')
         .eq('user_id', ownerUserId)
         .eq('mode', 'family')
+        .eq('deleted', false)
         .order('updated_at', { ascending: false });
 
     if (error) {

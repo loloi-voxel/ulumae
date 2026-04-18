@@ -24,6 +24,7 @@ import {
     useAuth,
 } from '@/components/providers/AuthProvider';
 import NotificationCenter from '@/components/NotificationCenter';
+import SidebarConnectedSpaces from '@/components/dashboard/SidebarConnectedSpaces';
 
 interface DashboardShellProps {
     userId: string;
@@ -189,6 +190,8 @@ function SidebarContent({
                     {email && <p className="mt-1 truncate text-xs text-warm-muted">{email}</p>}
                 </div>
             </div>
+
+            <SidebarConnectedSpaces onNavigate={onNavigate} />
 
             <nav className="flex-1 px-3 pb-4 flex flex-col">
                 <div className="space-y-2">

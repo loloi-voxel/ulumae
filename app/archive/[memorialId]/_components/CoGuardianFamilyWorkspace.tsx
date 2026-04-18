@@ -138,7 +138,7 @@ export default function CoGuardianFamilyWorkspace({
 
                     <div className="flex flex-wrap gap-3">
                         <Link
-                            href={`/archive/${memorialId}/view`}
+                            href={`/person/${memorialId}`}
                             className="inline-flex items-center gap-2 rounded-xl border border-warm-border/30 px-4 py-3 text-sm text-warm-dark/65 hover:bg-white transition-all font-sans"
                         >
                             <Eye size={16} />
@@ -279,7 +279,7 @@ export default function CoGuardianFamilyWorkspace({
                                                 Edit
                                             </button>
                                             <button
-                                                onClick={() => router.push(`/archive/${memorial.id}/view`)}
+                                                onClick={() => router.push(`/person/${memorial.id}`)}
                                                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-warm-border/30 px-3 py-2.5 text-sm text-warm-dark hover:bg-surface-low transition-all font-sans"
                                             >
                                                 <Eye size={15} />
