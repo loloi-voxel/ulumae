@@ -3,54 +3,29 @@
 'use client';
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, Edit, Trash2, User, Loader2, Network, X, Search, Filter, RefreshCcw, AlertTriangle, Archive, Wifi, BellDot, History, MessageSquareText, ChevronDown } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, User, Network, X, Search, Filter, RefreshCcw, AlertTriangle, Archive, Wifi, BellDot } from 'lucide-react';
 import { supabase, Memorial } from '@/lib/supabase';
 import FamilyLinker from '@/components/FamilyLinker';
 import AnchorPanel from '@/components/AnchorPanel';
 import ManageWitnessesModal from '@/app/dashboard/[userId]/_components/ManageWitnessesModal';
 import DashboardShell from '@/components/dashboard/DashboardShell';
 import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
+import EditableFamilyTitle from '@/components/dashboard/EditableFamilyTitle';
 
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
-import NotificationCenter from './_components/NotificationCenter';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
 import { useNotifications } from '@/hooks/useNotifications';
 import { permanentlyDeleteMemorial, updateMemorialTrashState } from '@/lib/memorialClientActions';
 
-interface FamilyActivityItem {
-    id: string;
-    memorialId: string;
-    memorialName: string;
-    createdAt: string;
-    createdByName: string | null;
-    changeSummary: string;
-}
-
-interface ActivityPersonGroup {
-    name: string;
-    items: FamilyActivityItem[];
-    latestCreatedAt: string;
-}
-
-interface ActivityDayGroup {
-    dayKey: string;
-    dayLabel: string;
-    items: FamilyActivityItem[];
-    people: ActivityPersonGroup[];
-}
+type FamilySortOption = 'birth' | 'created_asc' | 'created_desc';
 
 export default function FamilyDashboard({ params }: { params: Promise<{ userId: string }> }) {
     const unwrappedParams = use(params);
     const userId = unwrappedParams.userId;
     const auth = useAuth();
     const router = useRouter();
-    const {
-        data: notificationData,
-        loading: notificationLoading,
-        error: notificationError,
-        refresh: refreshNotifications,
-    } = useNotifications();
+    const { data: notificationData } = useNotifications();
     const [memorials, setMemorials] = useState<Memorial[]>([]);
     const [deletedMemorials, setDeletedMemorials] = useState<Memorial[]>([]);
     const [loading, setLoading] = useState(true);
@@ -63,10 +38,9 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
     const [managingId, setManagingId] = useState<string | null>(null);
     const [memberManagerMemorial, setMemberManagerMemorial] = useState<Memorial | null>(null);
     const [showWelcome, setShowWelcome] = useState(false);
-    const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
 
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterStatus, setFilterStatus] = useState<'all' | 'draft' | 'published'>('all');
+    const [sortOption, setSortOption] = useState<FamilySortOption>('created_desc');
 
     const searchParams = useSearchParams();
 
@@ -171,58 +145,6 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
         setLoading(false);
     };
 
-    const handleCreationRequestDecision = async (
-        memorialId: string,
-        requestId: string,
-        decision: 'approved' | 'rejected'
-    ) => {
-        setProcessingRequestId(requestId);
-        try {
-            const response = await fetch(`/api/archive/${memorialId}/creation-requests/${requestId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ decision }),
-            });
-
-            const payload = await response.json();
-            if (!response.ok) {
-                throw new Error(payload.error || 'Could not update the request.');
-            }
-
-            await loadMemorials();
-        } catch (error: any) {
-            alert(error.message || 'Could not update the request.');
-        } finally {
-            setProcessingRequestId(null);
-        }
-    };
-
-    const handleAccessRequestDecision = async (
-        memorialId: string,
-        requestId: string,
-        decision: 'approved' | 'denied'
-    ) => {
-        setProcessingRequestId(requestId);
-        try {
-            const response = await fetch(`/api/memorials/${memorialId}/access-request/${requestId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ decision }),
-            });
-
-            const payload = await response.json();
-            if (!response.ok) {
-                throw new Error(payload.error || 'Could not update the access request.');
-            }
-
-            await loadMemorials();
-        } catch (error: any) {
-            alert(error.message || 'Could not update the access request.');
-        } finally {
-            setProcessingRequestId(null);
-        }
-    };
-
     const handleCreate = () => {
         // Reuse an existing empty paid memorial (plan marker) if available
         const emptyPaid = memorials.find(m => !m.full_name && m.paid);
@@ -303,106 +225,37 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
 
     // Filter Active Memorials — exclude empty plan markers (no full_name)
     const realMemorials = memorials.filter(m => m.full_name);
-    const filteredMemorials = realMemorials.filter(m => {
-        const matchesSearch = (m.full_name || '').toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesFilter = filterStatus === 'all'
-            ? true
-            : filterStatus === 'published'
-                ? m.status === 'published'
-                : m.status === 'draft';
-        return matchesSearch && matchesFilter;
-    });
+    const searchedMemorials = realMemorials.filter((m) =>
+        (m.full_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
-    const deriveFamilyName = (): string => {
-        if (memorials.length === 0) return 'Your';
-        const firstName = memorials[0];
-        const fullName = firstName?.full_name || '';
-        const parts = fullName.trim().split(/\s+/);
-        if (parts.length > 1) {
-            return parts[parts.length - 1];
-        }
-        return fullName || 'Your';
+    const parseTime = (value?: string | null) => {
+        if (!value) return Number.NaN;
+        const parsed = new Date(value).getTime();
+        return Number.isFinite(parsed) ? parsed : Number.NaN;
     };
 
-    const familyName = deriveFamilyName();
+    const filteredMemorials = [...searchedMemorials].sort((a, b) => {
+        if (sortOption === 'birth') {
+            const aTime = parseTime(a.birth_date);
+            const bTime = parseTime(b.birth_date);
+            if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
+            if (Number.isNaN(aTime)) return 1;
+            if (Number.isNaN(bTime)) return -1;
+            return aTime - bTime;
+        }
+
+        const aCreated = parseTime(a.created_at);
+        const bCreated = parseTime(b.created_at);
+        const aSafe = Number.isNaN(aCreated) ? 0 : aCreated;
+        const bSafe = Number.isNaN(bCreated) ? 0 : bCreated;
+
+        return sortOption === 'created_asc' ? aSafe - bSafe : bSafe - aSafe;
+    });
 
     const firstPaidMemorial = memorials.find(m => m.paid);
 
     const pendingRequestCount = notificationData.pendingCount;
-    const activityItems: FamilyActivityItem[] = (notificationData.recentActivity || []).map((item) => ({
-        id: item.id,
-        memorialId: item.memorialId,
-        memorialName: item.memorialName,
-        createdAt: item.createdAt,
-        createdByName: item.actorEmail || 'Someone',
-        changeSummary: item.summary || 'Archive updated',
-    }));
-
-    const formatActivityDayLabel = (value: string) =>
-        new Intl.DateTimeFormat(undefined, {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-        }).format(new Date(value));
-
-    const getActivityDayKey = (value: string) => {
-        const date = new Date(value);
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
-
-    const groupedRecentActivity: ActivityDayGroup[] = Object.values(
-        activityItems.reduce<Record<string, ActivityDayGroup>>((groups, item) => {
-            const dayKey = getActivityDayKey(item.createdAt);
-            const existingDay = groups[dayKey];
-
-            if (existingDay) {
-                existingDay.items.push(item);
-                return groups;
-            }
-
-            groups[dayKey] = {
-                dayKey,
-                dayLabel: formatActivityDayLabel(item.createdAt),
-                items: [item],
-                people: [],
-            };
-
-            return groups;
-        }, {})
-    )
-        .sort((left, right) => right.dayKey.localeCompare(left.dayKey))
-        .map((dayGroup) => ({
-            ...dayGroup,
-            people: Object.values(
-                dayGroup.items.reduce<Record<string, ActivityPersonGroup>>((people, item) => {
-                    const name = item.createdByName || 'Someone';
-                    const existingPerson = people[name];
-
-                    if (existingPerson) {
-                        existingPerson.items.push(item);
-                        if (new Date(item.createdAt).getTime() > new Date(existingPerson.latestCreatedAt).getTime()) {
-                            existingPerson.latestCreatedAt = item.createdAt;
-                        }
-                        return people;
-                    }
-
-                    people[name] = {
-                        name,
-                        items: [item],
-                        latestCreatedAt: item.createdAt,
-                    };
-
-                    return people;
-                }, {})
-            ).sort(
-                (left, right) =>
-                    new Date(right.latestCreatedAt).getTime() - new Date(left.latestCreatedAt).getTime()
-            ),
-        }));
 
     // BLOCK RENDERING until auth checks pass
     const hasAccess = auth.plan === 'family' || auth.plan === 'concierge';
@@ -436,10 +289,8 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                 <div className="max-w-7xl mx-auto px-6 py-8">
                     <div className="flex items-center justify-between">
                         <div>
-                            <div className="flex items-center gap-3 mb-3">
-                                <h1 className="font-serif text-4xl text-warm-dark">
-                                    The {familyName} Legacy Archive
-                                </h1>
+                            <div className="flex flex-wrap items-center gap-3 mb-3">
+                                <EditableFamilyTitle />
                                 <span className="live-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-olive/10 text-olive border border-olive/20">
                                     Live
                                 </span>
@@ -450,7 +301,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                     </span>
                                 )}
                             </div>
-                            <p className="text-warm-muted font-sans text-sm tracking-wide ml-12">
+                            <p className="text-warm-muted font-sans text-sm tracking-wide">
                                 {memorials.length} memorial{memorials.length !== 1 ? 's' : ''} &bull; {pendingRequestCount} pending item{pendingRequestCount !== 1 ? 's' : ''} &bull; 0 devices anchored
                             </p>
                         </div>
@@ -469,12 +320,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
             </div>
 
             <div className="max-w-7xl mx-auto px-6 py-12">
-                <NotificationCenter
-                    pendingItems={notificationData.pendingItems}
-                    loading={notificationLoading}
-                    error={notificationError}
-                />
-                {/* SEARCH & FILTER TOOLBAR */}
+                {/* SEARCH & SORT TOOLBAR */}
                 {!loading && realMemorials.length > 0 && (
                     <div className="flex flex-col md:flex-row gap-4 mb-8">
                         <div className="flex-1 relative">
@@ -490,42 +336,15 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                         <div className="relative">
                             <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-warm-outline" size={20} />
                             <select
-                                value={filterStatus}
-                                onChange={(e) => setFilterStatus(e.target.value as any)}
+                                value={sortOption}
+                                onChange={(e) => setSortOption(e.target.value as FamilySortOption)}
                                 className="pl-12 pr-8 py-3 glass-input rounded-none appearance-none cursor-pointer"
                             >
-                                <option value="all">All Memorials</option>
-                                <option value="draft">Preview Archives</option>
-                                <option value="published">Published</option>
+                                <option value="birth">Date of birth</option>
+                                <option value="created_asc">Creation date (ascending)</option>
+                                <option value="created_desc">Creation date (descending)</option>
                             </select>
                         </div>
-                    </div>
-                )}
-
-                {/* IN-PAGE TABS — smooth scroll to sections on Overview */}
-                {!loading && realMemorials.length > 0 && (
-                    <div className="mb-8 flex flex-wrap gap-2 border-b border-warm-border/30 pb-3">
-                        <button
-                            type="button"
-                            onClick={() => document.getElementById('members')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                            className="inline-flex items-center gap-2 border border-warm-border/30 bg-white px-4 py-2 text-sm text-warm-dark transition-colors hover:bg-surface-mid rounded-none"
-                        >
-                            <User size={14} />
-                            Members
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => document.getElementById('activity')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                            className="inline-flex items-center gap-2 border border-warm-border/30 bg-white px-4 py-2 text-sm text-warm-dark transition-colors hover:bg-surface-mid rounded-none"
-                        >
-                            <History size={14} />
-                            Activity
-                            {pendingRequestCount > 0 && (
-                                <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-semibold bg-warm-brown/15 text-warm-brown rounded-full">
-                                    {pendingRequestCount}
-                                </span>
-                            )}
-                        </button>
                     </div>
                 )}
 
@@ -646,133 +465,6 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                         </div>
                     </>
                 )}
-
-                {/* MEMBERS — Role Management per Memorial */}
-                {firstPaidMemorial && (
-                    <div id="members" className="mt-12 border border-warm-border/30 bg-white p-8 rounded-none">
-                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                            <div>
-                                <h3 className="font-serif text-2xl text-warm-dark mb-2">Member management</h3>
-                                <p className="text-sm text-warm-muted font-sans leading-relaxed max-w-3xl">
-                                    Open the member manager from any memorial card to invite people, change roles, cancel pending invitations, or review who has access to that specific archive.
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => setMemberManagerMemorial(firstPaidMemorial)}
-                                className="inline-flex items-center gap-2 border border-warm-border/30 px-5 py-3 text-sm font-sans font-semibold text-warm-dark transition-all hover:bg-surface-high rounded-none"
-                            >
-                                <User size={16} />
-                                Open primary member manager
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                <div id="activity" className="mt-12">
-                    <section className="border border-warm-border/30 bg-white p-6 rounded-none">
-                        <div className="mb-5">
-                            <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Recent activity</p>
-                            <h2 className="mt-2 font-serif text-2xl text-warm-dark">Who changed what</h2>
-                            <p className="mt-2 text-sm text-warm-muted font-sans">
-                                Family archives need visible history. This feed shows recent saved changes across the family workspace.
-                            </p>
-                        </div>
-
-                        {notificationLoading ? (
-                            <div className="py-10 text-center">
-                                <Loader2 size={24} className="mx-auto text-olive animate-spin mb-3" />
-                                <p className="text-sm text-warm-muted font-sans">Loading activity...</p>
-                            </div>
-                        ) : notificationError ? (
-                            <div className="border border-red-200 bg-red-50 px-6 py-5 text-sm text-red-700 rounded-none">
-                                {notificationError}
-                            </div>
-                        ) : activityItems.length === 0 ? (
-                            <div className="border-2 border-dashed border-warm-border/35 bg-surface-low/40 px-6 py-10 text-center rounded-none">
-                                <History size={24} className="mx-auto mb-3 text-warm-muted" />
-                                <p className="font-serif text-xl text-warm-dark">No activity yet</p>
-                                <p className="mt-2 text-sm text-warm-muted font-sans">
-                                    Once someone edits a family memorial, the change history will appear here.
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {groupedRecentActivity.map((dayGroup) => (
-                                    <details
-                                        key={dayGroup.dayKey}
-                                        open
-                                        className="group border border-warm-border/20 bg-surface-low/20 rounded-none"
-                                    >
-                                        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
-                                            <div>
-                                                <p className="text-sm font-semibold text-warm-dark font-sans">
-                                                    {dayGroup.dayLabel}
-                                                </p>
-                                                <p className="mt-1 text-xs text-warm-outline font-sans">
-                                                    {dayGroup.items.length} update{dayGroup.items.length !== 1 ? 's' : ''} by {dayGroup.people.length} contributor{dayGroup.people.length !== 1 ? 's' : ''}
-                                                </p>
-                                            </div>
-                                            <ChevronDown
-                                                size={16}
-                                                className="text-warm-outline transition-transform group-open:rotate-180"
-                                            />
-                                        </summary>
-
-                                        <div className="space-y-3 border-t border-warm-border/15 px-3 py-3">
-                                            {dayGroup.people.map((personGroup) => (
-                                                <details
-                                                    key={`${dayGroup.dayKey}-${personGroup.name}`}
-                                                    className="group/person border border-warm-border/20 bg-white rounded-none"
-                                                >
-                                                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
-                                                        <div>
-                                                            <p className="text-sm font-semibold text-warm-dark font-sans">
-                                                                {personGroup.name}
-                                                            </p>
-                                                            <p className="mt-1 text-xs text-warm-outline font-sans">
-                                                                {personGroup.items.length} change{personGroup.items.length !== 1 ? 's' : ''}
-                                                            </p>
-                                                        </div>
-                                                        <ChevronDown
-                                                            size={16}
-                                                            className="text-warm-outline transition-transform group-open/person:rotate-180"
-                                                        />
-                                                    </summary>
-
-                                                    <div className="space-y-3 border-t border-warm-border/15 px-4 py-3">
-                                                        {personGroup.items.map((item) => (
-                                                            <div
-                                                                key={item.id}
-                                                                className="border border-warm-border/20 bg-surface-low/25 px-4 py-3 rounded-none"
-                                                            >
-                                                                <div className="flex items-start gap-3">
-                                                                    <div className="mt-1 flex h-9 w-9 items-center justify-center bg-olive/10 text-olive rounded-none">
-                                                                        <MessageSquareText size={16} />
-                                                                    </div>
-                                                                    <div className="min-w-0 flex-1">
-                                                                        <p className="text-sm text-warm-dark font-sans">
-                                                                            Updated <span className="font-semibold">{item.memorialName}</span>
-                                                                        </p>
-                                                                        <p className="mt-1 text-sm text-warm-muted font-sans leading-relaxed">
-                                                                            {item.changeSummary}
-                                                                        </p>
-                                                                        <p className="mt-2 text-xs text-warm-outline font-sans">
-                                                                            {new Date(item.createdAt).toLocaleString()}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </details>
-                                            ))}
-                                        </div>
-                                    </details>
-                                ))}
-                            </div>
-                        )}
-                    </section>
-                </div>
 
                 {/* ANCHOR PANEL — Family Sync Status */}
                 {firstPaidMemorial && (

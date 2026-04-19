@@ -21,6 +21,7 @@ import { useRoleSync } from '../_hooks/useRoleSync';
 import RoleBanner from './RoleBanner';
 import type { ArchiveRoleSnapshot } from '@/lib/archivePermissions';
 import ConnectedSpacesPanel from '@/components/dashboard/ConnectedSpacesPanel';
+import EditableFamilyTitle from '@/components/dashboard/EditableFamilyTitle';
 
 interface ArchiveHubClientProps {
   roleData: ArchiveRoleSnapshot;
@@ -108,7 +109,11 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
               </div>
             )}
             <div>
-              <p className="font-serif text-base text-warm-dark leading-none mb-0.5">{memorial.fullName}</p>
+              <EditableFamilyTitle
+                canEdit={userRole === 'owner'}
+                className="font-serif text-base text-warm-dark leading-none mb-0.5"
+                inputClassName="glass-input rounded-none max-w-xs text-sm font-serif"
+              />
               <p className="text-xs text-warm-dark/40 font-sans">
                 {roleLabel} • {plan} Archive
               </p>

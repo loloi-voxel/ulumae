@@ -108,6 +108,11 @@ export function useRoleSync(
             return;
         }
 
+        if (pathname === href) {
+            redirectKeyRef.current = redirectKey;
+            return;
+        }
+
         redirectKeyRef.current = redirectKey;
         toast.error(message);
         router.replace(href);

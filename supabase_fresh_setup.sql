@@ -46,8 +46,14 @@ CREATE TABLE IF NOT EXISTS users (
     verification_sent_at TIMESTAMPTZ,
 
     -- Plan tracking
-    highest_plan TEXT DEFAULT 'none'
+    highest_plan TEXT DEFAULT 'none',
+
+    -- User-personalized family title ("The {name} legacy archive")
+    family_display_name TEXT
 );
+
+-- Additive migration for existing databases
+ALTER TABLE users ADD COLUMN IF NOT EXISTS family_display_name TEXT;
 
 -- Auto-create user row when someone signs up via Supabase Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()

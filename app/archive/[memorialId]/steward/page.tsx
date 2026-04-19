@@ -95,13 +95,6 @@ export default function StewardPage({
         : `/archive/${memorialId}`;
 
     useEffect(() => {
-        if (roleLoading || !roleData) return;
-        if (!roleData.capabilities.canReview) {
-            router.push(`/archive/${memorialId}`);
-        }
-    }, [roleData, roleLoading, memorialId, router]);
-
-    useEffect(() => {
         const nextTab = searchParams.get('tab') as StewardTab | null;
         if (nextTab === 'contributions' || nextTab === 'requests' || nextTab === 'creation') {
             setTab(nextTab);

@@ -50,12 +50,6 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
   const supabase = createClient();
 
   useEffect(() => {
-    if (!roleLoading && roleData && !roleData.capabilities.canContribute) {
-      router.replace(`/archive/${memorialId}`);
-    }
-  }, [memorialId, roleData, roleLoading, router]);
-
-  useEffect(() => {
     if (!reviseId) {
       setExistingContributionLoaded(true);
       return;
