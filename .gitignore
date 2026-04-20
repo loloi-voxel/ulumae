@@ -36,3 +36,6 @@ next-env.d.ts
 
 .env.local
 .env.local
+# Claw Code local artifacts
+.claw/settings.local.json
+.claw/sessions/
