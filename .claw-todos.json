@@ -1,0 +1,12 @@
+[
+  {
+    "content": "Explore project structure and existing patterns",
+    "activeForm": "Exploring project structure and existing patterns",
+    "status": "completed"
+  },
+  {
+    "content": "Create activity page at dashboard/family/[id]/activity with foldable sections (days and months)",
+    "activeForm": "Creating activity page with foldable sections",
+    "status": "in_progress"
+  }
+]

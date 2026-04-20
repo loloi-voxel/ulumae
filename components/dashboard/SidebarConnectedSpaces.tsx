@@ -1,40 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowRight, Layers } from 'lucide-react';
-
-interface SpaceEntry {
-    id: string;
-    fullName: string | null;
-    role: 'owner' | 'co_guardian' | 'witness' | 'reader';
-    roleLabel: string;
-    plan: string;
-    href: string;
-}
+import { useConnectedSpaces } from '@/hooks/useConnectedSpaces';
 
 export default function SidebarConnectedSpaces({ onNavigate }: { onNavigate?: () => void }) {
     const pathname = usePathname();
-    const [spaces, setSpaces] = useState<SpaceEntry[] | null>(null);
+    const { spaces, loading, error } = useConnectedSpaces();
 
-    useEffect(() => {
-        let cancelled = false;
-        fetch('/api/user/spaces', { cache: 'no-store' })
-            .then((res) => res.json())
-            .then((payload) => {
-                if (cancelled) return;
-                setSpaces(payload?.spaces || []);
-            })
-            .catch(() => {
-                if (!cancelled) setSpaces([]);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
-    if (!spaces || spaces.length <= 1) {
+    if (loading || error || spaces.length === 0) {
         return null;
     }
 
@@ -56,7 +31,7 @@ export default function SidebarConnectedSpaces({ onNavigate }: { onNavigate?: ()
                 </div>
                 <ul className="space-y-2">
                     {preview.map((space) => {
-                        const isActive = pathname === space.href;
+                        const isActive = pathname === space.href || pathname.startsWith(`${space.href}/`);
                         return (
                             <li key={`${space.id}-${space.role}`}>
                                 <Link

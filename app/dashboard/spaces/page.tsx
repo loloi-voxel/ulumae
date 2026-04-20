@@ -6,11 +6,13 @@ import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import DashboardShell from '@/components/dashboard/DashboardShell';
 import ConnectedSpacesPanel from '@/components/dashboard/ConnectedSpacesPanel';
+import { useConnectedSpaces } from '@/hooks/useConnectedSpaces';
 
 export default function ConnectedSpacesPage() {
     const router = useRouter();
     const auth = useAuth();
     const userId = auth.user?.id;
+    const { spaces, loading, error } = useConnectedSpaces();
 
     useEffect(() => {
         if (!auth.loading && !auth.authenticated) {
@@ -35,13 +37,16 @@ export default function ConnectedSpacesPage() {
                     </p>
                     <h1 className="font-serif text-3xl text-warm-dark">Connected spaces</h1>
                     <p className="text-sm text-warm-muted font-sans max-w-xl">
-                        Every archive you own or are invited into. Switch contexts without
-                        guessing where to go next.
+                        Archives you have been invited into as a co-guardian, witness, or reader.
                     </p>
                 </header>
                 <ConnectedSpacesPanel
+                    spaces={spaces}
+                    loading={loading}
+                    error={error}
                     title="All spaces"
-                    emptyMessage="You are not yet connected to any archives. When someone invites you, they will appear here."
+                    hideWhenEmpty={false}
+                    emptyMessage="You are not connected to any external archives yet. Invited spaces will appear here."
                 />
             </div>
         </DashboardShell>

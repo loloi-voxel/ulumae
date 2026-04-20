@@ -22,6 +22,7 @@ import RoleBanner from './RoleBanner';
 import type { ArchiveRoleSnapshot } from '@/lib/archivePermissions';
 import ConnectedSpacesPanel from '@/components/dashboard/ConnectedSpacesPanel';
 import EditableFamilyTitle from '@/components/dashboard/EditableFamilyTitle';
+import { useConnectedSpaces } from '@/hooks/useConnectedSpaces';
 
 interface ArchiveHubClientProps {
   roleData: ArchiveRoleSnapshot;
@@ -63,6 +64,11 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
   useRoleSync(memorialId, roleData, 'ready');
   const [spacesOpen, setSpacesOpen] = useState(false);
   const spacesRef = useRef<HTMLDivElement | null>(null);
+  const {
+    spaces: connectedSpaces,
+    loading: connectedSpacesLoading,
+    error: connectedSpacesError,
+  } = useConnectedSpaces();
 
   useEffect(() => {
     if (!spacesOpen) return;
@@ -75,6 +81,12 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [spacesOpen]);
+
+  useEffect(() => {
+    if (!connectedSpacesLoading && connectedSpaces.length === 0 && spacesOpen) {
+      setSpacesOpen(false);
+    }
+  }, [connectedSpaces.length, connectedSpacesLoading, spacesOpen]);
 
   const {
     userRole,
@@ -120,29 +132,34 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="relative" ref={spacesRef}>
-              <button
-                type="button"
-                onClick={() => setSpacesOpen((open) => !open)}
-                aria-expanded={spacesOpen}
-                aria-haspopup="menu"
-                className="experience-button experience-button-secondary text-[11px] tracking-[0.2em]"
-              >
-                <Layers size={16} />
-                Switch space
-              </button>
-              {spacesOpen && (
-                <div
-                  role="menu"
-                  className="absolute right-0 top-full z-30 mt-2 w-[min(22rem,90vw)] border border-warm-border/30 bg-white/95 backdrop-blur-sm shadow-lg p-4"
+            {connectedSpacesLoading || connectedSpaces.length > 0 ? (
+              <div className="relative" ref={spacesRef}>
+                <button
+                  type="button"
+                  onClick={() => setSpacesOpen((open) => !open)}
+                  aria-expanded={spacesOpen}
+                  aria-haspopup="menu"
+                  className="experience-button experience-button-secondary text-[11px] tracking-[0.2em]"
                 >
-                  <ConnectedSpacesPanel
-                    variant="list"
-                    emptyMessage="You are not connected to any other archives yet."
-                  />
-                </div>
-              )}
-            </div>
+                  <Layers size={16} />
+                  Switch space
+                </button>
+                {spacesOpen && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full z-30 mt-2 w-[min(22rem,90vw)] border border-warm-border/30 bg-white/95 backdrop-blur-sm shadow-lg p-4"
+                  >
+                    <ConnectedSpacesPanel
+                      spaces={connectedSpaces}
+                      loading={connectedSpacesLoading}
+                      error={connectedSpacesError}
+                      variant="list"
+                      emptyMessage="You are not connected to any other archives yet."
+                    />
+                  </div>
+                )}
+              </div>
+            ) : null}
             <Link href={`/person/${memorialId}`} className="experience-button experience-button-secondary text-[11px] tracking-[0.2em]">
               <Eye size={16} />
               View archive

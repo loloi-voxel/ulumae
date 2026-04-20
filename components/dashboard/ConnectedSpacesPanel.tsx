@@ -1,72 +1,38 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowRight, Layers, Loader2 } from 'lucide-react';
-
-interface SpaceEntry {
-    id: string;
-    fullName: string | null;
-    profilePhotoUrl: string | null;
-    mode: string | null;
-    role: 'owner' | 'co_guardian' | 'witness' | 'reader';
-    roleLabel: string;
-    plan: string;
-    href: string;
-}
+import type { ConnectedSpaceEntry } from '@/lib/connectedSpaces';
 
 interface ConnectedSpacesPanelProps {
+    spaces: ConnectedSpaceEntry[];
+    loading?: boolean;
+    error?: string | null;
     variant?: 'panel' | 'list';
     className?: string;
     title?: string;
     emptyMessage?: string;
+    hideWhenEmpty?: boolean;
 }
 
 export default function ConnectedSpacesPanel({
+    spaces,
+    loading = false,
+    error = null,
     variant = 'panel',
     className = '',
     title = 'Connected spaces',
     emptyMessage = 'You are not yet connected to any other archives.',
+    hideWhenEmpty = true,
 }: ConnectedSpacesPanelProps) {
     const pathname = usePathname();
-    const [spaces, setSpaces] = useState<SpaceEntry[] | null>(null);
-    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        let cancelled = false;
-        fetch('/api/user/spaces', { cache: 'no-store' })
-            .then((res) => res.json())
-            .then((payload) => {
-                if (cancelled) return;
-                if (payload?.authenticated === false) {
-                    setSpaces([]);
-                    return;
-                }
-                setSpaces(payload?.spaces || []);
-            })
-            .catch((err) => {
-                if (cancelled) return;
-                setError(err?.message || 'Could not load spaces');
-                setSpaces([]);
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, []);
-
-    const sorted = useMemo(() => {
-        if (!spaces) return [] as SpaceEntry[];
-        const rank = (role: SpaceEntry['role']) =>
-            role === 'owner' ? 0 : role === 'co_guardian' ? 1 : role === 'witness' ? 2 : 3;
-        return [...spaces].sort((a, b) => rank(a.role) - rank(b.role));
-    }, [spaces]);
-
-    if (spaces === null) {
+    if (loading) {
         return (
             <div className={`flex items-center gap-2 text-warm-outline text-xs font-sans ${className}`}>
                 <Loader2 size={14} className="animate-spin" />
-                Loading spaces…
+                Loading spaces...
             </div>
         );
     }
@@ -79,9 +45,13 @@ export default function ConnectedSpacesPanel({
         );
     }
 
+    if (spaces.length === 0 && hideWhenEmpty) {
+        return null;
+    }
+
     const content = (
         <ul className="space-y-3">
-            {sorted.map((space) => {
+            {spaces.map((space) => {
                 const isCurrent = pathname === space.href || pathname.startsWith(`${space.href}/`);
                 return (
                     <li key={`${space.id}-${space.role}`}>
@@ -113,7 +83,7 @@ export default function ConnectedSpacesPanel({
                                 </p>
                                 <p className="mt-0.5 text-[10px] uppercase tracking-[0.18em] text-warm-outline">
                                     {space.roleLabel}
-                                    {space.plan ? ` • ${space.plan}` : ''}
+                                    {space.plan ? ` - ${space.plan}` : ''}
                                 </p>
                             </div>
                             <ArrowRight
@@ -129,7 +99,7 @@ export default function ConnectedSpacesPanel({
         </ul>
     );
 
-    if (sorted.length === 0) {
+    if (spaces.length === 0) {
         if (variant === 'list') {
             return (
                 <p className={`text-xs text-warm-outline font-sans ${className}`}>
@@ -137,6 +107,7 @@ export default function ConnectedSpacesPanel({
                 </p>
             );
         }
+
         return (
             <div className={`rounded-none border border-warm-border/30 bg-white/70 px-5 py-6 ${className}`}>
                 <div className="flex items-center gap-2 mb-2">
