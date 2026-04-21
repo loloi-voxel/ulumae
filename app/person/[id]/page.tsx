@@ -149,6 +149,7 @@ export default function PersonMemorialPage({ params }: {
 
     return (
         <MemorialRenderer
+            key={memorialId}
             data={memorialData}
             relations={relations}
             isPreview={false}
