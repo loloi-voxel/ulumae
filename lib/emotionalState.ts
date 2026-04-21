@@ -18,7 +18,8 @@ export interface RichnessScore {
 }
 
 export interface EmotionalStateResult {
-  state: EmotionalState;
+  enabled: boolean;
+  state: EmotionalState | null;
   richness: RichnessScore;
   canSeal: boolean;
   sealBlockReasons: string[];   // human-readable reasons why sealing is blocked
@@ -38,6 +39,28 @@ export interface MissingDimension {
 
 function countWords(text: string): number {
   return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+export function isEmotionalStateEnabled(plan: string): boolean {
+  return plan === 'draft';
+}
+
+function getDisabledEmotionalStateResult(): EmotionalStateResult {
+  return {
+    enabled: false,
+    state: null,
+    richness: {
+      total: 0,
+      depth: 0,
+      diversity: 0,
+      presence: 0,
+    },
+    canSeal: true,
+    sealBlockReasons: [],
+    missingDimensions: [],
+    ambientMessage: '',
+    fragmentCount: 0,
+  };
 }
 
 export function calculateRichness(data: MemorialData): RichnessScore {
@@ -356,7 +379,11 @@ function getAmbientMessage(state: EmotionalState, fragmentCount: number, data: M
 
 // ─── Main Export ─────────────────────────────────────────────────────────────
 
-export function calculateEmotionalState(data: MemorialData): EmotionalStateResult {
+export function calculateEmotionalState(data: MemorialData, plan: string = 'draft'): EmotionalStateResult {
+  if (!isEmotionalStateEnabled(plan)) {
+    return getDisabledEmotionalStateResult();
+  }
+
   const richness = calculateRichness(data);
   const state = getEmotionalState(richness);
   const missingDimensions = getMissingDimensions(data);
@@ -364,6 +391,7 @@ export function calculateEmotionalState(data: MemorialData): EmotionalStateResul
   const sealBlockReasons = getSealBlockReasons(data);
 
   return {
+    enabled: true,
     state,
     richness,
     canSeal: sealBlockReasons.length === 0,

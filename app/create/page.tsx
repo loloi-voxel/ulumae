@@ -38,7 +38,7 @@ import {
 } from '@/types/memorial';
 import { PathId } from '@/types/paths';
 import { createClient } from '@/utils/supabase/client';
-import { calculateEmotionalState, getPathDepth } from '@/lib/emotionalState';
+import { calculateEmotionalState, getPathDepth, isEmotionalStateEnabled } from '@/lib/emotionalState';
 import { getMemorialSaveSignature } from '@/lib/versioning';
 
 const PATH_CONFIG: Record<PathId, { steps: number[]; labels: string[] }> = {
@@ -842,7 +842,8 @@ function CreateMemorialPageContent() {
   ).length;
 
   // Emotional state engine — drives ambient messaging, visual tone, and seal gating
-  const emotionalResult = calculateEmotionalState(memorialData);
+  const emotionalResult = calculateEmotionalState(memorialData, effectiveMode);
+  const emotionalStateEnabled = isEmotionalStateEnabled(effectiveMode);
 
   const submitContribution = async (type: 'memory' | 'photo' | 'video', content: any) => {
     // Security check
@@ -934,7 +935,7 @@ function CreateMemorialPageContent() {
             {/* Badge */}
             <div className="flex justify-center gap-3 mb-4">
               <ModeBadge />
-              {emotionalResult.state !== 'void' && (
+              {emotionalStateEnabled && emotionalResult.state && emotionalResult.state !== 'void' && (
                 <div className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border transition-all duration-1000 ${
                   emotionalResult.state === 'eternal'
                     ? 'bg-olive/10 text-olive border-olive/20'
@@ -1077,7 +1078,7 @@ function CreateMemorialPageContent() {
           </div>
 
           {/* Ambient whisper: emotional state message */}
-          {showDraftStatusInsights && emotionalResult.state !== 'void' && emotionalResult.missingDimensions.length > 0 && (
+          {showDraftStatusInsights && emotionalResult.enabled && emotionalResult.state !== 'void' && emotionalResult.missingDimensions.length > 0 && (
             <div className="max-w-2xl mx-auto mb-10 text-center animate-fadeIn">
               <p className="text-xs text-warm-dark/30 italic leading-relaxed">
                 {emotionalResult.ambientMessage}
@@ -1098,7 +1099,7 @@ function CreateMemorialPageContent() {
               description={texts.cards.facts}
               status={getPathStatus(memorialData, 'facts')}
               onClick={handlePathClick}
-              emotionalState={emotionalResult.state}
+              emotionalState={emotionalResult.state ?? undefined}
               depth={getPathDepth(memorialData, 'facts')}
             />
             <PathCard
@@ -1108,7 +1109,7 @@ function CreateMemorialPageContent() {
               description={texts.cards.body}
               status={getPathStatus(memorialData, 'body')}
               onClick={handlePathClick}
-              emotionalState={emotionalResult.state}
+              emotionalState={emotionalResult.state ?? undefined}
               depth={getPathDepth(memorialData, 'body')}
             />
             <PathCard
@@ -1118,7 +1119,7 @@ function CreateMemorialPageContent() {
               description={texts.cards.soul}
               status={getPathStatus(memorialData, 'soul')}
               onClick={handlePathClick}
-              emotionalState={emotionalResult.state}
+              emotionalState={emotionalResult.state ?? undefined}
               depth={getPathDepth(memorialData, 'soul')}
             />
 
@@ -1151,7 +1152,7 @@ function CreateMemorialPageContent() {
               description={texts.cards.witnesses}
               status={getPathStatus(memorialData, 'witnesses')}
               onClick={handlePathClick}
-              emotionalState={emotionalResult.state}
+              emotionalState={emotionalResult.state ?? undefined}
               depth={getPathDepth(memorialData, 'witnesses')}
             />
             <PathCard
@@ -1161,7 +1162,7 @@ function CreateMemorialPageContent() {
               description={texts.cards.presence}
               status={getPathStatus(memorialData, 'presence', mode)}
               onClick={handlePathClick}
-              emotionalState={emotionalResult.state}
+              emotionalState={emotionalResult.state ?? undefined}
               depth={getPathDepth(memorialData, 'presence')}
             />
           </div>
@@ -1223,7 +1224,7 @@ function CreateMemorialPageContent() {
                   </p>
 
                   {/* Emotional state indicator */}
-                  {showDraftStatusInsights && emotionalResult.state !== 'void' && (
+                  {showDraftStatusInsights && emotionalResult.enabled && emotionalResult.state !== 'void' && (
                     <p className="text-[10px] text-warm-dark/25 uppercase tracking-[0.2em] mb-6">
                       {emotionalResult.state}
                     </p>
@@ -1497,6 +1498,7 @@ function CreateMemorialPageContent() {
                           memorialId={currentMemorialId}
                           onBack={() => setViewMode('hub')}
                           onJumpToStep={goToStep}
+                          plan={effectiveMode}
                           isSelfArchive={memorialData.step1.isSelfArchive}
                           hasSuccessor={hasSuccessor}
                           userId={authUserId || ''}
@@ -1567,6 +1569,7 @@ function CreateMemorialPageContent() {
         showMobilePreview && (
           <PreviewModal
             data={memorialData}
+            plan={effectiveMode}
             onClose={() => setShowMobilePreview(false)}
           />
         )

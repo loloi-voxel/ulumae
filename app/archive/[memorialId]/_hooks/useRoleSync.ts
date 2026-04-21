@@ -43,7 +43,11 @@ export function useRoleSync(
                             ? payload.old.user_id
                             : payload.new.user_id;
 
-                    if (nextUserId === userId) {
+                    const roleChanged =
+                        payload.eventType !== 'UPDATE' ||
+                        payload.old?.role !== payload.new?.role;
+
+                    if (nextUserId === userId && roleChanged) {
                         refresh(`realtime:user_memorial_roles:${payload.eventType}`);
                     }
                 }

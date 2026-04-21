@@ -5,29 +5,28 @@
 import { X } from 'lucide-react';
 import { MemorialData } from '@/types/memorial';
 import MemorialRenderer from '@/components/MemorialRenderer';
-import GhostPresence from './GhostPresence';
 import { calculateEmotionalState } from '@/lib/emotionalState';
 
 interface PreviewModalProps {
     data: MemorialData;
+    plan?: string;
     onClose: () => void;
 }
 
-export default function PreviewModal({ data, onClose }: PreviewModalProps) {
-    const { missingDimensions, fragmentCount, state } = calculateEmotionalState(data);
+export default function PreviewModal({ data, plan = 'draft', onClose }: PreviewModalProps) {
+    const { enabled, missingDimensions, fragmentCount, state } = calculateEmotionalState(data, plan);
 
     return (
         <div className="fixed inset-0 bg-warm-dark/90 backdrop-blur-sm z-50 overflow-y-auto">
             <div className="min-h-screen py-12 px-4">
                 <div className="max-w-5xl mx-auto">
-                    {/* Header */}
                     <div className="flex items-center justify-between mb-6 px-4">
                         <div>
                             <h2 className="text-2xl font-semibold text-surface-low mb-1">Archive Preview</h2>
                             <p className="text-surface-low/50 text-sm">
-                                {state === 'eternal'
-                                    ? 'This is how their archive will appear — complete and luminous.'
-                                    : 'A mirror of what you\u2019ve built so far — and what still waits.'}
+                                {enabled && state === 'eternal'
+                                    ? 'This is how their archive will appear - complete and luminous.'
+                                    : 'A mirror of what you have built so far.'}
                             </p>
                         </div>
                         <button
@@ -38,7 +37,6 @@ export default function PreviewModal({ data, onClose }: PreviewModalProps) {
                         </button>
                     </div>
 
-                    {/* Preview Container */}
                     <div className="rounded-2xl shadow-2xl overflow-hidden">
                         <MemorialRenderer
                             data={data}
@@ -47,8 +45,7 @@ export default function PreviewModal({ data, onClose }: PreviewModalProps) {
                         />
                     </div>
 
-                    {/* Ghost Presence: show what's missing below the preview */}
-                    {missingDimensions.length > 0 && state !== 'eternal' && (
+                    {enabled && missingDimensions.length > 0 && state !== 'eternal' && (
                         <div className="mt-8 p-6 rounded-xl bg-surface-low/5 border border-surface-low/10">
                             <p className="text-surface-low/40 text-xs uppercase tracking-wider mb-4">
                                 What remains to be preserved
@@ -67,7 +64,6 @@ export default function PreviewModal({ data, onClose }: PreviewModalProps) {
                         </div>
                     )}
 
-                    {/* Footer */}
                     <div className="mt-8 text-center">
                         <button
                             onClick={onClose}

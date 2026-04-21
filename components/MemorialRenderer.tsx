@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
     Calendar, MapPin, Heart, Briefcase, GraduationCap, Quote, Star, Home,
     Sparkles, MessageCircle, Share2, Mail, Users, BookOpen, Lightbulb, Award,
@@ -96,9 +96,9 @@ export default function MemorialRenderer({
         kind: 'image',
         src: item.preview,
         thumbnailSrc: item.preview,
-        alt: item.description || `Interactive photo story ${index + 1}`,
-        title: `Interactive photo story ${index + 1}`,
-        description: item.description || '',
+        alt: item.title || item.caption || item.description || `Interactive photo story ${index + 1}`,
+        title: item.title || item.caption || `Interactive photo story ${index + 1}`,
+        description: item.story || item.description || '',
     }));
     const videoLightboxItems: MediaLightboxItem[] = videoItems.map((video: any, index: number) => ({
         id: video.id,
@@ -106,6 +106,7 @@ export default function MemorialRenderer({
         src: video.url,
         thumbnailSrc: video.thumbnail || video.url,
         poster: video.thumbnail || null,
+        mimeType: video.mimeType || null,
         title: video.title || `Video memory ${index + 1}`,
         description: video.description || '',
     }));
@@ -116,12 +117,16 @@ export default function MemorialRenderer({
         : interactiveGalleryItems.slice(0, defaultVisibleCount);
     const visibleVideoItems = showAllVideos ? videoItems : videoItems.slice(0, defaultVisibleCount);
 
-    const openLightbox = (items: MediaLightboxItem[], initialIndex: number) => {
+    const openLightbox = useCallback((items: MediaLightboxItem[], initialIndex: number) => {
         setLightboxState({
             items,
             initialIndex,
         });
-    };
+    }, []);
+
+    const handleBrokenImage = useCallback((photoId: string) => {
+        setBrokenImages((current) => ({ ...current, [photoId]: true }));
+    }, []);
 
     return (
         <div className={`relative bg-surface-low ${compact ? 'rounded-2xl shadow-inner border border-warm-border/30 overflow-hidden' : 'min-h-screen'} ${className}`}>
@@ -769,14 +774,14 @@ export default function MemorialRenderer({
                                     </button>
                                 )})}
                             </div>
-                            {interactiveGalleryItems.length > defaultVisibleCount && !showAllInteractiveGallery && (
+                            {interactiveGalleryItems.length > defaultVisibleCount && (
                                 <div className="mt-4 text-center">
                                     <button
                                         type="button"
-                                        onClick={() => setShowAllInteractiveGallery(true)}
+                                        onClick={() => setShowAllInteractiveGallery((current) => !current)}
                                         className="rounded-xl border border-warm-border/30 px-4 py-2 text-sm text-warm-dark transition-all hover:bg-warm-border/10"
                                     >
-                                        Show all
+                                        {showAllInteractiveGallery ? 'Show fewer stories' : 'View all stories'}
                                     </button>
                                 </div>
                             )}
@@ -804,7 +809,7 @@ export default function MemorialRenderer({
                                             src={photo.preview}
                                             alt={photo.caption}
                                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                                            onError={() => setBrokenImages((current) => ({ ...current, [photo.id]: true }))}
+                                            onError={() => handleBrokenImage(photo.id)}
                                         />
 
                                         <IntegrityBadge hash={photo.sha256_hash} />
@@ -818,14 +823,14 @@ export default function MemorialRenderer({
                                     </button>
                                 )})}
                             </div>
-                            {galleryItems.length > defaultVisibleCount && !showAllGallery && (
+                            {galleryItems.length > defaultVisibleCount && (
                                 <div className="mt-4 text-center">
                                     <button
                                         type="button"
-                                        onClick={() => setShowAllGallery(true)}
+                                        onClick={() => setShowAllGallery((current) => !current)}
                                         className="px-4 py-2 text-sm border border-warm-border/30 rounded-xl text-warm-dark hover:bg-warm-border/10 transition-all"
                                     >
-                                        Show all
+                                        {showAllGallery ? 'Show fewer photos' : 'View all photos'}
                                     </button>
                                 </div>
                             )}
@@ -877,14 +882,14 @@ export default function MemorialRenderer({
                                     </button>
                                 )})}
                             </div>
-                            {videoItems.length > defaultVisibleCount && !showAllVideos && (
+                            {videoItems.length > defaultVisibleCount && (
                                 <div className="mt-4 text-center">
                                     <button
                                         type="button"
-                                        onClick={() => setShowAllVideos(true)}
+                                        onClick={() => setShowAllVideos((current) => !current)}
                                         className="px-4 py-2 text-sm border border-warm-border/30 rounded-xl text-warm-dark hover:bg-warm-border/10 transition-all"
                                     >
-                                        Show all
+                                        {showAllVideos ? 'Show fewer videos' : 'View all videos'}
                                     </button>
                                 </div>
                             )}
@@ -904,14 +909,23 @@ export default function MemorialRenderer({
                             </h2>
                             <div className={`space-y-${compact ? '2' : '4'}`}>
                                 {data.step8.voiceRecordings.map((recording: any) => (
-                                    <div key={recording.id} className={`bg-white rounded-xl ${compact ? 'p-3' : 'p-4 md:p-6'} shadow-sm border border-warm-border/30 flex items-center gap-4`}>
-                                        <div className={`${compact ? 'w-10 h-10' : 'w-14 h-14'} bg-warm-brown/10 rounded-full flex items-center justify-center flex-shrink-0`}>
-                                            <Mic size={compact ? 16 : 24} className="text-warm-brown" />
+                                    <div key={recording.id} className={`bg-white rounded-xl ${compact ? 'p-3' : 'p-4 md:p-6'} shadow-sm border border-warm-border/30 ${compact ? 'space-y-3' : 'space-y-4'}`}>
+                                        <div className="flex items-center gap-4">
+                                            <div className={`${compact ? 'w-10 h-10' : 'w-14 h-14'} bg-warm-brown/10 rounded-full flex items-center justify-center flex-shrink-0`}>
+                                                <Mic size={compact ? 16 : 24} className="text-warm-brown" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <h4 className={`font-semibold text-warm-dark ${compact ? 'text-xs' : 'text-base'}`}>{recording.title || 'Untitled Recording'}</h4>
+                                            </div>
+                                            <IntegrityBadge hash={recording.sha256_hash} />
                                         </div>
-                                        <div className="flex-1">
-                                            <h4 className={`font-semibold text-warm-dark ${compact ? 'text-xs' : 'text-base'}`}>{recording.title || 'Untitled Recording'}</h4>
-                                        </div>
-                                        <IntegrityBadge hash={recording.sha256_hash} />
+                                        {recording.url ? (
+                                            <audio controls preload="metadata" className="w-full">
+                                                <source src={recording.url} type={recording.mimeType || undefined} />
+                                            </audio>
+                                        ) : (
+                                            <p className="text-sm text-warm-dark/45">This recording is not available for playback yet.</p>
+                                        )}
                                     </div>
                                 ))}
                             </div>

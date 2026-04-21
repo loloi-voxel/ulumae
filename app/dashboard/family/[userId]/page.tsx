@@ -3,7 +3,7 @@
 'use client';
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, Edit, Trash2, User, Search, Filter, RefreshCcw, AlertTriangle, Archive, Wifi, BellDot } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, User, Search, Filter, RefreshCcw, AlertTriangle, Archive, Wifi, BellDot, Download } from 'lucide-react';
 import { supabase, Memorial } from '@/lib/supabase';
 import AnchorPanel from '@/components/AnchorPanel';
 import DashboardShell from '@/components/dashboard/DashboardShell';
@@ -34,6 +34,8 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
         | null
     >(null);
     const [showWelcome, setShowWelcome] = useState(false);
+    const [exportingMemorialId, setExportingMemorialId] = useState<string | null>(null);
+    const [exportErrors, setExportErrors] = useState<Record<string, string>>({});
 
     const [searchTerm, setSearchTerm] = useState('');
     const [sortOption, setSortOption] = useState<FamilySortOption>('created_desc');
@@ -169,6 +171,42 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
 
     const permanentDeleteMemorial = (id: string) => {
         setPendingConfirm({ kind: 'permanent-delete', id, stage: 1 });
+    };
+
+    const exportArchive = async (memorialId: string) => {
+        setExportingMemorialId(memorialId);
+        setExportErrors((current) => {
+            const next = { ...current };
+            delete next[memorialId];
+            return next;
+        });
+
+        try {
+            const response = await fetch('/api/arche/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ memorialId }),
+            });
+
+            const payload = await response.json();
+            if (!response.ok || !payload?.success || !payload?.downloadUrl) {
+                throw new Error(payload?.error || 'Could not export this archive right now.');
+            }
+
+            const link = document.createElement('a');
+            link.href = payload.downloadUrl;
+            link.download = payload.filename || 'archive.zip';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error: any) {
+            setExportErrors((current) => ({
+                ...current,
+                [memorialId]: error.message || 'Could not export this archive right now.',
+            }));
+        } finally {
+            setExportingMemorialId((current) => (current === memorialId ? null : current));
+        }
     };
 
     const handleConfirmDestructive = async () => {
@@ -374,22 +412,17 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                                 <User size={64} className="text-warm-border/30" />
                                             </div>
                                         )}
-                                        {/* Status Badge */}
+                                        {/* Export Archive */}
                                         <div className="absolute top-3 right-3">
-                                            {memorial.paid ? (
-                                                <span className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-white/80 backdrop-blur-sm text-olive border border-olive/20 font-sans">
-                                                    <Archive size={10} />
-                                                    Active
-                                                </span>
-                                            ) : memorial.status === 'published' ? (
-                                                <span className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-olive/10 backdrop-blur-sm text-olive border border-olive/20 font-sans">
-                                                    Published
-                                                </span>
-                                            ) : (
-                                                <span className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-white/80 backdrop-blur-sm text-warm-muted border border-warm-border/30 font-sans">
-                                                    Preview
-                                                </span>
-                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => exportArchive(memorial.id)}
+                                                disabled={exportingMemorialId === memorial.id}
+                                                className="inline-flex items-center gap-1.5 rounded-full border border-warm-border/30 bg-white/85 px-3 py-1.5 text-xs font-medium text-warm-dark shadow-sm backdrop-blur-sm transition-all hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                                            >
+                                                <Download size={12} />
+                                                {exportingMemorialId === memorial.id ? 'Exporting...' : 'Export this archive'}
+                                            </button>
                                         </div>
                                     </div>
 
@@ -418,6 +451,9 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                                 </button>
                                             )}
                                         </div>
+                                        {exportErrors[memorial.id] && (
+                                            <p className="mt-3 text-xs text-red-600">{exportErrors[memorial.id]}</p>
+                                        )}
                                     </div>
                                 </div>
                             ))}

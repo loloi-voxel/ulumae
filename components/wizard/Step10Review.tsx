@@ -19,6 +19,7 @@ interface Step10Props {
   memorialId: string | null;
   onBack: () => void;
   onJumpToStep: (step: number) => void;
+  plan?: string;
   isSelfArchive?: boolean;
   hasSuccessor?: boolean;
   userId?: string;
@@ -36,6 +37,7 @@ export default function Step10Review({
   memorialId,
   onBack,
   onJumpToStep,
+  plan = 'draft',
   isSelfArchive = false,
   hasSuccessor = false,
   userId = '',
@@ -47,8 +49,9 @@ export default function Step10Review({
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccessorModal, setShowSuccessorModal] = useState(false);
 
-  const completion = calculateCompletion(data);
+  const completion = calculateCompletion(data, plan);
   const { canSeal, sealBlockReasons, emotionalState, emotionalResult } = completion;
+  const showEmotionalInsights = showStatusInsights && emotionalResult.enabled && emotionalState !== null;
 
   const isBlockedBySuccessor = isSelfArchive && !hasSuccessor;
   const isSealReady = canSeal && !isBlockedBySuccessor;
@@ -165,7 +168,7 @@ export default function Step10Review({
       </div>
 
       {/* Emotional state message */}
-      {showStatusInsights && (
+      {showEmotionalInsights && (
       <div className={`mb-10 p-6 rounded-xl border transition-all duration-700 ${
         emotionalState === 'eternal'
           ? 'bg-olive/[0.04] border-olive/20'
@@ -350,7 +353,7 @@ export default function Step10Review({
       </div>
 
       {/* Missing dimensions whisper */}
-      {showStatusInsights && emotionalResult.missingDimensions.length > 0 && emotionalState !== 'eternal' && (
+      {showEmotionalInsights && emotionalResult.missingDimensions.length > 0 && emotionalState !== 'eternal' && (
         <div className="mb-10 p-5 rounded-xl bg-warm-border/[0.04] border border-warm-border/10">
           <p className="text-xs text-warm-dark/30 mb-3 italic">
             You&apos;ve captured {emotionalResult.fragmentCount} fragments of their life.
@@ -409,6 +412,7 @@ export default function Step10Review({
       {showPreview && (
         <PreviewModal
           data={data}
+          plan={plan}
           onClose={() => setShowPreview(false)}
         />
       )}

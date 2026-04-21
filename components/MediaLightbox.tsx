@@ -9,6 +9,7 @@ export interface MediaLightboxItem {
   src: string;
   thumbnailSrc?: string | null;
   poster?: string | null;
+  mimeType?: string | null;
   alt?: string;
   title?: string;
   description?: string;
@@ -29,6 +30,7 @@ export default function MediaLightbox({
 }: MediaLightboxProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setCurrentIndex(initialIndex);
@@ -80,6 +82,9 @@ export default function MediaLightbox({
       }
     };
 
+    previouslyFocusedRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', handleKeyDown);
     dialogRef.current?.querySelector<HTMLElement>('[data-close]')?.focus();
@@ -87,12 +92,14 @@ export default function MediaLightbox({
     return () => {
       document.body.style.overflow = '';
       window.removeEventListener('keydown', handleKeyDown);
+      previouslyFocusedRef.current?.focus();
     };
   }, [goToNext, goToPrevious, onClose]);
 
   if (!items.length) return null;
 
   const currentItem = items[currentIndex];
+  const embedUrl = getVideoEmbedUrl(currentItem);
   const hasMeta =
     currentItem.title ||
     currentItem.description ||
@@ -129,16 +136,29 @@ export default function MediaLightbox({
       <div className="relative mx-auto max-h-[90vh] max-w-7xl px-20">
         <div className="overflow-hidden rounded-lg shadow-2xl">
           {currentItem.kind === 'video' ? (
-            <video
-              key={currentItem.id}
-              controls
-              autoPlay
-              preload="metadata"
-              className="max-h-[85vh] max-w-full bg-black object-contain"
-              poster={currentItem.poster || undefined}
-            >
-              <source src={currentItem.src} />
-            </video>
+            embedUrl ? (
+              <div className="aspect-video w-[min(92vw,1200px)] max-w-full bg-black">
+                <iframe
+                  key={currentItem.id}
+                  src={embedUrl}
+                  title={currentItem.title || 'Video viewer'}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  className="h-full w-full"
+                />
+              </div>
+            ) : (
+              <video
+                key={currentItem.id}
+                controls
+                autoPlay
+                preload="metadata"
+                className="max-h-[85vh] max-w-full bg-black object-contain"
+                poster={currentItem.poster || undefined}
+              >
+                <source src={currentItem.src} type={currentItem.mimeType || undefined} />
+              </video>
+            )
           ) : (
             <img
               src={currentItem.src}
@@ -217,4 +237,39 @@ export default function MediaLightbox({
       )}
     </div>
   );
+}
+
+function getVideoEmbedUrl(item: MediaLightboxItem): string | null {
+  if (item.kind !== 'video') {
+    return null;
+  }
+
+  try {
+    const url = new URL(item.src);
+    const hostname = url.hostname.replace(/^www\./, '');
+
+    if (hostname === 'youtu.be') {
+      const videoId = url.pathname.split('/').filter(Boolean)[0];
+      return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : null;
+    }
+
+    if (hostname === 'youtube.com' || hostname === 'm.youtube.com') {
+      if (url.pathname === '/watch') {
+        const videoId = url.searchParams.get('v');
+        return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : null;
+      }
+
+      const match = url.pathname.match(/^\/(?:embed|shorts)\/([^/?#]+)/);
+      return match?.[1] ? `https://www.youtube.com/embed/${match[1]}?autoplay=1` : null;
+    }
+
+    if (hostname === 'vimeo.com' || hostname === 'player.vimeo.com') {
+      const videoId = url.pathname.split('/').filter(Boolean).pop();
+      return videoId ? `https://player.vimeo.com/video/${videoId}?autoplay=1` : null;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
 }

@@ -35,7 +35,7 @@ export interface CompletionResult {
     message: string;
     canSeal: boolean;
     sealBlockReasons: string[];
-    emotionalState: EmotionalState;
+    emotionalState: EmotionalState | null;
     emotionalResult: EmotionalStateResult;
 }
 
@@ -43,8 +43,8 @@ export interface CompletionResult {
  * Calculate the exploration status of a memorial archive.
  * Now powered by the emotional state engine — richness over checkboxes.
  */
-export function calculateCompletion(data: MemorialData): CompletionResult {
-    const emotionalResult = calculateEmotionalState(data);
+export function calculateCompletion(data: MemorialData, plan: string = 'draft'): CompletionResult {
+    const emotionalResult = calculateEmotionalState(data, plan);
 
     const steps: StepCompletionInfo[] = [
         {
@@ -177,7 +177,17 @@ export function calculateCompletion(data: MemorialData): CompletionResult {
 
     // Map emotional state to legacy CompletionStatus
     let status: CompletionStatus;
-    if (emotionalResult.state === 'eternal') {
+    if (!emotionalResult.enabled) {
+        if (coreCompleted === coreTotal && enrichmentCompleted === enrichmentTotal) {
+            status = 'complete';
+        } else if (coreCompleted === coreTotal) {
+            status = 'complete_solo';
+        } else if (hasBasicInfo) {
+            status = 'in_progress';
+        } else {
+            status = 'minimal';
+        }
+    } else if (emotionalResult.state === 'eternal') {
         status = 'complete';
     } else if (emotionalResult.state === 'substantial') {
         status = 'complete_solo';
@@ -194,7 +204,7 @@ export function calculateCompletion(data: MemorialData): CompletionResult {
         enrichmentStepsCompleted: enrichmentCompleted,
         enrichmentStepsTotal: enrichmentTotal,
         steps,
-        message: emotionalResult.ambientMessage,
+        message: emotionalResult.enabled ? emotionalResult.ambientMessage : '',
         canSeal: emotionalResult.canSeal,
         sealBlockReasons: emotionalResult.sealBlockReasons,
         emotionalState: emotionalResult.state,

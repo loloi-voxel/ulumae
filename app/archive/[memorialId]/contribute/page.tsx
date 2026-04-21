@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, use, useEffect, useRef, useState } from 'react';
+import { Suspense, use, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertCircle,
@@ -48,6 +48,10 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
 
   const photoRef = useRef<HTMLInputElement>(null);
   const [supabase] = useState(() => createClient());
+  const revisionContribution = useMemo(
+    () => roleData?.myContributions.find((item) => item.id === reviseId) ?? null,
+    [reviseId, roleData?.myContributions]
+  );
 
   const resetContributionForm = () => {
     setTitle('');
@@ -71,12 +75,13 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
       return;
     }
 
-    const contribution = roleData.myContributions.find((item) => item.id === reviseId);
-    if (!contribution || contribution.status !== 'needs_changes') {
+    if (!revisionContribution || revisionContribution.status !== 'needs_changes') {
       setError('This contribution is no longer available for revision.');
       setExistingContributionLoaded(true);
       return;
     }
+
+    setExistingContributionLoaded(false);
 
     (async () => {
       try {
@@ -108,7 +113,7 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
         setExistingContributionLoaded(true);
       }
     })();
-  }, [reviseId, roleData, supabase]);
+  }, [reviseId, revisionContribution?.id, revisionContribution?.status, roleData?.currentUserId, supabase]);
 
   if (roleLoading || !roleData || !existingContributionLoaded) {
     return (

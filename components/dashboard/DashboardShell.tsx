@@ -184,19 +184,13 @@ function buildItems(options: {
 
 function SidebarContent({
     items,
-    plan,
-    email,
     onNavigate,
     contactSupportRef,
 }: {
     items: NavItem[];
-    plan: string;
-    email?: string;
     onNavigate?: () => void;
     contactSupportRef?: Ref<HTMLAnchorElement>;
 }) {
-    const showPlanCard = !isPersonalPlan(plan as any);
-
     return (
         <div className="flex h-full flex-col bg-white/92 backdrop-blur-sm">
             <div className="border-b border-warm-border/20 px-6 py-6">
@@ -212,16 +206,6 @@ function SidebarContent({
                     </div>
                 </Link>
             </div>
-
-            {showPlanCard && (
-                <div className="px-4 py-5">
-                    <div className="rounded-none border border-warm-border/28 bg-surface-mid/45 px-4 py-4">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Current Plan</p>
-                        <p className="mt-2 font-serif text-xl text-warm-dark">{planLabel(plan)}</p>
-                        {email && <p className="mt-1 truncate text-xs text-warm-muted">{email}</p>}
-                    </div>
-                </div>
-            )}
 
             <SidebarConnectedSpaces onNavigate={onNavigate} />
 
@@ -301,6 +285,7 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
     const desktopSidebarRef = useRef<HTMLElement | null>(null);
     const desktopSidebarPanelRef = useRef<HTMLDivElement | null>(null);
     const desktopContactSupportRef = useRef<HTMLAnchorElement | null>(null);
+    const footerRef = useRef<HTMLElement | null>(null);
     const mobileStickyTriggerRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -318,16 +303,19 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
     );
 
     useEffect(() => {
+        let frameId: number | null = null;
+
         const updateNavigationLayout = () => {
             const mobileTrigger = mobileStickyTriggerRef.current;
             if (mobileTrigger) {
                 setMobileTopSticky(mobileTrigger.getBoundingClientRect().top <= 0);
             }
 
-            const footer = document.getElementById('site-footer');
+            footerRef.current = document.getElementById('site-footer') as HTMLElement | null;
+            const footer = footerRef.current;
             const sidebarOuter = desktopSidebarRef.current;
             const sidebarPanel = desktopSidebarPanelRef.current;
-            const contactSupport = desktopContactSupportRef.current;
+            const contactSupport = desktopContactSupportRef.current ?? desktopSidebarPanelRef.current?.querySelector('nav a:last-of-type') ?? null;
 
             if (sidebarPanel) {
                 setDesktopNavHeight(sidebarPanel.offsetHeight);
@@ -338,8 +326,7 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                 window.innerWidth < 1024 ||
                 !footer ||
                 !sidebarOuter ||
-                !sidebarPanel ||
-                !contactSupport
+                !sidebarPanel
             ) {
                 setDesktopNavStyle({});
                 return;
@@ -350,7 +337,7 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
             const sidebarTop = sidebarRect.top + scrollY;
             const sidebarWidth = sidebarRect.width;
             const sidebarHeight = sidebarPanel.offsetHeight;
-            const triggerBottom = contactSupport.getBoundingClientRect().bottom + scrollY;
+            const triggerBottom = (contactSupport?.getBoundingClientRect().bottom ?? sidebarPanel.getBoundingClientRect().bottom) + scrollY;
             const footerTop = footer.getBoundingClientRect().top + scrollY;
             const maxFixedScroll = footerTop - sidebarHeight - 24;
 
@@ -378,13 +365,27 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
             });
         };
 
+        const scheduleNavigationLayout = () => {
+            if (frameId !== null) {
+                return;
+            }
+
+            frameId = window.requestAnimationFrame(() => {
+                frameId = null;
+                updateNavigationLayout();
+            });
+        };
+
         updateNavigationLayout();
-        window.addEventListener('scroll', updateNavigationLayout, { passive: true });
-        window.addEventListener('resize', updateNavigationLayout);
+        window.addEventListener('scroll', scheduleNavigationLayout, { passive: true });
+        window.addEventListener('resize', scheduleNavigationLayout);
 
         return () => {
-            window.removeEventListener('scroll', updateNavigationLayout);
-            window.removeEventListener('resize', updateNavigationLayout);
+            if (frameId !== null) {
+                window.cancelAnimationFrame(frameId);
+            }
+            window.removeEventListener('scroll', scheduleNavigationLayout);
+            window.removeEventListener('resize', scheduleNavigationLayout);
         };
     }, [desktopCollapsed, items.length, pathname, searchParams]);
 
@@ -444,8 +445,6 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                         ) : (
                             <SidebarContent
                                 items={items}
-                                plan={auth.plan}
-                                email={auth.user?.email || undefined}
                                 contactSupportRef={desktopContactSupportRef}
                             />
                         )}
@@ -504,8 +503,6 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                         </div>
                         <SidebarContent
                             items={items}
-                            plan={auth.plan}
-                            email={auth.user?.email || undefined}
                             onNavigate={() => setMobileOpen(false)}
                         />
                     </div>
