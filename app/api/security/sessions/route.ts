@@ -8,8 +8,74 @@ import {
 } from '@/lib/sessionDevices';
 import { SESSION_ACTIVITY_STALE_HOURS } from '@/lib/constants';
 import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { getSessionFingerprintFromRequest } from '@/lib/sessionFingerprint';
 
 type SessionActionType = 'session' | 'anchor' | 'scope';
+
+function groupTrackedSessions(
+  rows: Array<{
+    id: string;
+    session_id: string;
+    fingerprint: string | null;
+    device_label: string | null;
+    ip_address: string | null;
+    user_agent: string | null;
+    last_seen_at: string | null;
+    created_at: string | null;
+    revoked_at: string | null;
+  }>,
+  currentSessionId: string | null,
+  staleThreshold: number
+) {
+  const groups = new Map<string, typeof rows>();
+
+  for (const row of rows) {
+    const key = row.fingerprint || row.session_id || row.id;
+    const existing = groups.get(key) || [];
+    existing.push(row);
+    groups.set(key, existing);
+  }
+
+  return Array.from(groups.values()).map((group) => {
+    const representative = [...group].sort((left, right) => {
+      if (left.session_id === currentSessionId) return -1;
+      if (right.session_id === currentSessionId) return 1;
+
+      const leftSeen = new Date(left.last_seen_at || left.created_at || 0).getTime();
+      const rightSeen = new Date(right.last_seen_at || right.created_at || 0).getTime();
+      return rightSeen - leftSeen;
+    })[0];
+
+    const lastSeenAt =
+      [...group]
+        .map((row) => row.last_seen_at)
+        .filter(Boolean)
+        .sort((left, right) => new Date(right as string).getTime() - new Date(left as string).getTime())[0] ||
+      representative.last_seen_at;
+
+    const revokedAt =
+      group.every((row) => !!row.revoked_at)
+        ? [...group]
+            .map((row) => row.revoked_at)
+            .filter(Boolean)
+            .sort((left, right) => new Date(right as string).getTime() - new Date(left as string).getTime())[0] || null
+        : null;
+
+    return {
+      id: representative.id,
+      sessionId: representative.session_id,
+      fingerprint: representative.fingerprint,
+      deviceLabel: representative.device_label,
+      ipAddress: representative.ip_address,
+      userAgent: representative.user_agent,
+      lastSeenAt: lastSeenAt || null,
+      createdAt: representative.created_at,
+      revokedAt,
+      isCurrent: group.some((row) => row.session_id === currentSessionId),
+      isStale: !!lastSeenAt && new Date(lastSeenAt).getTime() < staleThreshold,
+    };
+  });
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,6 +98,7 @@ export async function GET(request: NextRequest) {
     const trackedSession = await trackUserSessionDevice(supabaseAdmin, {
       userId: user.id,
       sessionId,
+      fingerprint: getSessionFingerprintFromRequest(request),
       ipAddress: getRequestIpAddress(request),
       userAgent: request.headers.get('user-agent'),
       expiresAt: session?.expires_at
@@ -42,7 +109,7 @@ export async function GET(request: NextRequest) {
     const [sessionRowsResult, anchorRowsResult] = await Promise.all([
       supabaseAdmin
         .from('user_session_devices')
-        .select('id, session_id, device_label, ip_address, user_agent, last_seen_at, created_at, revoked_at')
+        .select('id, session_id, fingerprint, device_label, ip_address, user_agent, last_seen_at, created_at, revoked_at')
         .eq('user_id', user.id)
         .order('last_seen_at', { ascending: false }),
       supabaseAdmin
@@ -66,20 +133,11 @@ export async function GET(request: NextRequest) {
       {
         currentSessionId: sessionId,
         currentSession: trackedSession || sessionState,
-        sessions: (sessionRowsResult.data || []).map((tracked) => ({
-          id: tracked.id,
-          sessionId: tracked.session_id,
-          deviceLabel: tracked.device_label,
-          ipAddress: tracked.ip_address,
-          userAgent: tracked.user_agent,
-          lastSeenAt: tracked.last_seen_at,
-          createdAt: tracked.created_at,
-          revokedAt: tracked.revoked_at,
-          isCurrent: tracked.session_id === sessionId,
-          isStale:
-            !!tracked.last_seen_at &&
-            new Date(tracked.last_seen_at).getTime() < staleThreshold,
-        })),
+        sessions: groupTrackedSessions(
+          sessionRowsResult.data || [],
+          sessionId,
+          staleThreshold
+        ),
         devices: (anchorRowsResult.data || []).map((device) => ({
           id: device.id,
           memorialId: device.memorial_id,

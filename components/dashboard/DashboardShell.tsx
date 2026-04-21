@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type ReactNode, type Ref, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
@@ -81,6 +81,14 @@ function buildItems(options: {
                 href: `/dashboard/preservation/${userId}`,
                 icon: Shield,
                 active: pathname.startsWith(`/dashboard/preservation/${userId}`),
+            },
+            {
+                key: 'members',
+                label: 'Members',
+                description: 'Invite trusted witnesses and readers',
+                href: `/dashboard/personal/${userId}/members`,
+                icon: Users,
+                active: pathname.startsWith(`/dashboard/personal/${userId}/members`),
             },
             {
                 key: 'succession',
@@ -179,11 +187,13 @@ function SidebarContent({
     plan,
     email,
     onNavigate,
+    contactSupportRef,
 }: {
     items: NavItem[];
     plan: string;
     email?: string;
     onNavigate?: () => void;
+    contactSupportRef?: Ref<HTMLAnchorElement>;
 }) {
     return (
         <div className="flex h-full flex-col bg-white/92 backdrop-blur-sm">
@@ -261,6 +271,7 @@ function SidebarContent({
                         </Link>
                         <Link
                             href="/contact"
+                            ref={contactSupportRef}
                             onClick={onNavigate}
                             className="flex items-center gap-3 px-4 py-2 text-xs text-warm-dark/70 transition-colors hover:bg-surface-mid/40 rounded-none"
                         >
@@ -280,6 +291,13 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
     const searchParams = useSearchParams();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [desktopCollapsed, setDesktopCollapsed] = useState(false);
+    const [mobileTopSticky, setMobileTopSticky] = useState(false);
+    const [desktopNavStyle, setDesktopNavStyle] = useState<CSSProperties>({});
+    const [desktopNavHeight, setDesktopNavHeight] = useState<number | null>(null);
+    const desktopSidebarRef = useRef<HTMLElement | null>(null);
+    const desktopSidebarPanelRef = useRef<HTMLDivElement | null>(null);
+    const desktopContactSupportRef = useRef<HTMLAnchorElement | null>(null);
+    const mobileStickyTriggerRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
         setMobileOpen(false);
@@ -295,6 +313,77 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
         [pathname, userId, auth.plan]
     );
 
+    useEffect(() => {
+        const updateNavigationLayout = () => {
+            const mobileTrigger = mobileStickyTriggerRef.current;
+            if (mobileTrigger) {
+                setMobileTopSticky(mobileTrigger.getBoundingClientRect().top <= 0);
+            }
+
+            const footer = document.getElementById('site-footer');
+            const sidebarOuter = desktopSidebarRef.current;
+            const sidebarPanel = desktopSidebarPanelRef.current;
+            const contactSupport = desktopContactSupportRef.current;
+
+            if (sidebarPanel) {
+                setDesktopNavHeight(sidebarPanel.offsetHeight);
+            }
+
+            if (
+                typeof window === 'undefined' ||
+                window.innerWidth < 1024 ||
+                !footer ||
+                !sidebarOuter ||
+                !sidebarPanel ||
+                !contactSupport
+            ) {
+                setDesktopNavStyle({});
+                return;
+            }
+
+            const scrollY = window.scrollY;
+            const sidebarRect = sidebarOuter.getBoundingClientRect();
+            const sidebarTop = sidebarRect.top + scrollY;
+            const sidebarWidth = sidebarRect.width;
+            const sidebarHeight = sidebarPanel.offsetHeight;
+            const triggerBottom = contactSupport.getBoundingClientRect().bottom + scrollY;
+            const footerTop = footer.getBoundingClientRect().top + scrollY;
+            const maxFixedScroll = footerTop - sidebarHeight - 24;
+
+            if (scrollY < triggerBottom) {
+                setDesktopNavStyle({});
+                return;
+            }
+
+            if (scrollY >= maxFixedScroll) {
+                setDesktopNavStyle({
+                    position: 'absolute',
+                    top: Math.max(0, maxFixedScroll - sidebarTop),
+                    width: '100%',
+                    zIndex: 30,
+                });
+                return;
+            }
+
+            setDesktopNavStyle({
+                position: 'fixed',
+                top: 0,
+                left: sidebarRect.left,
+                width: sidebarWidth,
+                zIndex: 30,
+            });
+        };
+
+        updateNavigationLayout();
+        window.addEventListener('scroll', updateNavigationLayout, { passive: true });
+        window.addEventListener('resize', updateNavigationLayout);
+
+        return () => {
+            window.removeEventListener('scroll', updateNavigationLayout);
+            window.removeEventListener('resize', updateNavigationLayout);
+        };
+    }, [desktopCollapsed, items.length, pathname, searchParams]);
+
     return (
         <div className="experience-shell">
             <div
@@ -304,8 +393,12 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                         : 'lg:grid-cols-[280px_minmax(0,1fr)]'
                 }`}
             >
-                <aside className="hidden border-r border-warm-border/20 bg-white/70 backdrop-blur-sm lg:sticky lg:top-0 lg:block lg:h-screen">
-                    <div className="relative h-full">
+                <aside
+                    ref={desktopSidebarRef}
+                    style={desktopNavHeight ? { minHeight: desktopNavHeight } : undefined}
+                    className="hidden border-r border-warm-border/20 bg-white/70 backdrop-blur-sm lg:block"
+                >
+                    <div ref={desktopSidebarPanelRef} style={desktopNavStyle} className="relative h-full">
                         <button
                             onClick={() => setDesktopCollapsed((value) => !value)}
                             aria-label={desktopCollapsed ? 'Expand navigation' : 'Collapse navigation'}
@@ -345,13 +438,18 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                                 </nav>
                             </div>
                         ) : (
-                            <SidebarContent items={items} plan={auth.plan} email={auth.user?.email || undefined} />
+                            <SidebarContent
+                                items={items}
+                                plan={auth.plan}
+                                email={auth.user?.email || undefined}
+                                contactSupportRef={desktopContactSupportRef}
+                            />
                         )}
                     </div>
                 </aside>
 
                 <div className="min-w-0">
-                    <div className="sticky top-0 z-40 border-b border-warm-border/20 bg-white/80 backdrop-blur-sm lg:hidden">
+                    <div className={`${mobileTopSticky ? 'sticky top-0' : 'relative'} z-40 border-b border-warm-border/20 bg-white/80 backdrop-blur-sm lg:hidden`}>
                         <div className="flex items-center justify-between px-4 py-3">
                             <button
                                 onClick={() => setMobileOpen(true)}
@@ -371,6 +469,7 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
                             </div>
                         </div>
                     </div>
+                    <div ref={mobileStickyTriggerRef} className="lg:hidden" />
 
                     <div className="sticky top-0 z-40 hidden border-b border-warm-border/20 bg-white/78 backdrop-blur-sm lg:block">
                         <div className="flex items-center justify-end px-8 py-3">

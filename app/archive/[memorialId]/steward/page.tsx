@@ -65,7 +65,7 @@ export default function StewardPage({
     const { memorialId } = use(params);
     const router = useRouter();
     const searchParams = useSearchParams();
-    const supabase = createClient();
+    const [supabase] = useState(() => createClient());
 
     const [contributions, setContributions] = useState<PendingContribution[]>([]);
     const [accessRequests, setAccessRequests] = useState<AccessRequestRecord[]>([]);

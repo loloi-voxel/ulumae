@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedClient } from '@/utils/supabase/api';
 import { getRequestIpAddress, trackUserSessionDevice } from '@/lib/sessionDevices';
 import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { getSessionFingerprintFromRequest } from '@/lib/sessionFingerprint';
 
 export async function POST(request: NextRequest) {
     try {
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
         const trackedSession = await trackUserSessionDevice(supabaseAdmin, {
             userId: user.id,
             sessionId,
+            fingerprint: getSessionFingerprintFromRequest(request),
             ipAddress: getRequestIpAddress(request),
             userAgent: request.headers.get('user-agent'),
             expiresAt: session?.expires_at

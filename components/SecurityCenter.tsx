@@ -13,6 +13,11 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
+import PasswordInput from '@/components/ui/PasswordInput';
+import {
+    getOrCreateSessionFingerprint,
+    SESSION_FINGERPRINT_HEADER,
+} from '@/lib/sessionFingerprint';
 
 interface SecurityCenterProps {
     userId: string;
@@ -30,6 +35,7 @@ interface SessionSummary {
 interface TrackedSession {
     id: string;
     sessionId: string | null;
+    fingerprint?: string | null;
     deviceLabel: string | null;
     ipAddress: string | null;
     userAgent: string | null;
@@ -112,6 +118,7 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
         setError(null);
 
         try {
+            const fingerprint = getOrCreateSessionFingerprint();
             const [
                 { data: userData, error: userError },
                 twoFactorResponse,
@@ -119,7 +126,12 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
             ] = await Promise.all([
                 supabase.auth.getUser(),
                 fetch('/api/security/two-factor/state', { cache: 'no-store' }),
-                fetch('/api/security/sessions', { cache: 'no-store' }),
+                fetch('/api/security/sessions', {
+                    cache: 'no-store',
+                    headers: fingerprint
+                        ? { [SESSION_FINGERPRINT_HEADER]: fingerprint }
+                        : undefined,
+                }),
             ]);
 
             if (userError) throw userError;
@@ -523,18 +535,16 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
                                 Password
                             </div>
                             <div className="space-y-3">
-                                <input
+                                <PasswordInput
                                     value={passwordInput}
                                     onChange={(event) => setPasswordInput(event.target.value)}
-                                    type="password"
-                                    className="w-full rounded-xl border border-warm-border/30 bg-surface-low/40 px-4 py-3 text-sm text-warm-dark focus:outline-none focus:ring-2 focus:ring-olive/15"
+                                    className="w-full rounded-xl border border-warm-border/30 bg-surface-low/40 py-3 text-sm text-warm-dark focus:outline-none focus:ring-2 focus:ring-olive/15"
                                     placeholder="New password"
                                 />
-                                <input
+                                <PasswordInput
                                     value={passwordConfirm}
                                     onChange={(event) => setPasswordConfirm(event.target.value)}
-                                    type="password"
-                                    className="w-full rounded-xl border border-warm-border/30 bg-surface-low/40 px-4 py-3 text-sm text-warm-dark focus:outline-none focus:ring-2 focus:ring-olive/15"
+                                    className="w-full rounded-xl border border-warm-border/30 bg-surface-low/40 py-3 text-sm text-warm-dark focus:outline-none focus:ring-2 focus:ring-olive/15"
                                     placeholder="Confirm new password"
                                 />
                                 <button

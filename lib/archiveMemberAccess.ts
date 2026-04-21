@@ -43,10 +43,6 @@ export async function updateArchiveMemberRole(
     throw new Error('Co-Guardian role is only available for Family plan archives');
   }
 
-  if (context.plan === 'personal') {
-    throw new Error('Personal archives cannot have members. Upgrade to Family plan.');
-  }
-
   const { data: currentRoleRow } = await admin
     .from('user_memorial_roles')
     .select('role')

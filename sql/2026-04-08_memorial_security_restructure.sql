@@ -41,6 +41,7 @@ create table if not exists public.user_session_devices (
     id uuid primary key default gen_random_uuid(),
     user_id uuid not null references auth.users(id) on delete cascade,
     session_id text not null,
+    fingerprint text,
     device_label text not null default 'Unknown device',
     ip_address text,
     user_agent text,
@@ -52,6 +53,9 @@ create table if not exists public.user_session_devices (
 
 create index if not exists user_session_devices_user_id_last_seen_idx
     on public.user_session_devices (user_id, last_seen_at desc);
+
+create index if not exists user_session_devices_user_id_fingerprint_idx
+    on public.user_session_devices (user_id, fingerprint, last_seen_at desc);
 
 alter table public.user_session_devices enable row level security;
 

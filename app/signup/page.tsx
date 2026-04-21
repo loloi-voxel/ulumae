@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client';
 import { ArrowLeft, Mail, Lock, Loader2, Check } from 'lucide-react';
 import Link from 'next/link';
 import { ExperiencePage, ExperienceHero, ExperiencePanel } from '@/components/ui/experience';
+import PasswordInput from '@/components/ui/PasswordInput';
 
 function SignupForm() {
   const router = useRouter();
@@ -148,35 +149,29 @@ function SignupForm() {
               <label className="mb-2 block text-xs font-medium uppercase tracking-[0.22em] text-warm-outline">
                 Password
               </label>
-              <div className="relative">
-                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-warm-border" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                  placeholder="At least 6 characters"
-                  className="experience-input w-full pl-11 pr-4"
-                />
-              </div>
+              <PasswordInput
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                placeholder="At least 6 characters"
+                className="experience-input w-full"
+                leftIcon={<Lock size={16} />}
+              />
             </div>
 
             <div>
               <label className="mb-2 block text-xs font-medium uppercase tracking-[0.22em] text-warm-outline">
                 Confirm Password
               </label>
-              <div className="relative">
-                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-warm-border" />
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  placeholder="Confirm your password"
-                  className="experience-input w-full pl-11 pr-4"
-                />
-              </div>
+              <PasswordInput
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                placeholder="Confirm your password"
+                className="experience-input w-full"
+                leftIcon={<Lock size={16} />}
+              />
             </div>
 
             <button

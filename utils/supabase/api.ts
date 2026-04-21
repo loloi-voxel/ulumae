@@ -71,6 +71,7 @@ export async function createAuthenticatedClient() {
 
   let sessionState = {
     sessionId,
+    fingerprint: null as string | null,
     exists: Boolean(sessionId),
     revoked: false,
     revokedAt: null as string | null,

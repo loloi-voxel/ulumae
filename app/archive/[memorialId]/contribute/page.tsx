@@ -47,7 +47,19 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
   } | null>(null);
 
   const photoRef = useRef<HTMLInputElement>(null);
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
+
+  const resetContributionForm = () => {
+    setTitle('');
+    setContent('');
+    setAuthorName('');
+    setRelationship('');
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    setPhotoCaption('');
+    setPhotoYear('');
+    setError(null);
+  };
 
   useEffect(() => {
     if (!reviseId) {
@@ -249,12 +261,11 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
             <button
               onClick={() => {
                 setSubmitted(false);
-                setTitle('');
-                setContent('');
-                setPhotoFile(null);
-                setPhotoPreview(null);
-                setPhotoCaption('');
-                setPhotoYear('');
+                setRevisionContext(null);
+                resetContributionForm();
+                if (isRevision) {
+                  router.replace(`/archive/${memorialId}/contribute${type === 'photo' ? '?type=photo' : ''}`);
+                }
               }}
               className="flex-1 py-3 border border-warm-border/40 rounded-xl text-sm text-warm-dark/60 hover:bg-warm-border/10 transition-all font-sans"
             >

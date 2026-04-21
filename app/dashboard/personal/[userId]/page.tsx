@@ -15,6 +15,10 @@ import PreservationStatus from '@/components/PreservationStatus';
 import DashboardShell from '@/components/dashboard/DashboardShell';
 import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
+import {
+    getOrCreateSessionFingerprint,
+    SESSION_FINGERPRINT_HEADER,
+} from '@/lib/sessionFingerprint';
 
 type PendingConfirm =
     | { kind: 'soft-delete'; id: string }
@@ -96,9 +100,12 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
     }, [auth.loading, auth.authenticated, auth.user, auth.plan, userId, router, planVerified]);
 
     useEffect(() => {
+        const fingerprint = getOrCreateSessionFingerprint();
         fetch('/api/user/heartbeat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: fingerprint
+                ? { 'Content-Type': 'application/json', [SESSION_FINGERPRINT_HEADER]: fingerprint }
+                : { 'Content-Type': 'application/json' },
         });
         if (searchParams.get('checkin') === 'true') {
             setShowCheckinSuccess(true);

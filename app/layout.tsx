@@ -47,7 +47,7 @@ export default function RootLayout({
 
 function Footer() {
   return (
-    <footer className="border-t border-warm-border/30 bg-surface-low">
+    <footer id="site-footer" className="border-t border-warm-border/30 bg-surface-low">
       <div className="mx-auto max-w-6xl px-4 py-10 md:px-6 md:py-12">
         <div className="grid gap-8 md:grid-cols-3">
           <div className="space-y-2">

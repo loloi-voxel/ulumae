@@ -21,16 +21,34 @@ interface MemberRecord {
 
 interface RoleManagementTableProps {
     memorialId: string;
-    isOwner?: boolean; // Deprecated — now derived from API. Kept for backwards compat.
+    isOwner?: boolean;
     planType: 'personal' | 'family';
-    inviteHref?: string; // Optional: if provided, show "Invite New" button
+    inviteHref?: string;
+    allowedRoles?: WitnessRole[];
+    title?: string;
+    emptyStateTitle?: string;
+    emptyStateDescription?: string;
 }
 
-export default function RoleManagementTable({ memorialId, planType, inviteHref }: RoleManagementTableProps) {
+export default function RoleManagementTable({
+    memorialId,
+    planType,
+    inviteHref,
+    allowedRoles,
+    title,
+    emptyStateTitle = 'No members yet',
+    emptyStateDescription = 'Invited people and accepted members will appear here.',
+}: RoleManagementTableProps) {
     const [members, setMembers] = useState<MemberRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [isOwner, setIsOwner] = useState(false);
-    const supabase = createClient();
+    const [supabase] = useState(() => createClient());
+    const visibleMembers = allowedRoles?.length
+        ? members.filter((member) => allowedRoles.includes(member.role))
+        : members;
+    const editableRoles = (allowedRoles?.length ? allowedRoles : getAssignableRoles(planType)).filter(
+        (role, index, array) => array.indexOf(role) === index
+    );
 
     const fetchMembers = useCallback(async () => {
         try {
@@ -41,7 +59,7 @@ export default function RoleManagementTable({ memorialId, planType, inviteHref }
             setIsOwner(data.callerRole === 'owner');
         } catch (err: any) {
             console.error(err);
-            toast.error("Could not load member list");
+            toast.error('Could not load member list');
         } finally {
             setLoading(false);
         }
@@ -50,30 +68,38 @@ export default function RoleManagementTable({ memorialId, planType, inviteHref }
     useEffect(() => {
         fetchMembers();
 
-        // Subscribe to REALTIME changes for this memorial's roles
         const channel = supabase
             .channel(`members-sync-${memorialId}`)
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'user_memorial_roles',
-                filter: `memorial_id=eq.${memorialId}`
-            }, () => fetchMembers())
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'witness_invitations',
-                filter: `memorial_id=eq.${memorialId}`
-            }, () => fetchMembers())
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'user_memorial_roles',
+                    filter: `memorial_id=eq.${memorialId}`,
+                },
+                () => fetchMembers()
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'witness_invitations',
+                    filter: `memorial_id=eq.${memorialId}`,
+                },
+                () => fetchMembers()
+            )
             .subscribe();
 
-        return () => { supabase.removeChannel(channel); };
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [memorialId, fetchMembers, supabase]);
 
     const handleRoleChange = async (targetUserId: string, newRole: WitnessRole, email: string) => {
-        // Optimistic Update
         const previousMembers = [...members];
-        setMembers(prev => prev.map(m => m.userId === targetUserId ? { ...m, role: newRole } : m));
+        setMembers((prev) => prev.map((member) => (member.userId === targetUserId ? { ...member, role: newRole } : member)));
 
         try {
             const res = await fetch(`/api/memorials/${memorialId}/members/${targetUserId}`, {
@@ -84,25 +110,25 @@ export default function RoleManagementTable({ memorialId, planType, inviteHref }
 
             if (!res.ok) throw new Error('Failed to update role');
             toast.success(`${email} is now a ${newRole}`);
-        } catch (err) {
-            setMembers(previousMembers); // Revert on failure
-            toast.error("Role update failed");
+        } catch {
+            setMembers(previousMembers);
+            toast.error('Role update failed');
         }
     };
 
     const handleRemoveMember = async (targetUserId: string, email: string) => {
         if (!window.confirm(`Are you sure you want to revoke access for ${email}?`)) return;
 
-        setMembers(prev => prev.filter(m => m.userId !== targetUserId));
+        setMembers((prev) => prev.filter((member) => member.userId !== targetUserId));
         try {
             const res = await fetch(`/api/memorials/${memorialId}/members/${targetUserId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
             });
             if (!res.ok) throw new Error('Failed to remove');
             toast.success(`${email} has been removed`);
-        } catch (err) {
-            fetchMembers(); // Revert
-            toast.error("Removal failed");
+        } catch {
+            fetchMembers();
+            toast.error('Removal failed');
         }
     };
 
@@ -116,14 +142,14 @@ export default function RoleManagementTable({ memorialId, planType, inviteHref }
             if (!res.ok) throw new Error();
             toast.success(`Invitation re-sent to ${email}`);
         } catch {
-            toast.error("Failed to re-send invitation");
+            toast.error('Failed to re-send invitation');
         }
     };
 
     const handleCancelInvite = async (invitationId: string, email: string) => {
         if (!window.confirm(`Cancel the pending invitation for ${email}?`)) return;
 
-        setMembers(prev => prev.filter((member) => member.invitationId !== invitationId));
+        setMembers((prev) => prev.filter((member) => member.invitationId !== invitationId));
         try {
             const res = await fetch(`/api/memorials/${memorialId}/invitations/${invitationId}`, {
                 method: 'DELETE',
@@ -137,11 +163,13 @@ export default function RoleManagementTable({ memorialId, planType, inviteHref }
         }
     };
 
-    if (loading) return (
-        <div className="glass-card p-8 flex justify-center">
-            <Loader2 className="animate-spin text-warm-dark/20" />
-        </div>
-    );
+    if (loading) {
+        return (
+            <div className="glass-card p-8 flex justify-center">
+                <Loader2 className="animate-spin text-warm-dark/20" />
+            </div>
+        );
+    }
 
     return (
         <div className="glass-card overflow-hidden">
@@ -149,87 +177,106 @@ export default function RoleManagementTable({ memorialId, planType, inviteHref }
                 <div className="flex items-center gap-3">
                     <Users size={20} className="text-warm-dark/40" />
                     <h3 className="font-serif text-xl text-warm-dark italic">
-                        {planType === 'family' ? 'Family & Contributors' : 'Archive Witnesses'}
+                        {title || (planType === 'family' ? 'Family & Contributors' : 'Archive Witnesses')}
                     </h3>
                 </div>
+                {inviteHref ? (
+                    <a href={inviteHref} className="text-xs text-warm-outline hover:text-warm-dark">
+                        Invite new
+                    </a>
+                ) : null}
             </div>
 
-            <div className="divide-y divide-warm-border/10">
-                {members.map((member) => {
-                    const isOwnerRow = member.role === 'owner';
-                    const isPending = member.status === 'pending';
-                    const canEdit = isOwner && !isOwnerRow && !isPending;
+            {visibleMembers.length === 0 ? (
+                <div className="px-6 py-10 text-center">
+                    <p className="font-serif text-lg text-warm-dark">{emptyStateTitle}</p>
+                    <p className="mt-2 text-sm text-warm-muted">{emptyStateDescription}</p>
+                </div>
+            ) : (
+                <div className="divide-y divide-warm-border/10">
+                    {visibleMembers.map((member) => {
+                        const isOwnerRow = member.role === 'owner';
+                        const isPending = member.status === 'pending';
+                        const canEdit = isOwner && !isOwnerRow && !isPending;
 
-                    return (
-                        <div key={member.userId || member.email} className="p-4 flex items-center justify-between hover:bg-surface-low/50 transition-colors">
-                            <div className="flex items-center gap-4 min-w-0 flex-1">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border-2 ${isPending ? 'border-dashed border-warm-border/40 bg-transparent' : 'border-warm-border/20 bg-white'}`}>
-                                    {isPending ? <Mail size={16} className="text-warm-dark/20" /> : <Users size={18} className="text-warm-dark/40" />}
-                                </div>
-                                <div className="min-w-0">
-                                    <p className={`text-sm font-medium text-warm-dark truncate ${isPending ? 'italic opacity-60' : ''}`}>
-                                        {member.email}
-                                    </p>
-                                    <p className="text-[10px] text-warm-dark/30 uppercase tracking-tighter font-bold">
-                                        {isPending ? 'Pending Invitation' : `Joined ${new Date(member.joinedAt!).toLocaleDateString()}`}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 ml-4">
-                                {isPending ? (
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => handleReinvite(member.email, member.role)}
-                                            className="p-2 text-warm-dark/40 hover:text-olive transition-colors"
-                                            title="Re-send invitation"
-                                        >
-                                            <RefreshCw size={14} />
-                                        </button>
-                                        {isOwner && member.invitationId && (
-                                            <button
-                                                onClick={() => handleCancelInvite(member.invitationId!, member.email)}
-                                                className="p-2 text-warm-dark/20 hover:text-red-500 transition-colors"
-                                                title="Cancel invitation"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        )}
-                                        <RoleBadge role={member.role} />
+                        return (
+                            <div
+                                key={member.userId || member.email}
+                                className="p-4 flex items-center justify-between hover:bg-surface-low/50 transition-colors"
+                            >
+                                <div className="flex items-center gap-4 min-w-0 flex-1">
+                                    <div
+                                        className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border-2 ${
+                                            isPending ? 'border-dashed border-warm-border/40 bg-transparent' : 'border-warm-border/20 bg-white'
+                                        }`}
+                                    >
+                                        {isPending ? <Mail size={16} className="text-warm-dark/20" /> : <Users size={18} className="text-warm-dark/40" />}
                                     </div>
-                                ) : (
-                                    <>
-                                        {canEdit ? (
-                                            <RoleDropdown
-                                                currentRole={member.role}
-                                                availableRoles={getAssignableRoles(planType)}
-                                                onChange={(newRole) => handleRoleChange(member.userId!, newRole, member.email)}
-                                            />
-                                        ) : (
-                                            <RoleBadge role={member.role} />
-                                        )}
+                                    <div className="min-w-0">
+                                        <p className={`text-sm font-medium text-warm-dark truncate ${isPending ? 'italic opacity-60' : ''}`}>
+                                            {member.email}
+                                        </p>
+                                        <p className="text-[10px] text-warm-dark/30 uppercase tracking-tighter font-bold">
+                                            {isPending ? 'Pending Invitation' : `Joined ${new Date(member.joinedAt!).toLocaleDateString()}`}
+                                        </p>
+                                    </div>
+                                </div>
 
-                                        {canEdit && (
+                                <div className="flex items-center gap-3 ml-4">
+                                    {isPending ? (
+                                        <div className="flex items-center gap-2">
                                             <button
-                                                onClick={() => handleRemoveMember(member.userId!, member.email)}
-                                                className="p-2 text-warm-dark/20 hover:text-red-500 transition-colors"
-                                                title="Revoke access"
+                                                onClick={() => handleReinvite(member.email, member.role)}
+                                                className="p-2 text-warm-dark/40 hover:text-olive transition-colors"
+                                                title="Re-send invitation"
                                             >
-                                                <Trash2 size={14} />
+                                                <RefreshCw size={14} />
                                             </button>
-                                        )}
-                                        {isOwnerRow && (
-                                            <span title="Primary Owner">
-                                                <ShieldAlert size={14} className="text-warm-dark/10 mr-2" />
-                                            </span>
-                                        )}
-                                    </>
-                                )}
+                                            {isOwner && member.invitationId ? (
+                                                <button
+                                                    onClick={() => handleCancelInvite(member.invitationId!, member.email)}
+                                                    className="p-2 text-warm-dark/20 hover:text-red-500 transition-colors"
+                                                    title="Cancel invitation"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            ) : null}
+                                            <RoleBadge role={member.role} />
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {canEdit ? (
+                                                <RoleDropdown
+                                                    currentRole={member.role}
+                                                    availableRoles={editableRoles}
+                                                    onChange={(newRole) => handleRoleChange(member.userId!, newRole, member.email)}
+                                                />
+                                            ) : (
+                                                <RoleBadge role={member.role} />
+                                            )}
+
+                                            {canEdit ? (
+                                                <button
+                                                    onClick={() => handleRemoveMember(member.userId!, member.email)}
+                                                    className="p-2 text-warm-dark/20 hover:text-red-500 transition-colors"
+                                                    title="Revoke access"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            ) : null}
+                                            {isOwnerRow ? (
+                                                <span title="Primary Owner">
+                                                    <ShieldAlert size={14} className="text-warm-dark/10 mr-2" />
+                                                </span>
+                                            ) : null}
+                                        </>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    );
-                })}
-            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 }

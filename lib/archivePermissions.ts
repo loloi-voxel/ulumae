@@ -93,17 +93,25 @@ export const ARCHIVE_ROLE_LABELS: Record<WitnessRole, string> = {
 const PERSONAL_ROLE_PERMISSIONS: Record<WitnessRole, readonly ArchiveAction[]> = {
   owner: [
     'view_archive',
+    'view_members',
     'edit_archive',
+    'invite_member',
+    'manage_members',
+    'review_contributions',
     'export_archive',
     'delete_archive',
     'view_activity',
     'manage_succession',
     'manage_devices',
   ],
-  // Personal plan: No collaboration roles allowed
   co_guardian: [], // NEVER assign this role on personal plans
-  witness: [],
-  reader: [],
+  witness: [
+    'view_archive',
+    'contribute_content',
+  ],
+  reader: [
+    'view_archive',
+  ],
 };
 
 const FAMILY_ROLE_PERMISSIONS: Record<WitnessRole, readonly ArchiveAction[]> = {
@@ -158,7 +166,7 @@ const PLAN_PERMISSIONS: Record<
 };
 
 const ASSIGNABLE_ROLES: Record<ArchivePlan, WitnessRole[]> = {
-  personal: [],
+  personal: ['witness', 'reader'],
   family: ['co_guardian', 'witness', 'reader'],
 };
 
@@ -265,10 +273,6 @@ async function resolveFromMemorial(
       role: 'owner',
       isOwner: true,
     };
-  }
-
-  if (plan === 'personal') {
-    return null;
   }
 
   const { data: roleRow, error: roleError } = await supabaseAdmin

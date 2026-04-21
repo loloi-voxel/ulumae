@@ -1,7 +1,7 @@
 // components/role/InviteComposer.tsx
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Send, ChevronDown, Loader2, Check, Info } from 'lucide-react';
 import { WitnessRole } from '@/types/roles';
 import { ROLE_CONFIG, getAssignableRoles } from '@/lib/roles';
@@ -11,16 +11,30 @@ interface InviteComposerProps {
     memorialId: string;
     planType: 'personal' | 'family';
     onSuccess?: (email: string, role: WitnessRole) => void;
+    allowedRoles?: WitnessRole[];
 }
 
-export default function InviteComposer({ memorialId, planType, onSuccess }: InviteComposerProps) {
+export default function InviteComposer({
+    memorialId,
+    planType,
+    onSuccess,
+    allowedRoles,
+}: InviteComposerProps) {
     const [email, setEmail] = useState('');
     const [role, setRole] = useState<WitnessRole>('witness');
     const [message, setMessage] = useState('');
     const [loading, setLoading] = useState(false);
     const [showRoleDetails, setShowRoleDetails] = useState(false);
 
-    const availableRoles = getAssignableRoles(planType);
+    const availableRoles = (allowedRoles?.length ? allowedRoles : getAssignableRoles(planType)).filter((availableRole, index, array) =>
+        array.indexOf(availableRole) === index
+    );
+
+    useEffect(() => {
+        if (!availableRoles.includes(role) && availableRoles[0]) {
+            setRole(availableRoles[0]);
+        }
+    }, [availableRoles, role]);
 
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();

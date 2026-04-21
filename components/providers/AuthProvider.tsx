@@ -3,6 +3,10 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
+import {
+    getOrCreateSessionFingerprint,
+    SESSION_FINGERPRINT_HEADER,
+} from '@/lib/sessionFingerprint';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export interface UserArchive {
@@ -89,9 +93,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         isFetchingRef.current = true;
         try {
+            const fingerprint = getOrCreateSessionFingerprint();
             const res = await fetch('/api/user/state', {
                 cache: 'no-store',
-                headers: { 'Cache-Control': 'no-cache' },
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    ...(fingerprint
+                        ? { [SESSION_FINGERPRINT_HEADER]: fingerprint }
+                        : {}),
+                },
             });
             const data = await res.json();
 

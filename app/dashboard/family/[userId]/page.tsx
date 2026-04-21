@@ -3,9 +3,8 @@
 'use client';
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, Edit, Trash2, User, Network, X, Search, Filter, RefreshCcw, AlertTriangle, Archive, Wifi, BellDot } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, User, Search, Filter, RefreshCcw, AlertTriangle, Archive, Wifi, BellDot } from 'lucide-react';
 import { supabase, Memorial } from '@/lib/supabase';
-import FamilyLinker from '@/components/FamilyLinker';
 import AnchorPanel from '@/components/AnchorPanel';
 import ManageWitnessesModal from '@/app/dashboard/[userId]/_components/ManageWitnessesModal';
 import DashboardShell from '@/components/dashboard/DashboardShell';
@@ -35,7 +34,6 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
         | { kind: 'permanent-delete'; id: string; stage: 1 | 2 }
         | null
     >(null);
-    const [managingId, setManagingId] = useState<string | null>(null);
     const [memberManagerMemorial, setMemberManagerMemorial] = useState<Memorial | null>(null);
     const [showWelcome, setShowWelcome] = useState(false);
 
@@ -430,14 +428,6 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                             >
                                                 <User size={14} />
                                             </button>
-                                            <button
-                                                onClick={() => setManagingId(memorial.id)}
-                                                aria-label="Manage family connections"
-                                                className="py-2 px-3 bg-surface-mid rounded-none text-warm-muted hover:bg-surface-high transition-colors"
-                                                title="Manage family connections"
-                                            >
-                                                <Network size={14} />
-                                            </button>
                                             {(memorial as any).preservation_state !== 'preserved' && (
                                                 <button
                                                     onClick={() => softDeleteMemorial(memorial.id)}
@@ -534,31 +524,6 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                     </div>
                 )}
             </div>
-
-            {/* CONNECTION MANAGER MODAL */}
-            {managingId && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 glass-modal-overlay">
-                        <div className="glass-modal w-full max-w-lg overflow-hidden shadow-2xl animate-fadeIn rounded-none">
-                        <div className="p-4 border-b border-warm-border/30 flex justify-between items-center bg-surface-mid/50">
-                            <h3 className="font-serif text-lg text-warm-dark">Manage Family Connections</h3>
-                            <button
-                                onClick={() => setManagingId(null)}
-                                aria-label="Close"
-                                className="p-2 hover:bg-surface-high transition-colors rounded-none"
-                            >
-                                <X size={20} className="text-warm-muted" />
-                            </button>
-                        </div>
-                        <div className="p-6">
-                            <FamilyLinker
-                                currentMemorialId={managingId}
-                                userId={userId}
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {memberManagerMemorial && (
                 <ManageWitnessesModal
                     isOpen={true}

@@ -2,6 +2,7 @@ import type { User } from '@supabase/supabase-js';
 import { WitnessRole } from '@/types/roles';
 import { getSupabaseAdmin } from '@/lib/apiAuth';
 import { INVITATION_EXPIRATION_DAYS } from '@/lib/constants';
+import { syncCoGuardianAcrossOwnerFamily } from '@/lib/familyWorkspace';
 
 export interface InviteMemorialPreview {
     id: string;
@@ -541,6 +542,10 @@ export async function acceptInvitationForUser(
                     ? 'This invitation has already been used.'
                     : 'Could not join this archive.',
         };
+    }
+
+    if (invitation.plan === 'family' && invitation.role === 'co_guardian') {
+        await syncCoGuardianAcrossOwnerFamily(admin, memorial.user_id, user.id);
     }
 
     return {
