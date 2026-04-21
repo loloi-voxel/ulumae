@@ -25,7 +25,8 @@ export async function DELETE(
         const permission = await resolveArchivePermissionContext(
             supabaseAdmin,
             memorialId,
-            user.id
+            user.id,
+            { includeDeleted: true }
         );
 
         if (!permission.memorialExists || !permission.context) {

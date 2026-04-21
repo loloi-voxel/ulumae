@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, use, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, use, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
     Shield, Check, X, MessageCircle,
@@ -56,6 +56,7 @@ type ReviewDecision = 'approved' | 'rejected' | 'needs_changes';
 type AccessDecision = 'approved' | 'denied';
 type CreationDecision = 'approved' | 'rejected';
 type StewardTab = 'contributions' | 'requests' | 'creation';
+const STEWARD_REFRESH_INTERVAL_MS = 30_000;
 
 export default function StewardPage({
     params
@@ -101,8 +102,10 @@ export default function StewardPage({
         }
     }, [searchParams]);
 
-    const loadPending = async () => {
-        setLoading(true);
+    const loadPending = useCallback(async (silent = false) => {
+        if (!silent) {
+            setLoading(true);
+        }
         const { data, error: loadError } = await supabase
             .from('memorial_contributions')
             .select('*')
@@ -113,10 +116,12 @@ export default function StewardPage({
         if (loadError) setError(loadError.message);
         else setContributions(data || []);
         setLoading(false);
-    };
+    }, [memorialId, supabase]);
 
-    const loadAccessRequests = async () => {
-        setRequestsLoading(true);
+    const loadAccessRequests = useCallback(async (silent = false) => {
+        if (!silent) {
+            setRequestsLoading(true);
+        }
         try {
             const res = await fetch(`/api/memorials/${memorialId}/access-request`);
             const data = await res.json();
@@ -127,16 +132,18 @@ export default function StewardPage({
         } finally {
             setRequestsLoading(false);
         }
-    };
+    }, [memorialId]);
 
-    const loadCreationRequests = async () => {
+    const loadCreationRequests = useCallback(async (silent = false) => {
         if (roleData?.userRole !== 'owner') {
             setCreationRequests([]);
             setCreationLoading(false);
             return;
         }
 
-        setCreationLoading(true);
+        if (!silent) {
+            setCreationLoading(true);
+        }
         try {
             const res = await fetch(`/api/archive/${memorialId}/creation-requests`);
             const data = await res.json();
@@ -147,66 +154,30 @@ export default function StewardPage({
         } finally {
             setCreationLoading(false);
         }
-    };
+    }, [memorialId, roleData?.userRole]);
+
+    const refreshQueues = useCallback(async (silent = false) => {
+        if (!silent) {
+            setError(null);
+        }
+        await Promise.all([
+            loadPending(silent),
+            loadAccessRequests(silent),
+            loadCreationRequests(silent),
+        ]);
+    }, [loadAccessRequests, loadCreationRequests, loadPending]);
 
     useEffect(() => {
-        loadPending();
-        loadAccessRequests();
-        loadCreationRequests();
+        void refreshQueues();
 
-        const contributionsChannel = supabase
-            .channel(`steward-contributions-${memorialId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'memorial_contributions',
-                    filter: `memorial_id=eq.${memorialId}`,
-                },
-                loadPending
-            )
-            .subscribe();
-
-        const requestsChannel = supabase
-            .channel(`steward-requests-${memorialId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'memorial_access_requests',
-                    filter: `memorial_id=eq.${memorialId}`,
-                },
-                loadAccessRequests
-            )
-            .subscribe();
-
-        let creationChannel: any = null;
-        if (roleData?.userRole === 'owner' && roleData.currentUserId) {
-            creationChannel = supabase
-                .channel(`steward-creation-${memorialId}`)
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'memorial_creation_requests',
-                        filter: `owner_user_id=eq.${roleData.currentUserId}`,
-                    },
-                    loadCreationRequests
-                )
-                .subscribe();
-        }
+        const interval = window.setInterval(() => {
+            void refreshQueues(true);
+        }, STEWARD_REFRESH_INTERVAL_MS);
 
         return () => {
-            supabase.removeChannel(contributionsChannel);
-            supabase.removeChannel(requestsChannel);
-            if (creationChannel) {
-                supabase.removeChannel(creationChannel);
-            }
+            window.clearInterval(interval);
         };
-    }, [memorialId, roleData?.currentUserId, roleData?.userRole, supabase]);
+    }, [refreshQueues]);
 
     const handleDecision = async (
         id: string,
@@ -305,9 +276,7 @@ export default function StewardPage({
                     </div>
                     <button
                         onClick={() => {
-                            loadPending();
-                            loadAccessRequests();
-                            loadCreationRequests();
+                            void refreshQueues();
                         }}
                         className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-warm-border/30 text-xs text-warm-dark/60 hover:bg-warm-border/10 transition-colors"
                     >

@@ -131,7 +131,7 @@ function WelcomeContent({ memorialId }: { memorialId: string }) {
             ctaLabel="View archive"
             ctaDisabled={archiveRichness === 'empty'}
             disabledNote="Content coming soon"
-            onClick={() => router.push(`/person/${memorialId}`)}
+            onClick={() => router.push(`/person/${memorial.id}`)}
             primary={archiveRichness !== 'empty'}
           />
 
@@ -147,7 +147,7 @@ function WelcomeContent({ memorialId }: { memorialId: string }) {
                   : 'Add a memory directly. As a guardian, your contribution appears right away.'
               }
               ctaLabel="Add a memory"
-              onClick={() => router.push(`/archive/${memorialId}/contribute`)}
+              onClick={() => router.push(`/archive/${memorial.id}/contribute`)}
               primary={archiveRichness === 'empty'}
             />
           )}
@@ -166,7 +166,7 @@ function WelcomeContent({ memorialId }: { memorialId: string }) {
               ctaLabel="View family map"
               ctaDisabled={linkedCount === 0}
               disabledNote="No links yet"
-              onClick={() => router.push(`/archive/${memorialId}/family`)}
+              onClick={() => router.push(`/archive/${memorial.id}/family`)}
             />
           )}
 
@@ -178,7 +178,7 @@ function WelcomeContent({ memorialId }: { memorialId: string }) {
               title="Review contributions"
               description="See and approve memories submitted by witnesses."
               ctaLabel="Open steward tools"
-              onClick={() => router.push(`/archive/${memorialId}/steward`)}
+              onClick={() => router.push(`/archive/${memorial.id}/steward`)}
             />
           )}
 
@@ -194,7 +194,7 @@ function WelcomeContent({ memorialId }: { memorialId: string }) {
                   : 'Share a photo directly into the archive.'
               }
               ctaLabel="Share a photo"
-              onClick={() => router.push(`/archive/${memorialId}/contribute?type=photo`)}
+              onClick={() => router.push(`/archive/${memorial.id}/contribute?type=photo`)}
             />
           )}
         </div>
@@ -208,7 +208,7 @@ function WelcomeContent({ memorialId }: { memorialId: string }) {
               : 'You have reading access to this archive. If the owner wants you to contribute later, they can update your role.'}
           </p>
           <button
-            onClick={() => router.push(`/archive/${memorialId}`)}
+            onClick={() => router.push(`/archive/${memorial.id}`)}
             className="mt-4 text-sm text-warm-dark/30 hover:text-warm-dark/50 transition-colors flex items-center gap-1.5 mx-auto"
           >
             Go to your archive dashboard

@@ -23,6 +23,7 @@ interface Step10Props {
   hasSuccessor?: boolean;
   userId?: string;
   isPaid?: boolean;
+  showStatusInsights?: boolean;
 }
 
 const STEP_ICONS: Record<number, any> = {
@@ -38,7 +39,8 @@ export default function Step10Review({
   isSelfArchive = false,
   hasSuccessor = false,
   userId = '',
-  isPaid = false
+  isPaid = false,
+  showStatusInsights = true
 }: Step10Props) {
   const [isSealing, setIsSealing] = useState(false);
   const [sealPhase, setSealPhase] = useState<'idle' | 'review' | 'pause' | 'sealing' | 'sealed'>('idle');
@@ -163,6 +165,7 @@ export default function Step10Review({
       </div>
 
       {/* Emotional state message */}
+      {showStatusInsights && (
       <div className={`mb-10 p-6 rounded-xl border transition-all duration-700 ${
         emotionalState === 'eternal'
           ? 'bg-olive/[0.04] border-olive/20'
@@ -203,6 +206,7 @@ export default function Step10Review({
           })}
         </div>
       </div>
+      )}
 
       {/* Seal block reasons — gentle, not punishing */}
       {!canSeal && sealBlockReasons.length > 0 && (
@@ -346,7 +350,7 @@ export default function Step10Review({
       </div>
 
       {/* Missing dimensions whisper */}
-      {emotionalResult.missingDimensions.length > 0 && emotionalState !== 'eternal' && (
+      {showStatusInsights && emotionalResult.missingDimensions.length > 0 && emotionalState !== 'eternal' && (
         <div className="mb-10 p-5 rounded-xl bg-warm-border/[0.04] border border-warm-border/10">
           <p className="text-xs text-warm-dark/30 mb-3 italic">
             You&apos;ve captured {emotionalResult.fragmentCount} fragments of their life.

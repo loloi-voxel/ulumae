@@ -251,6 +251,7 @@ function CreateMemorialPageContent() {
   // Personal & Family modes = user already paid for the plan → full access
   const isPaidMode = effectiveMode === 'personal' || effectiveMode === 'family' || effectiveMode === 'concierge';
   const hasFullAccess = isPaidMode || memorialData.paid;
+  const showDraftStatusInsights = effectiveMode === 'draft';
 
   const isMemorialOwner = !!authUserId && memorialOwnerId === authUserId;
   // Determine the correct dashboard path based on the memorial's actual mode.
@@ -990,6 +991,8 @@ function CreateMemorialPageContent() {
 
             {/* ... Arche HTML Button ... */}
 
+            {false && (
+              <>
             {/* NEW: ZIP EXPORT BUTTON */}
             <button
               onClick={async () => {
@@ -1026,6 +1029,8 @@ function CreateMemorialPageContent() {
             >
               <span className="hidden sm:inline">📦 Export ZIP</span>
             </button>
+              </>
+            )}
 
             {/*   // ... rest of the top bar ... */}
 
@@ -1072,7 +1077,7 @@ function CreateMemorialPageContent() {
           </div>
 
           {/* Ambient whisper: emotional state message */}
-          {emotionalResult.state !== 'void' && emotionalResult.missingDimensions.length > 0 && (
+          {showDraftStatusInsights && emotionalResult.state !== 'void' && emotionalResult.missingDimensions.length > 0 && (
             <div className="max-w-2xl mx-auto mb-10 text-center animate-fadeIn">
               <p className="text-xs text-warm-dark/30 italic leading-relaxed">
                 {emotionalResult.ambientMessage}
@@ -1218,7 +1223,7 @@ function CreateMemorialPageContent() {
                   </p>
 
                   {/* Emotional state indicator */}
-                  {emotionalResult.state !== 'void' && (
+                  {showDraftStatusInsights && emotionalResult.state !== 'void' && (
                     <p className="text-[10px] text-warm-dark/25 uppercase tracking-[0.2em] mb-6">
                       {emotionalResult.state}
                     </p>
@@ -1496,6 +1501,7 @@ function CreateMemorialPageContent() {
                           hasSuccessor={hasSuccessor}
                           userId={authUserId || ''}
                           isPaid={hasFullAccess}
+                          showStatusInsights={showDraftStatusInsights}
                         />
                       )}
                     </div>

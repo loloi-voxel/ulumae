@@ -19,7 +19,7 @@ const EVENT_CATEGORIES = [
     { value: 'birth', label: 'Birth', color: 'bg-blue-100 text-blue-700' },
     { value: 'career', label: 'Career', color: 'bg-purple-100 text-purple-700' },
     { value: 'achievement', label: 'Achievement', color: 'bg-olive/15 text-warm-dark' },
-    { value: 'loss', label: 'Loss', color: 'bg-gray-100 text-gray-700' },
+    { value: 'loss', label: 'Loss', color: 'bg-gray-100 text-warm-dark' },
     { value: 'milestone', label: 'Milestone', color: 'bg-surface-high text-warm-brown' },
 ] as const;
 

@@ -17,6 +17,9 @@ export async function PATCH(
         if (!memorialId) {
             return NextResponse.json({ error: 'Missing memorial id' }, { status: 400 });
         }
+        if (action !== 'delete' && action !== 'restore') {
+            return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+        }
 
         const { user } = await createAuthenticatedClient();
         if (!user) {
@@ -26,7 +29,8 @@ export async function PATCH(
         const permission = await resolveArchivePermissionContext(
             supabaseAdmin,
             memorialId,
-            user.id
+            user.id,
+            { includeDeleted: true }
         );
 
         if (!permission.memorialExists || !permission.context) {

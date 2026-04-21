@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { Plus, Eye, Edit, Trash2, User, Search, Filter, RefreshCcw, AlertTriangle, Archive, Wifi, BellDot } from 'lucide-react';
 import { supabase, Memorial } from '@/lib/supabase';
 import AnchorPanel from '@/components/AnchorPanel';
-import ManageWitnessesModal from '@/app/dashboard/[userId]/_components/ManageWitnessesModal';
 import DashboardShell from '@/components/dashboard/DashboardShell';
 import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 import EditableFamilyTitle from '@/components/dashboard/EditableFamilyTitle';
@@ -34,7 +33,6 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
         | { kind: 'permanent-delete'; id: string; stage: 1 | 2 }
         | null
     >(null);
-    const [memberManagerMemorial, setMemberManagerMemorial] = useState<Memorial | null>(null);
     const [showWelcome, setShowWelcome] = useState(false);
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -90,16 +88,6 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
             target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
     }, [searchParams, notificationData.pendingCount, memorials.length]);
-
-    useEffect(() => {
-        const memberMemorialId = searchParams.get('members');
-        if (!memberMemorialId || memorials.length === 0) return;
-
-        const target = memorials.find((memorial) => memorial.id === memberMemorialId);
-        if (target) {
-            setMemberManagerMemorial(target);
-        }
-    }, [searchParams, memorials]);
 
     useEffect(() => {
         const interval = window.setInterval(() => {
@@ -420,14 +408,6 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                             <Link href={`/create?id=${memorial.id}&mode=family`} className="flex-1 py-2 px-3 bg-surface-mid rounded-none font-sans font-medium text-center text-sm flex items-center justify-center gap-1 text-warm-dark hover:bg-surface-high transition-colors">
                                                 <Edit size={14} /> Edit
                                             </Link>
-                                            <button
-                                                onClick={() => setMemberManagerMemorial(memorial)}
-                                                aria-label="Manage members"
-                                                className="py-2 px-3 bg-surface-mid rounded-none text-warm-muted hover:bg-surface-high transition-colors"
-                                                title="Manage members"
-                                            >
-                                                <User size={14} />
-                                            </button>
                                             {(memorial as any).preservation_state !== 'preserved' && (
                                                 <button
                                                     onClick={() => softDeleteMemorial(memorial.id)}
@@ -524,15 +504,6 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                     </div>
                 )}
             </div>
-            {memberManagerMemorial && (
-                <ManageWitnessesModal
-                    isOpen={true}
-                    onClose={() => setMemberManagerMemorial(null)}
-                    memorialId={memberManagerMemorial.id}
-                    memorialName={memberManagerMemorial.full_name || 'Untitled'}
-                    planType="family"
-                />
-            )}
         </div>
         <ConfirmDialog
             open={pendingConfirm !== null}

@@ -225,6 +225,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
     };
 
     const hasPersonalAccess = planVerified && !auth.loading && auth.authenticated && isPersonalPlan(auth.plan);
+    const restoreBlocked = Boolean(activeArchive);
     if (!hasPersonalAccess) {
         return (
             <div className="bg-surface-low min-h-screen flex items-center justify-center">
@@ -333,6 +334,11 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                             <Archive size={13} />
                             Removed Archives
                         </h3>
+                        {restoreBlocked && (
+                            <p className="mb-4 max-w-2xl text-sm text-warm-dark">
+                                Personal plans can only have one active archive at a time. Delete the current active archive before restoring another one.
+                            </p>
+                        )}
                         <div className="space-y-3">
                             {deletedArchives.map(m => (
                                 <div
@@ -350,8 +356,13 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                                         <button
                                             onClick={() => restore(m.id)}
                                             aria-label="Restore archive"
-                                            className="p-2 text-warm-muted hover:text-warm-dark hover:bg-surface-mid transition-colors rounded-none"
-                                            title="Restore"
+                                            disabled={restoreBlocked}
+                                            className={`rounded-none p-2 transition-colors ${
+                                                restoreBlocked
+                                                    ? 'cursor-not-allowed text-warm-outline/60'
+                                                    : 'text-warm-muted hover:bg-surface-mid hover:text-warm-dark'
+                                            }`}
+                                            title={restoreBlocked ? 'Delete the active archive before restoring another one' : 'Restore'}
                                         >
                                             <RefreshCcw size={15} />
                                         </button>

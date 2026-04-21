@@ -195,6 +195,8 @@ function SidebarContent({
     onNavigate?: () => void;
     contactSupportRef?: Ref<HTMLAnchorElement>;
 }) {
+    const showPlanCard = !isPersonalPlan(plan as any);
+
     return (
         <div className="flex h-full flex-col bg-white/92 backdrop-blur-sm">
             <div className="border-b border-warm-border/20 px-6 py-6">
@@ -211,13 +213,15 @@ function SidebarContent({
                 </Link>
             </div>
 
-            <div className="px-4 py-5">
-                <div className="rounded-none border border-warm-border/28 bg-surface-mid/45 px-4 py-4">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Current Plan</p>
-                    <p className="mt-2 font-serif text-xl text-warm-dark">{planLabel(plan)}</p>
-                    {email && <p className="mt-1 truncate text-xs text-warm-muted">{email}</p>}
+            {showPlanCard && (
+                <div className="px-4 py-5">
+                    <div className="rounded-none border border-warm-border/28 bg-surface-mid/45 px-4 py-4">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">Current Plan</p>
+                        <p className="mt-2 font-serif text-xl text-warm-dark">{planLabel(plan)}</p>
+                        {email && <p className="mt-1 truncate text-xs text-warm-muted">{email}</p>}
+                    </div>
                 </div>
-            </div>
+            )}
 
             <SidebarConnectedSpaces onNavigate={onNavigate} />
 

@@ -14,7 +14,7 @@ import {
     Sparkles, MessageCircle, Share2, Mail, Users, BookOpen, Lightbulb, Award,
     MousePointer, Play, Mic
 } from 'lucide-react';
-import ImageViewer from '@/components/ImageViewer';
+import MediaLightbox, { type MediaLightboxItem } from '@/components/MediaLightbox';
 import IntegrityBadge from '@/components/IntegrityBadge';
 import BioWithLinks from '@/components/BioWithLinks';
 import GhostPresence from '@/components/wizard/GhostPresence';
@@ -37,11 +37,15 @@ export default function MemorialRenderer({
 }: MemorialRendererProps) {
     const [hoveredInteractive, setHoveredInteractive] = useState<string | null>(null);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-    const [viewerOpen, setViewerOpen] = useState(false);
-    const [viewerStartIndex, setViewerStartIndex] = useState(0);
-    const [visibleGalleryCount, setVisibleGalleryCount] = useState(compact ? 6 : 12);
-    const [visibleVideoCount, setVisibleVideoCount] = useState(compact ? 4 : 8);
+    const [showAllGallery, setShowAllGallery] = useState(false);
+    const [showAllInteractiveGallery, setShowAllInteractiveGallery] = useState(false);
+    const [showAllVideos, setShowAllVideos] = useState(false);
+    const [lightboxState, setLightboxState] = useState<{
+        items: MediaLightboxItem[];
+        initialIndex: number;
+    } | null>(null);
     const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
+    const defaultVisibleCount = compact ? 4 : 8;
 
     const calculateAge = () => {
         if (!data.step1?.birthDate) return null;
@@ -51,7 +55,7 @@ export default function MemorialRenderer({
         return end.getFullYear() - birth.getFullYear();
     };
 
-    const handleInteractiveMouseMove = (e: React.MouseEvent<HTMLDivElement>, imageId: string) => {
+    const handleInteractiveMouseMove = (e: React.MouseEvent<HTMLElement>, imageId: string) => {
         const rect = e.currentTarget.getBoundingClientRect();
         setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
         setHoveredInteractive(imageId);
@@ -74,9 +78,50 @@ export default function MemorialRenderer({
     const galleryItems = (data.step8?.gallery || [])
         .filter((photo: any) => !!photo?.preview)
         .filter((photo: any) => !brokenImages[photo.id]);
-    const visibleGalleryItems = galleryItems.slice(0, visibleGalleryCount);
+    const interactiveGalleryItems = (data.step8?.interactiveGallery || []).filter((item: any) => !!item?.preview);
     const videoItems = (data.step9?.videos || []).filter((video: any) => !!video?.url);
-    const visibleVideoItems = videoItems.slice(0, visibleVideoCount);
+
+    const galleryLightboxItems: MediaLightboxItem[] = galleryItems.map((photo: any) => ({
+        id: photo.id,
+        kind: 'image',
+        src: photo.preview,
+        thumbnailSrc: photo.preview,
+        alt: photo.caption || 'Photo',
+        title: photo.caption || 'Photo',
+        caption: photo.caption || '',
+        year: photo.year || '',
+    }));
+    const interactiveLightboxItems: MediaLightboxItem[] = interactiveGalleryItems.map((item: any, index: number) => ({
+        id: item.id,
+        kind: 'image',
+        src: item.preview,
+        thumbnailSrc: item.preview,
+        alt: item.description || `Interactive photo story ${index + 1}`,
+        title: `Interactive photo story ${index + 1}`,
+        description: item.description || '',
+    }));
+    const videoLightboxItems: MediaLightboxItem[] = videoItems.map((video: any, index: number) => ({
+        id: video.id,
+        kind: 'video',
+        src: video.url,
+        thumbnailSrc: video.thumbnail || video.url,
+        poster: video.thumbnail || null,
+        title: video.title || `Video memory ${index + 1}`,
+        description: video.description || '',
+    }));
+
+    const visibleGalleryItems = showAllGallery ? galleryItems : galleryItems.slice(0, defaultVisibleCount);
+    const visibleInteractiveItems = showAllInteractiveGallery
+        ? interactiveGalleryItems
+        : interactiveGalleryItems.slice(0, defaultVisibleCount);
+    const visibleVideoItems = showAllVideos ? videoItems : videoItems.slice(0, defaultVisibleCount);
+
+    const openLightbox = (items: MediaLightboxItem[], initialIndex: number) => {
+        setLightboxState({
+            items,
+            initialIndex,
+        });
+    };
 
     return (
         <div className={`relative bg-surface-low ${compact ? 'rounded-2xl shadow-inner border border-warm-border/30 overflow-hidden' : 'min-h-screen'} ${className}`}>
@@ -543,7 +588,7 @@ export default function MemorialRenderer({
                                                                 event.category === 'birth' ? 'bg-blue-50 text-blue-600' :
                                                                 event.category === 'career' ? 'bg-purple-50 text-purple-600' :
                                                                 event.category === 'achievement' ? 'bg-olive/10 text-olive' :
-                                                                event.category === 'loss' ? 'bg-gray-100 text-gray-500' :
+                                                                event.category === 'loss' ? 'bg-gray-100 text-warm-dark' :
                                                                 'bg-warm-brown/10 text-warm-brown'
                                                             }`}>{event.category}</span>
                                                             {event.year && <span className={`text-warm-dark/40 ${compact ? 'text-[10px]' : 'text-xs'}`}>{event.year}</span>}
@@ -669,7 +714,7 @@ export default function MemorialRenderer({
                     ) : null}
 
                     {/* Interactive Photo Stories */}
-                    {data.step8?.interactiveGallery?.length > 0 ? (
+                    {interactiveGalleryItems.length > 0 ? (
                         <section>
                             <h2 className={`font-serif ${s.sectionTitle} text-warm-dark mb-${compact ? '4' : '8'} flex items-center gap-3`}>
                                 <div className={`${compact ? 'w-8 h-8' : 'w-12 h-12'} bg-olive/10 rounded-xl flex items-center justify-center`}>
@@ -678,13 +723,18 @@ export default function MemorialRenderer({
                                 Interactive Photo Stories
                             </h2>
                             <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-${compact ? '3' : '6'}`}>
-                                {data.step8.interactiveGallery.map((item: any, index: number) => (
-                                    <div
+                                {visibleInteractiveItems.map((item: any, index: number) => {
+                                    const absoluteIndex = interactiveGalleryItems.findIndex((entry: any) => entry.id === item.id);
+
+                                    return (
+                                    <button
                                         key={item.id}
-                                        className={`relative aspect-video rounded-xl overflow-hidden border-2 border-warm-border/30 group ${isPreview && index > 0 ? 'opacity-50 pointer-events-none' : ''}`}
+                                        type="button"
+                                        onClick={() => openLightbox(interactiveLightboxItems, absoluteIndex)}
+                                        className={`relative aspect-video rounded-xl overflow-hidden border-2 border-warm-border/30 group text-left ${isPreview && index > 0 ? 'opacity-50 pointer-events-none' : ''}`}
                                         onMouseMove={(e) => handleInteractiveMouseMove(e, item.id)}
                                         onMouseLeave={() => setHoveredInteractive(null)}
-                                        style={{ cursor: 'none' }}
+                                        style={{ cursor: 'pointer' }}
                                     >
                                         {/* Hidden text layer (visible by default) */}
                                         <div className="absolute inset-0 flex items-center justify-center p-4 z-10">
@@ -716,9 +766,20 @@ export default function MemorialRenderer({
                                         </div>
 
                                         <IntegrityBadge hash={item.sha256_hash} />
-                                    </div>
-                                ))}
+                                    </button>
+                                )})}
                             </div>
+                            {interactiveGalleryItems.length > defaultVisibleCount && !showAllInteractiveGallery && (
+                                <div className="mt-4 text-center">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAllInteractiveGallery(true)}
+                                        className="rounded-xl border border-warm-border/30 px-4 py-2 text-sm text-warm-dark transition-all hover:bg-warm-border/10"
+                                    >
+                                        Show all
+                                    </button>
+                                </div>
+                            )}
                         </section>
                     ) : isPreview ? (
                         <GhostPresence variant="gallery" whisper="Moments waiting to be revealed." />
@@ -729,10 +790,14 @@ export default function MemorialRenderer({
                         <section>
                             <h2 className={`font-serif ${s.sectionTitle} text-warm-dark mb-${compact ? '4' : '8'}`}>Photo Gallery</h2>
                             <div className={`grid ${s.galleryGrid} gap-${compact ? '2' : '4'}`}>
-                                {visibleGalleryItems.map((photo: any, index: number) => (
+                                {visibleGalleryItems.map((photo: any, index: number) => {
+                                    const absoluteIndex = galleryItems.findIndex((entry: any) => entry.id === photo.id);
+
+                                    return (
                                     <button
                                         key={photo.id}
-                                        onClick={() => { setViewerStartIndex(index); setViewerOpen(true); }}
+                                        type="button"
+                                        onClick={() => openLightbox(galleryLightboxItems, absoluteIndex)}
                                         className={`group relative aspect-square rounded-xl overflow-hidden bg-warm-border/20 shadow-sm cursor-pointer hover:shadow-lg transition-all ${isPreview && index > 0 ? 'opacity-50 pointer-events-none' : ''}`}
                                     >
                                         <img
@@ -751,20 +816,18 @@ export default function MemorialRenderer({
                                             </div>
                                         )}
                                     </button>
-                                ))}
+                                )})}
                             </div>
-                            {galleryItems.length > visibleGalleryCount && (
+                            {galleryItems.length > defaultVisibleCount && !showAllGallery && (
                                 <div className="mt-4 text-center">
                                     <button
-                                        onClick={() => setVisibleGalleryCount((current) => current + (compact ? 6 : 12))}
-                                        className="px-4 py-2 text-sm border border-warm-border/30 rounded-xl text-warm-dark/60 hover:bg-warm-border/10 transition-all"
+                                        type="button"
+                                        onClick={() => setShowAllGallery(true)}
+                                        className="px-4 py-2 text-sm border border-warm-border/30 rounded-xl text-warm-dark hover:bg-warm-border/10 transition-all"
                                     >
-                                        Load more photos
+                                        Show all
                                     </button>
                                 </div>
-                            )}
-                            {viewerOpen && !compact && (
-                                <ImageViewer images={galleryItems} initialIndex={viewerStartIndex} onClose={() => setViewerOpen(false)} />
                             )}
                         </section>
                     ) : isPreview ? (
@@ -776,30 +839,52 @@ export default function MemorialRenderer({
                         <section>
                             <h2 className={`font-serif ${s.sectionTitle} text-warm-dark mb-${compact ? '4' : '8'}`}>Video Memories</h2>
                             <div className={`grid grid-cols-1 ${compact ? '' : 'md:grid-cols-2'} gap-${compact ? '3' : '6'}`}>
-                                {visibleVideoItems.map((video: any) => (
-                                    <div key={video.id} className={`bg-white rounded-xl ${compact ? 'p-3' : 'p-4'} border border-warm-border/30 shadow-sm relative`}>
+                                {visibleVideoItems.map((video: any) => {
+                                    const absoluteIndex = videoItems.findIndex((entry: any) => entry.id === video.id);
+
+                                    return (
+                                    <button
+                                        key={video.id}
+                                        type="button"
+                                        onClick={() => openLightbox(videoLightboxItems, absoluteIndex)}
+                                        className={`relative overflow-hidden rounded-xl border border-warm-border/30 bg-white text-left shadow-sm transition-all hover:shadow-lg ${compact ? 'p-3' : 'p-4'}`}
+                                    >
 
                                         <IntegrityBadge hash={video.sha256_hash} className="top-2 left-2" />
 
-                                        <div className="aspect-video bg-warm-dark/10 rounded-lg overflow-hidden mb-2">
-                                            <video controls preload="metadata" className="w-full h-full" poster={video.thumbnail}>
-                                                <source src={video.url} type={video.mimeType || 'video/mp4'} />
-                                            </video>
+                                        <div className="relative mb-2 aspect-video overflow-hidden rounded-lg bg-warm-dark/10">
+                                            {video.thumbnail ? (
+                                                <img
+                                                    src={video.thumbnail}
+                                                    alt={video.title || 'Video memory'}
+                                                    className="h-full w-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="flex h-full w-full items-center justify-center bg-warm-dark/15">
+                                                    <Play size={28} className="fill-warm-dark text-warm-dark" />
+                                                </div>
+                                            )}
+                                            <div className="absolute inset-0 flex items-center justify-center bg-warm-dark/20">
+                                                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/85 shadow-lg">
+                                                    <Play size={20} className="fill-warm-dark text-warm-dark" />
+                                                </div>
+                                            </div>
                                         </div>
                                         {video.title && <h3 className={`font-semibold text-warm-dark ${compact ? 'text-xs' : ''}`}>{video.title}</h3>}
                                         {video.description && !compact && (
-                                            <p className="mt-2 text-sm text-warm-dark/55 line-clamp-2">{video.description}</p>
+                                            <p className="mt-2 text-sm text-warm-dark line-clamp-2">{video.description}</p>
                                         )}
-                                    </div>
-                                ))}
+                                    </button>
+                                )})}
                             </div>
-                            {videoItems.length > visibleVideoCount && (
+                            {videoItems.length > defaultVisibleCount && !showAllVideos && (
                                 <div className="mt-4 text-center">
                                     <button
-                                        onClick={() => setVisibleVideoCount((current) => current + (compact ? 4 : 8))}
-                                        className="px-4 py-2 text-sm border border-warm-border/30 rounded-xl text-warm-dark/60 hover:bg-warm-border/10 transition-all"
+                                        type="button"
+                                        onClick={() => setShowAllVideos(true)}
+                                        className="px-4 py-2 text-sm border border-warm-border/30 rounded-xl text-warm-dark hover:bg-warm-border/10 transition-all"
                                     >
-                                        Load more videos
+                                        Show all
                                     </button>
                                 </div>
                             )}
@@ -859,6 +944,13 @@ export default function MemorialRenderer({
                     </div>
                 )}
             </div>
+            {lightboxState && (
+                <MediaLightbox
+                    items={lightboxState.items}
+                    initialIndex={lightboxState.initialIndex}
+                    onClose={() => setLightboxState(null)}
+                />
+            )}
         </div>
     );
 }

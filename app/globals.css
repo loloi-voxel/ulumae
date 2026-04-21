@@ -694,6 +694,40 @@
   }
 }
 
+@layer utilities {
+  .text-gray-200,
+  .text-gray-300,
+  .text-gray-400,
+  .text-gray-500,
+  .text-gray-600,
+  .text-gray-700,
+  .text-warm-muted,
+  .text-warm-muted\/20,
+  .text-warm-muted\/30,
+  .text-warm-muted\/40,
+  .text-warm-muted\/50,
+  .text-warm-muted\/60,
+  .text-warm-muted\/70,
+  .text-warm-outline,
+  .text-warm-outline\/20,
+  .text-warm-outline\/30,
+  .text-warm-outline\/40,
+  .text-warm-outline\/50,
+  .text-warm-outline\/60,
+  .text-warm-outline\/70,
+  .text-warm-dark\/20,
+  .text-warm-dark\/25,
+  .text-warm-dark\/30,
+  .text-warm-dark\/40,
+  .text-warm-dark\/50,
+  .text-warm-dark\/55,
+  .text-warm-dark\/60,
+  .text-warm-dark\/65,
+  .text-warm-dark\/70 {
+    color: rgb(57 56 48 / 0.92) !important;
+  }
+}
+
 @keyframes liveDot {
 
   0%,
