@@ -5,6 +5,7 @@
 // NEVER asks "Would you like to save?" — saves silently, always
 
 import { useEffect, useRef, useCallback, useState } from 'react';
+import { serializeMemorialDataForSave } from '@/lib/memorialSave';
 import { MemorialData } from '@/types/memorial';
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'offline' | 'reconnected';
@@ -47,48 +48,12 @@ export function useAutoSave({
         dataRef.current = data;
     }, [data]);
 
-    // Step 1.1.3: Serialize data for save (shared between save and offline cache)
-    const serializeForSave = useCallback((currentData: MemorialData) => {
-        return {
-            step1: currentData.step1,
-            step2: currentData.step2,
-            step3: currentData.step3,
-            step4: currentData.step4,
-            step5: currentData.step5,
-            step6: currentData.step6,
-            step7: currentData.step7,
-            step8: {
-                ...currentData.step8,
-                coverPhoto: null,
-                gallery: currentData.step8.gallery.map(g => ({
-                    ...g,
-                    file: null,
-                })),
-                interactiveGallery: currentData.step8.interactiveGallery?.map(ig => ({
-                    ...ig,
-                    file: null,
-                })),
-                voiceRecordings: currentData.step8.voiceRecordings.map(v => ({
-                    ...v,
-                    file: null,
-                })),
-            },
-            step9: {
-                ...currentData.step9,
-                videos: currentData.step9.videos?.map(v => ({
-                    ...v,
-                    file: null,
-                })),
-            },
-        };
-    }, []);
-
     // Core save function
     const performSave = useCallback(async () => {
         if (!memorialId || !enabled || isSavingRef.current) return;
 
         const currentData = dataRef.current;
-        const serializable = serializeForSave(currentData);
+        const serializable = serializeMemorialDataForSave(currentData);
         const serialized = JSON.stringify(serializable);
 
         if (serialized === lastSavedDataRef.current) {
@@ -147,7 +112,7 @@ export function useAutoSave({
         } finally {
             isSavingRef.current = false;
         }
-    }, [memorialId, enabled, serializeForSave]);
+    }, [memorialId, enabled]);
 
     // Public "save now" function
     const saveNow = useCallback(async () => {
@@ -214,7 +179,7 @@ export function useAutoSave({
         const handleBeforeUnload = () => {
             const currentData = dataRef.current;
             const payload = JSON.stringify({
-                memorialData: serializeForSave(currentData),
+                memorialData: serializeMemorialDataForSave(currentData),
             });
             const blob = new Blob([payload], { type: 'application/json' });
             navigator.sendBeacon(`/api/memorials/${memorialId}/save`, blob);
@@ -222,7 +187,7 @@ export function useAutoSave({
 
         window.addEventListener('beforeunload', handleBeforeUnload);
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-    }, [memorialId, enabled, serializeForSave]);
+    }, [memorialId, enabled]);
 
     return { saveStatus, lastSavedAt, saveNow, error };
 }

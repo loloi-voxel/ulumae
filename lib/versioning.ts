@@ -1,4 +1,5 @@
 import { MemorialData } from '@/types/memorial';
+import { serializeMemorialDataForSave } from '@/lib/memorialSave';
 
 export type MemorialVersionChangeType =
     | 'manual'
@@ -271,17 +272,19 @@ export function applyVersionSnapshot(currentData: MemorialData, snapshotData: Pa
 }
 
 export function getMemorialSaveSignature(data: MemorialData) {
+    const serializable = serializeMemorialDataForSave(data);
+
     return JSON.stringify({
-        step1: data.step1,
-        step2: data.step2,
-        step3: data.step3,
-        step4: data.step4,
-        step5: data.step5,
-        step6: data.step6,
-        step7: data.step7,
-        step8: data.step8,
-        step9: data.step9,
-        completedSteps: data.completedSteps || [],
-        paid: data.paid ?? false,
+        step1: serializable.step1,
+        step2: serializable.step2,
+        step3: serializable.step3,
+        step4: serializable.step4,
+        step5: serializable.step5,
+        step6: serializable.step6,
+        step7: serializable.step7,
+        step8: serializable.step8,
+        step9: serializable.step9,
+        completedSteps: serializable.completedSteps || [],
+        paid: serializable.paid ?? false,
     });
 }

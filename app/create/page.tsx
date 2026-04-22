@@ -39,6 +39,7 @@ import {
 import { PathId } from '@/types/paths';
 import { createClient } from '@/utils/supabase/client';
 import { calculateEmotionalState, getPathDepth, isEmotionalStateEnabled } from '@/lib/emotionalState';
+import { hasPendingMemorialMedia, serializeMemorialDataForSave } from '@/lib/memorialSave';
 import { getMemorialSaveSignature } from '@/lib/versioning';
 
 const PATH_CONFIG: Record<PathId, { steps: number[]; labels: string[] }> = {
@@ -162,9 +163,28 @@ function CreateMemorialPageContent() {
   // Keep a stable snapshot so restores and saves stay aligned
   const stepEntryDataRef = useRef<MemorialData>(getInitialData());
   const lastSavedSignatureRef = useRef(getMemorialSaveSignature(getInitialData()));
+  const memorialDataRef = useRef<MemorialData>(getInitialData());
+  const currentMemorialIdRef = useRef<string | null>(memorialId);
+  const authUserIdRef = useRef<string | null>(null);
+  const dbModeRef = useRef<string | null>(null);
+  const memorialOwnerIdRef = useRef<string | null>(null);
+  const userRoleRef = useRef<WitnessRole>('owner');
+  const isSaveInFlightRef = useRef(false);
+  const saveQueuedRef = useRef(false);
+  const activeSavePromiseRef = useRef<Promise<void> | null>(null);
+  const previousPendingMediaRef = useRef(false);
 
   // Track the authenticated user ID
   const [authUserId, setAuthUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    memorialDataRef.current = memorialData;
+    currentMemorialIdRef.current = currentMemorialId;
+    authUserIdRef.current = authUserId;
+    dbModeRef.current = dbMode;
+    memorialOwnerIdRef.current = memorialOwnerId;
+    userRoleRef.current = userRole;
+  }, [memorialData, currentMemorialId, authUserId, dbMode, memorialOwnerId, userRole]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -572,13 +592,33 @@ function CreateMemorialPageContent() {
     if (isLoading) return;
 
     const currentSignature = getMemorialSaveSignature(memorialData);
+    const hasPendingMedia = hasPendingMemorialMedia(memorialData);
 
-    if (currentSignature !== lastSavedSignatureRef.current) {
-      setSaveStatus(prev => prev === 'saving' ? prev : 'unsaved');
+    if (hasPendingMedia || currentSignature !== lastSavedSignatureRef.current) {
+      setSaveStatus(isSaveInFlightRef.current ? 'saving' : 'unsaved');
       return;
     }
 
-    setSaveStatus(prev => prev === 'unsaved' ? 'saved' : prev);
+    setSaveStatus(isSaveInFlightRef.current ? 'saving' : 'saved');
+  }, [isLoading, memorialData]);
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const hasPendingMedia = hasPendingMemorialMedia(memorialData);
+    const hadPendingMedia = previousPendingMediaRef.current;
+    previousPendingMediaRef.current = hasPendingMedia;
+
+    if (!hadPendingMedia || hasPendingMedia) {
+      return;
+    }
+
+    const currentSignature = getMemorialSaveSignature(memorialData);
+    if (currentSignature === lastSavedSignatureRef.current) {
+      return;
+    }
+
+    void saveToSupabase();
   }, [isLoading, memorialData]);
 
   // Prevent data loss: warn if the user tries to close the tab while a save
@@ -596,100 +636,130 @@ function CreateMemorialPageContent() {
   }, [saveStatus]);
 
   const saveToSupabase = async () => {
-    if (!memorialData.step1.fullName) return;
-
-    // --- NEW PERMISSION CHECK ---
-    if (userRole !== 'owner' && userRole !== 'co_guardian') {
-      // Witnesses do not auto-save the main record.
-      // Their changes are handled via the Approval System (Step 2.1.5)
-      return;
-    }
-    // ----------------------------
-
-    if (!authUserId) {
-      console.log("Waiting for authenticated user...");
-      return;
+    if (isSaveInFlightRef.current) {
+      saveQueuedRef.current = true;
+      return activeSavePromiseRef.current ?? Promise.resolve();
     }
 
-    const saveSignature = getMemorialSaveSignature(memorialData);
-    if (saveSignature === lastSavedSignatureRef.current) {
-      return;
-    }
+    const executeSave = async () => {
+      isSaveInFlightRef.current = true;
 
-    setSaveStatus('saving');
-    try {
-      const slug = generateSlug(memorialData.step1.fullName);
-      // Use the DB mode if we loaded from an existing memorial (prevents overwriting family→personal)
-      // Only fall back to URL param for brand new memorials
-      const rawMode = dbMode || searchParams.get('mode') || 'personal';
-      // DB constraint allows 'personal', 'family', or 'draft'
-      const currentMode = rawMode === 'family' ? 'family' : rawMode === 'draft' ? 'draft' : 'personal';
+      try {
+        const currentData = memorialDataRef.current;
+        if (!currentData.step1.fullName) return;
 
-      const memorialRecord: Record<string, any> = {
-        step1: memorialData.step1,
-        step2: memorialData.step2,
-        step3: memorialData.step3,
-        step4: memorialData.step4,
-        step5: memorialData.step5,
-        step6: memorialData.step6,
-        step7: memorialData.step7,
-        step8: memorialData.step8,
-        step9: memorialData.step9,
-        status: 'draft',
-        slug: slug || currentMemorialId || 'untitled',
-        full_name: memorialData.step1.fullName,
-        birth_date: memorialData.step1.birthDate ? memorialData.step1.birthDate : null,
-        death_date: memorialData.step1.deathDate ? memorialData.step1.deathDate : null,
-        profile_photo_url: memorialData.step1.profilePhotoPreview || null,
-        cover_photo_url: memorialData.step8?.coverPhotoPreview || null,
-        completed_steps: memorialData.completedSteps || [],
-        mode: currentMode,
-        user_id: currentMemorialId ? (memorialOwnerId || authUserId) : authUserId,
-        paid: memorialData.paid ?? false,
-        updated_at: new Date().toISOString(),
-      };
+        // --- NEW PERMISSION CHECK ---
+        if (userRoleRef.current !== 'owner' && userRoleRef.current !== 'co_guardian') {
+          // Witnesses do not auto-save the main record.
+          // Their changes are handled via the Approval System (Step 2.1.5)
+          return;
+        }
+        // ----------------------------
 
-      // Only include id if we already have one (for updates)
-      if (currentMemorialId) {
-        memorialRecord.id = currentMemorialId;
+        const currentAuthUserId = authUserIdRef.current;
+        if (!currentAuthUserId) {
+          console.log("Waiting for authenticated user...");
+          return;
+        }
+
+        const serializableData = serializeMemorialDataForSave(currentData);
+        const saveSignature = getMemorialSaveSignature(currentData);
+        if (saveSignature === lastSavedSignatureRef.current) {
+          return;
+        }
+
+        setSaveStatus('saving');
+
+        const slug = generateSlug(currentData.step1.fullName);
+        // Use the DB mode if we loaded from an existing memorial (prevents overwriting family→personal)
+        // Only fall back to URL param for brand new memorials
+        const rawMode = dbModeRef.current || searchParams.get('mode') || 'personal';
+        // DB constraint allows 'personal', 'family', or 'draft'
+        const currentMode = rawMode === 'family' ? 'family' : rawMode === 'draft' ? 'draft' : 'personal';
+        const currentMemorialIdValue = currentMemorialIdRef.current;
+
+        const memorialRecord: Record<string, any> = {
+          step1: serializableData.step1,
+          step2: serializableData.step2,
+          step3: serializableData.step3,
+          step4: serializableData.step4,
+          step5: serializableData.step5,
+          step6: serializableData.step6,
+          step7: serializableData.step7,
+          step8: serializableData.step8,
+          step9: serializableData.step9,
+          status: 'draft',
+          slug: slug || currentMemorialIdValue || 'untitled',
+          full_name: currentData.step1.fullName,
+          birth_date: currentData.step1.birthDate ? currentData.step1.birthDate : null,
+          death_date: currentData.step1.deathDate ? currentData.step1.deathDate : null,
+          profile_photo_url: serializableData.step1.profilePhotoPreview || null,
+          cover_photo_url: serializableData.step8?.coverPhotoPreview || null,
+          completed_steps: serializableData.completedSteps || [],
+          mode: currentMode,
+          user_id: currentMemorialIdValue ? (memorialOwnerIdRef.current || currentAuthUserId) : currentAuthUserId,
+          paid: serializableData.paid ?? false,
+          updated_at: new Date().toISOString(),
+        };
+
+        // Only include id if we already have one (for updates)
+        if (currentMemorialIdValue) {
+          memorialRecord.id = currentMemorialIdValue;
+        }
+
+        let data, error;
+        if (currentMemorialIdValue) {
+          const response = await fetch(`/api/memorials/${currentMemorialIdValue}/save`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ memorialData: serializableData }),
+          });
+          const payload = await response.json().catch(() => null);
+          data = payload?.memorial || null;
+          error = response.ok ? null : { message: payload?.error || 'Save failed' };
+        } else {
+          const supabase = createClient();
+          // Insert new memorial
+          const result = await supabase
+            .from('memorials')
+            .insert(memorialRecord)
+            .select()
+            .single();
+          data = result.data;
+          error = result.error;
+        }
+
+        if (error) throw error;
+
+        if (data && !currentMemorialIdValue) {
+          setCurrentMemorialId(data.id);
+          setMemorialOwnerId(currentAuthUserId);
+          window.history.replaceState({}, '', `/create?id=${data.id}&mode=${currentMode}`);
+        }
+
+        lastSavedSignatureRef.current = saveSignature;
+
+        const latestData = memorialDataRef.current;
+        const latestSignature = getMemorialSaveSignature(latestData);
+        const latestHasPendingMedia = hasPendingMemorialMedia(latestData);
+        setSaveStatus(latestHasPendingMedia || latestSignature !== lastSavedSignatureRef.current ? 'unsaved' : 'saved');
+      } catch (error: any) {
+        console.error('Save error:', error?.message || error?.code || JSON.stringify(error));
+        setSaveStatus('error');
+      } finally {
+        isSaveInFlightRef.current = false;
+        activeSavePromiseRef.current = null;
+
+        if (saveQueuedRef.current) {
+          saveQueuedRef.current = false;
+          await saveToSupabase();
+        }
       }
+    };
 
-      let data, error;
-      if (currentMemorialId) {
-        const response = await fetch(`/api/memorials/${currentMemorialId}/save`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ memorialData }),
-        });
-        const payload = await response.json().catch(() => null);
-        data = payload?.memorial || null;
-        error = response.ok ? null : { message: payload?.error || 'Save failed' };
-      } else {
-        const supabase = createClient();
-        // Insert new memorial
-        const result = await supabase
-          .from('memorials')
-          .insert(memorialRecord)
-          .select()
-          .single();
-        data = result.data;
-        error = result.error;
-      }
-
-      if (error) throw error;
-
-      if (data && !currentMemorialId) {
-        setCurrentMemorialId(data.id);
-        setMemorialOwnerId(authUserId);
-        window.history.replaceState({}, '', `/create?id=${data.id}&mode=${currentMode}`);
-      }
-
-      lastSavedSignatureRef.current = saveSignature;
-      setSaveStatus('saved');
-    } catch (error: any) {
-      console.error('Save error:', error?.message || error?.code || JSON.stringify(error));
-      setSaveStatus('error');
-    }
+    const savePromise = executeSave();
+    activeSavePromiseRef.current = savePromise;
+    return savePromise;
   };
 
   const goToPreviousStep = () => {
@@ -1413,6 +1483,7 @@ function CreateMemorialPageContent() {
                           onBack={() => setViewMode('hub')}
                           readOnly={!canEditStep(2)}
                           isSelfArchive={memorialData.step1.isSelfArchive}
+                          memorialId={currentMemorialId}
                         />
                       )}
                       {memorialData.currentStep === 3 && (

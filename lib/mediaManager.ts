@@ -66,8 +66,8 @@ const MEDIA_KIND_CONFIG: Record<
     permission: 'edit_archive',
   },
   video_thumbnail: {
-    bucket: 'videos',
-    folder: 'thumbnails',
+    bucket: 'memorial-media',
+    folder: 'video-thumbnails',
     maxBytes: IMAGE_MAX_BYTES,
     mimePrefixes: ['image/'],
     permission: 'edit_archive',
