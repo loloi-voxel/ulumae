@@ -58,19 +58,28 @@ export function useAutoSave({
             step6: currentData.step6,
             step7: currentData.step7,
             step8: {
-                coverPhotoPreview: currentData.step8.coverPhotoPreview,
+                ...currentData.step8,
+                coverPhoto: null,
                 gallery: currentData.step8.gallery.map(g => ({
-                    id: g.id, preview: g.preview, caption: g.caption, year: g.year, type: g.type
+                    ...g,
+                    file: null,
                 })),
                 interactiveGallery: currentData.step8.interactiveGallery?.map(ig => ({
-                    id: ig.id, preview: ig.preview, description: ig.description
+                    ...ig,
+                    file: null,
                 })),
                 voiceRecordings: currentData.step8.voiceRecordings.map(v => ({
-                    id: v.id, title: v.title
+                    ...v,
+                    file: null,
                 })),
-                legacyStatement: currentData.step8.legacyStatement,
             },
-            step9: currentData.step9,
+            step9: {
+                ...currentData.step9,
+                videos: currentData.step9.videos?.map(v => ({
+                    ...v,
+                    file: null,
+                })),
+            },
         };
     }, []);
 

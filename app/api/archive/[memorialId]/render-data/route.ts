@@ -2,42 +2,72 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAuthenticatedClient } from '@/utils/supabase/api';
 import { hasPermission, resolveArchivePermissionContext } from '@/lib/archivePermissions';
 import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { normalizeMemorialMediaData } from '@/lib/mediaManager';
+import type { MemorialData } from '@/types/memorial';
+
+function buildMemorialData(record: any): MemorialData {
+  return {
+    step1: record.step1 || {},
+    step2: record.step2 || {},
+    step3: record.step3 || {},
+    step4: record.step4 || {},
+    step5: record.step5 || {},
+    step6: record.step6 || {},
+    step7: record.step7 || {},
+    step8: record.step8 || {},
+    step9: record.step9 || { videos: [] },
+    currentStep: 1,
+    paid: record.paid ?? false,
+    lastSaved: record.updated_at || null,
+    completedSteps: record.completed_steps || [],
+  } as MemorialData;
+}
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ memorialId: string }> }
 ) {
   try {
-        const supabaseAdmin = getSupabaseAdmin();
+    const supabaseAdmin = getSupabaseAdmin();
     const { memorialId } = await params;
     const { user } = await createAuthenticatedClient();
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const permission = user
+      ? await resolveArchivePermissionContext(supabaseAdmin, memorialId, user.id)
+      : { memorialExists: false, context: null };
+    const { data: memorial, error: memorialError } = await supabaseAdmin
+      .from('memorials')
+      .select('*')
+      .eq('id', memorialId)
+      .single();
 
-    const [permission, memorialRes] = await Promise.all([
-      resolveArchivePermissionContext(supabaseAdmin, memorialId, user.id),
-      supabaseAdmin.from('memorials').select('*').eq('id', memorialId).single(),
-    ]);
-
-    if (memorialRes.error || !memorialRes.data) {
+    if (memorialError || !memorial) {
       return NextResponse.json({ error: 'Archive not found' }, { status: 404 });
     }
 
-    const memorial = memorialRes.data;
-    if (!permission.context || !hasPermission(permission.context, 'view_archive')) {
+    const canViewViaRole = !!permission.context && hasPermission(permission.context, 'view_archive');
+    const isOwner = !!user && user.id === memorial.user_id;
+    const isPaidMode = memorial.mode === 'personal' || memorial.mode === 'family';
+    const isPubliclyReadable = !!memorial.paid || isPaidMode;
+
+    if (!canViewViaRole && !isOwner && !isPubliclyReadable) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    const [{ data: approvedContributions }, { data: relations }] = await Promise.all([
+    const [normalizedData, { data: approvedContributions }, { data: relations }] = await Promise.all([
+      normalizeMemorialMediaData({
+        admin: supabaseAdmin,
+        memorialId,
+        userId: memorial.user_id,
+        data: buildMemorialData(memorial),
+      }),
       supabaseAdmin
         .from('memorial_contributions')
         .select('id, type, content, witness_name, created_at')
         .eq('memorial_id', memorialId)
         .eq('status', 'approved')
         .order('created_at', { ascending: true }),
-      memorial.mode === 'family' && permission.context.plan === 'family'
+      memorial.mode === 'family'
         ? supabaseAdmin
             .from('memorial_relations')
             .select('id, from_memorial_id, to_memorial_id, relationship_type, memorials!memorial_relations_to_memorial_id_fkey(id, full_name)')
@@ -77,23 +107,18 @@ export async function GET(
       }));
 
     const memorialData = {
-      step1: memorial.step1 || {},
-      step2: memorial.step2 || {},
-      step3: memorial.step3 || {},
-      step4: memorial.step4 || {},
-      step5: memorial.step5 || {},
-      step6: memorial.step6 || {},
+      ...normalizedData,
       step7: {
-        ...(memorial.step7 || {}),
-        sharedMemories: [...(memorial.step7?.sharedMemories || []), ...memoryContributions],
+        ...(normalizedData.step7 || {}),
+        sharedMemories: [...(normalizedData.step7?.sharedMemories || []), ...memoryContributions],
       },
       step8: {
-        ...(memorial.step8 || {}),
-        gallery: [...(memorial.step8?.gallery || []), ...photoContributions],
+        ...(normalizedData.step8 || {}),
+        gallery: [...(normalizedData.step8?.gallery || []), ...photoContributions],
       },
       step9: {
-        ...(memorial.step9 || { videos: [] }),
-        videos: [...(memorial.step9?.videos || []), ...videoContributions],
+        ...(normalizedData.step9 || { videos: [] }),
+        videos: [...(normalizedData.step9?.videos || []), ...videoContributions],
       },
     };
 

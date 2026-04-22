@@ -16,13 +16,15 @@ export default function IntegrityBadge({ hash, className = '' }: IntegrityBadgeP
     return (
         <div className={`absolute top-2 left-2 z-20 ${className}`}>
             {/* The Badge Icon — click to toggle */}
-            <button
-                type="button"
+            <div
+                role="button"
+                tabIndex={0}
                 onClick={(e) => { e.stopPropagation(); setShowTooltip(!showTooltip); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setShowTooltip(!showTooltip); } }}
                 className="bg-white/90 backdrop-blur-sm text-plum p-1.5 rounded-full shadow-sm border border-plum/20 cursor-pointer transition-transform hover:scale-110"
             >
                 <ShieldCheck size={14} />
-            </button>
+            </div>
 
             {/* The Tooltip (appears on click) */}
             {showTooltip && (
