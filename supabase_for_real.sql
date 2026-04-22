@@ -1487,3 +1487,15 @@ EXCEPTION WHEN duplicate_object THEN
   NULL;
 END;
 $$;
+
+
+-- ==============================================================
+-- Commands execute after 
+-- ==============================================================
+
+-- First 
+CREATE POLICY "Anyone can view memorial media"
+    ON storage.objects FOR SELECT
+    USING (bucket_id = 'memorial-media');
+
+-- Done
