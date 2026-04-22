@@ -45,6 +45,15 @@ export interface VideoReference extends MediaReferenceFields {
   sha256_hash?: string;
 }
 
+export interface ChildhoodPhotoReference extends MediaReferenceFields {
+  id: string;
+  file?: File | null;
+  preview: string;
+  caption: string;
+  year: string;
+  sha256_hash?: string;
+}
+
 export interface BasicInfo {
   fullName: string;
   birthDate: string;
@@ -79,12 +88,7 @@ export interface ChildhoodInfo {
   };
   childhoodPersonality: string[];
   earlyInterests: string[];
-  childhoodPhotos: Array<{
-    file: File;
-    preview: string;
-    caption: string;
-    year: string;
-  }>;
+  childhoodPhotos: ChildhoodPhotoReference[];
 }
 
 export interface CareerEducation {

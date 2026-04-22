@@ -432,6 +432,10 @@ export function collectMemorialMediaAssetIds(data: MemorialData) {
   if (data.step1.profilePhotoAssetId) ids.add(data.step1.profilePhotoAssetId);
   if (data.step8.coverPhotoAssetId) ids.add(data.step8.coverPhotoAssetId);
 
+  for (const item of data.step2.childhoodPhotos || []) {
+    if (item.assetId) ids.add(item.assetId);
+  }
+
   for (const item of data.step8.gallery || []) {
     if (item.assetId) ids.add(item.assetId);
   }
@@ -713,6 +717,10 @@ export async function normalizeMemorialMediaData({
   data,
 }: SyncMediaOptions): Promise<MemorialData> {
   const step1 = { ...data.step1 };
+  const step2 = {
+    ...data.step2,
+    childhoodPhotos: [] as MemorialData['step2']['childhoodPhotos'],
+  };
   const step8 = {
     ...data.step8,
     gallery: [] as MemorialData['step8']['gallery'],
@@ -727,6 +735,7 @@ export async function normalizeMemorialMediaData({
   const normalized: MemorialData = {
     ...data,
     step1,
+    step2,
     step8,
     step9,
   };
@@ -805,6 +814,50 @@ export async function normalizeMemorialMediaData({
     normalized.step8.coverPhotoUploadStatus = 'idle';
     normalized.step8.coverPhotoUploadError = null;
     normalized.step8.coverPhotoHash = undefined;
+  }
+
+  for (const [index, item] of (step2.childhoodPhotos || []).entries()) {
+    const resolved = await resolveMediaAssetForSource({
+      admin,
+      memorialId,
+      userId,
+      kind: 'gallery_photo',
+      assetId: item.assetId || null,
+      sourceUrl: item.preview || null,
+      metadata: {
+        caption: item.caption || '',
+        year: item.year || '',
+        position: index,
+        section: 'childhood_photos',
+      },
+    });
+
+    if (!resolved.asset || !resolved.sourceUrl) {
+      continue;
+    }
+
+    await updateAssetMetadata(admin, resolved.asset.id, {
+      caption: item.caption || '',
+      year: item.year || '',
+      position: index,
+      section: 'childhood_photos',
+    });
+
+    normalized.step2.childhoodPhotos.push({
+      ...stripTransientFileFields(item),
+      id: item.id || resolved.asset.id,
+      preview: resolved.sourceUrl,
+      assetId: resolved.asset.id,
+      bucket: resolved.asset.bucket,
+      storagePath: resolved.asset.storagePath,
+      originalFileName: resolved.asset.originalFileName,
+      mimeType: resolved.asset.mimeType,
+      fileSize: resolved.asset.fileSize,
+      uploadedAt: resolved.asset.createdAt,
+      uploadStatus: 'ready',
+      uploadError: null,
+      sha256_hash: resolved.asset.sha256Hash,
+    });
   }
 
   for (const [index, item] of (step8.gallery || []).entries()) {

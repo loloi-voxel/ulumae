@@ -1,9 +1,10 @@
 // components/wizard/Step2Childhood.tsx
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Home, Users, GraduationCap, Heart, Sparkles, Upload, X, Plus } from 'lucide-react';
-import { ChildhoodInfo } from '@/types/memorial';
+import { deleteMediaAssets, secureUpload } from '@/lib/uploadService';
+import { ChildhoodInfo, ChildhoodPhotoReference } from '@/types/memorial';
 
 interface Step2Props {
     data: ChildhoodInfo;
@@ -12,6 +13,7 @@ interface Step2Props {
     onBack: () => void;
     readOnly?: boolean;
     isSelfArchive?: boolean; // NEW PROP
+    memorialId: string | null;
 }
 
 const PERSONALITY_OPTIONS = [
@@ -21,19 +23,39 @@ const PERSONALITY_OPTIONS = [
     'Serious', 'Social', 'Independent', 'Helpful', 'Imaginative'
 ];
 
-export default function Step2Childhood({ data, onUpdate, onNext, onBack, readOnly, isSelfArchive = false }: Step2Props) {
+export default function Step2Childhood({
+    data,
+    onUpdate,
+    onNext,
+    onBack,
+    readOnly,
+    isSelfArchive = false,
+    memorialId,
+}: Step2Props) {
     const [newInterest, setNewInterest] = useState('');
     const photoInputRef = useRef<HTMLInputElement>(null);
+    const dataRef = useRef(data);
+    const [photoError, setPhotoError] = useState<string | null>(null);
+
+    useEffect(() => {
+        dataRef.current = data;
+    }, [data]);
+
+    const applyUpdate = (updater: (current: ChildhoodInfo) => ChildhoodInfo) => {
+        const next = updater(dataRef.current);
+        dataRef.current = next;
+        onUpdate(next);
+    };
 
     const handleChange = (field: keyof ChildhoodInfo, value: any) => {
-        onUpdate({ ...data, [field]: value });
+        applyUpdate((current) => ({ ...current, [field]: value }));
     };
 
     const handleSchoolChange = (school: keyof ChildhoodInfo['schools'], value: string) => {
-        onUpdate({
-            ...data,
-            schools: { ...data.schools, [school]: value }
-        });
+        applyUpdate((current) => ({
+            ...current,
+            schools: { ...current.schools, [school]: value }
+        }));
     };
 
     const togglePersonality = (trait: string) => {
@@ -56,41 +78,131 @@ export default function Step2Childhood({ data, onUpdate, onNext, onBack, readOnl
         handleChange('earlyInterests', data.earlyInterests.filter(i => i !== interest));
     };
 
-    const handlePhotosUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
+    const ensureMemorial = () => {
+        if (!memorialId) {
+            setPhotoError('Please wait for the memorial draft to finish initializing before adding childhood photos.');
+            return false;
+        }
 
-        files.forEach(file => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const newPhoto = {
-                    file,
-                    preview: reader.result as string,
-                    caption: '',
-                    year: ''
-                };
-                handleChange('childhoodPhotos', [...data.childhoodPhotos, newPhoto]);
-            };
-            reader.readAsDataURL(file);
-        });
+        return true;
     };
 
-    const removePhoto = (index: number) => {
+    const handlePhotosUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+        if (!ensureMemorial()) {
+            e.currentTarget.value = '';
+            return;
+        }
+
+        setPhotoError(null);
+
+        for (const file of files) {
+            const tempId = `childhood-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            const pendingPhoto: ChildhoodPhotoReference = {
+                id: tempId,
+                file,
+                preview: URL.createObjectURL(file),
+                caption: '',
+                year: '',
+                uploadStatus: 'uploading',
+                uploadError: null,
+            };
+
+            applyUpdate((current) => ({
+                ...current,
+                childhoodPhotos: [...current.childhoodPhotos, pendingPhoto],
+            }));
+
+            const result = await secureUpload(file, {
+                memorialId: memorialId!,
+                kind: 'gallery_photo',
+                metadata: { section: 'childhood_photos' },
+            });
+
+            if (!result.success || !result.asset) {
+                applyUpdate((current) => ({
+                    ...current,
+                    childhoodPhotos: current.childhoodPhotos.map((photo) =>
+                        photo.id === tempId
+                            ? {
+                                ...photo,
+                                uploadStatus: 'error',
+                                uploadError: result.error || 'Upload failed.',
+                            }
+                            : photo
+                    ),
+                }));
+                setPhotoError(result.error || `Could not upload ${file.name}.`);
+                continue;
+            }
+
+            const asset = result.asset;
+            applyUpdate((current) => ({
+                ...current,
+                childhoodPhotos: current.childhoodPhotos.map((photo) =>
+                    photo.id === tempId
+                        ? {
+                            ...photo,
+                            file: null,
+                            preview: asset.publicUrl,
+                            assetId: asset.id,
+                            bucket: asset.bucket,
+                            storagePath: asset.storagePath,
+                            originalFileName: asset.originalFileName,
+                            mimeType: asset.mimeType,
+                            fileSize: asset.fileSize,
+                            uploadedAt: asset.createdAt,
+                            uploadStatus: 'ready',
+                            uploadError: null,
+                            sha256_hash: asset.sha256Hash,
+                        }
+                        : photo
+                ),
+            }));
+        }
+
+        e.currentTarget.value = '';
+    };
+
+    const removePhoto = async (index: number) => {
+        const photo = dataRef.current.childhoodPhotos[index];
+        if (!photo) return;
+
         if (!window.confirm('Remove this childhood photo? This change will be saved to the memorial.')) {
             return;
         }
-        handleChange('childhoodPhotos', data.childhoodPhotos.filter((_, i) => i !== index));
+
+        if (memorialId && photo.assetId) {
+            try {
+                await deleteMediaAssets(memorialId, [photo.assetId], 'soft');
+            } catch (error: any) {
+                setPhotoError(error.message || 'Could not remove this childhood photo.');
+                return;
+            }
+        }
+
+        setPhotoError(null);
+        applyUpdate((current) => ({
+            ...current,
+            childhoodPhotos: current.childhoodPhotos.filter((_, i) => i !== index),
+        }));
     };
 
     const updatePhotoCaption = (index: number, caption: string) => {
-        const updated = [...data.childhoodPhotos];
-        updated[index] = { ...updated[index], caption };
-        handleChange('childhoodPhotos', updated);
+        applyUpdate((current) => {
+            const updated = [...current.childhoodPhotos];
+            updated[index] = { ...updated[index], caption };
+            return { ...current, childhoodPhotos: updated };
+        });
     };
 
     const updatePhotoYear = (index: number, year: string) => {
-        const updated = [...data.childhoodPhotos];
-        updated[index] = { ...updated[index], year };
-        handleChange('childhoodPhotos', updated);
+        applyUpdate((current) => {
+            const updated = [...current.childhoodPhotos];
+            updated[index] = { ...updated[index], year };
+            return { ...current, childhoodPhotos: updated };
+        });
     };
 
     return (
