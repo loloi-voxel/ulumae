@@ -2,7 +2,14 @@ import crypto from 'crypto';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import type { MemorialData } from '@/types/memorial';
+import type {
+  ChildhoodPhotoReference,
+  InteractiveMediaReference,
+  MediaImageReference,
+  MemorialData,
+  VideoReference,
+  VoiceRecordingReference,
+} from '@/types/memorial';
 import type {
   MediaBucket,
   MediaKind,
@@ -456,6 +463,169 @@ export function collectMemorialMediaAssetIds(data: MemorialData) {
   return ids;
 }
 
+async function getActiveMemorialMediaAssets(
+  admin: SupabaseClient,
+  memorialId: string
+) {
+  const { data, error } = await admin
+    .from('memorial_media_assets')
+    .select(MEDIA_SELECT)
+    .eq('memorial_id', memorialId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw new Error(error.message || 'Could not load active media assets.');
+  }
+
+  return (data || []).map((row) => serializeMediaAsset(row as MediaAssetRow));
+}
+
+function getAssetMetadataString(
+  asset: StoredMediaAsset,
+  key: string
+) {
+  const value = asset.metadata?.[key];
+  return typeof value === 'string' ? value : '';
+}
+
+function getAssetMetadataNumber(
+  asset: StoredMediaAsset,
+  key: string
+) {
+  const value = asset.metadata?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function getAssetSortValue(asset: StoredMediaAsset) {
+  return getAssetMetadataNumber(asset, 'position') ?? Number.MAX_SAFE_INTEGER;
+}
+
+function sortAssetsByPositionThenCreatedAt(a: StoredMediaAsset, b: StoredMediaAsset) {
+  const positionDiff = getAssetSortValue(a) - getAssetSortValue(b);
+  if (positionDiff !== 0) return positionDiff;
+
+  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+}
+
+function stripExtension(fileName?: string | null) {
+  if (!fileName) return '';
+  return fileName.replace(/\.[^/.]+$/, '');
+}
+
+function buildChildhoodPhotoReference(
+  asset: StoredMediaAsset
+): ChildhoodPhotoReference {
+  return {
+    id: asset.id,
+    preview: asset.publicUrl,
+    caption: getAssetMetadataString(asset, 'caption'),
+    year: getAssetMetadataString(asset, 'year'),
+    assetId: asset.id,
+    bucket: asset.bucket,
+    storagePath: asset.storagePath,
+    originalFileName: asset.originalFileName,
+    mimeType: asset.mimeType,
+    fileSize: asset.fileSize,
+    uploadedAt: asset.createdAt,
+    uploadStatus: 'ready',
+    uploadError: null,
+    sha256_hash: asset.sha256Hash,
+  };
+}
+
+function buildGalleryPhotoReference(
+  asset: StoredMediaAsset
+): MediaImageReference {
+  return {
+    id: asset.id,
+    preview: asset.publicUrl,
+    caption: getAssetMetadataString(asset, 'caption'),
+    year: getAssetMetadataString(asset, 'year'),
+    type: 'photo',
+    assetId: asset.id,
+    bucket: asset.bucket,
+    storagePath: asset.storagePath,
+    originalFileName: asset.originalFileName,
+    mimeType: asset.mimeType,
+    fileSize: asset.fileSize,
+    uploadedAt: asset.createdAt,
+    uploadStatus: 'ready',
+    uploadError: null,
+    sha256_hash: asset.sha256Hash,
+  };
+}
+
+function buildInteractiveMediaReference(
+  asset: StoredMediaAsset
+): InteractiveMediaReference {
+  return {
+    id: asset.id,
+    preview: asset.publicUrl,
+    description: getAssetMetadataString(asset, 'description'),
+    assetId: asset.id,
+    bucket: asset.bucket,
+    storagePath: asset.storagePath,
+    originalFileName: asset.originalFileName,
+    mimeType: asset.mimeType,
+    fileSize: asset.fileSize,
+    uploadedAt: asset.createdAt,
+    uploadStatus: 'ready',
+    uploadError: null,
+    sha256_hash: asset.sha256Hash,
+  };
+}
+
+function buildVoiceRecordingReference(
+  asset: StoredMediaAsset
+): VoiceRecordingReference {
+  return {
+    id: asset.id,
+    title: getAssetMetadataString(asset, 'title') || stripExtension(asset.originalFileName) || 'Voice recording',
+    url: asset.publicUrl,
+    assetId: asset.id,
+    bucket: asset.bucket,
+    storagePath: asset.storagePath,
+    originalFileName: asset.originalFileName,
+    mimeType: asset.mimeType,
+    fileSize: asset.fileSize,
+    uploadedAt: asset.createdAt,
+    uploadStatus: 'ready',
+    uploadError: null,
+    sha256_hash: asset.sha256Hash,
+  };
+}
+
+function buildVideoReference(
+  asset: StoredMediaAsset,
+  thumbnailAsset: StoredMediaAsset | null
+): VideoReference {
+  return {
+    id: asset.id,
+    url: asset.publicUrl,
+    thumbnail: thumbnailAsset?.publicUrl || asset.publicUrl,
+    title: getAssetMetadataString(asset, 'title') || stripExtension(asset.originalFileName) || 'Video memory',
+    description: getAssetMetadataString(asset, 'description'),
+    duration: getAssetMetadataString(asset, 'duration'),
+    assetId: asset.id,
+    bucket: asset.bucket,
+    storagePath: asset.storagePath,
+    originalFileName: asset.originalFileName,
+    mimeType: asset.mimeType,
+    fileSize: asset.fileSize,
+    uploadedAt: asset.createdAt,
+    uploadStatus: 'ready',
+    uploadError: null,
+    sha256_hash: asset.sha256Hash,
+    thumbnailAssetId: thumbnailAsset?.id || null,
+    thumbnailBucket: thumbnailAsset?.bucket || null,
+    thumbnailStoragePath: thumbnailAsset?.storagePath || null,
+    thumbnailMimeType: thumbnailAsset?.mimeType || null,
+    thumbnailFileSize: thumbnailAsset?.fileSize || null,
+    thumbnailUploadedAt: thumbnailAsset?.createdAt || null,
+  };
+}
+
 function parseSupabasePublicUrl(url: string) {
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!baseUrl) return null;
@@ -700,6 +870,34 @@ async function updateAssetMetadata(
   if (error) {
     throw new Error(error.message || 'Could not update media metadata.');
   }
+}
+
+export async function mergeMemorialMediaAssetMetadata(
+  admin: SupabaseClient,
+  memorialId: string,
+  assetId: string,
+  metadataPatch: Record<string, unknown>
+) {
+  const assets = await getMemorialMediaAssetsByIds(admin, memorialId, [assetId]);
+  const asset = assets[0] || null;
+
+  if (!asset) {
+    throw new Error('Media asset not found.');
+  }
+
+  const mergedMetadata = {
+    ...(asset.metadata || {}),
+    ...Object.fromEntries(
+      Object.entries(metadataPatch).filter(([, value]) => value !== undefined)
+    ),
+  };
+
+  await updateAssetMetadata(admin, assetId, mergedMetadata);
+
+  return {
+    ...asset,
+    metadata: mergedMetadata,
+  };
 }
 
 function stripTransientFileFields<T extends Record<string, any>>(value: T) {
@@ -1041,6 +1239,121 @@ export async function normalizeMemorialMediaData({
       thumbnailFileSize: thumbnailAsset.asset?.fileSize || null,
       thumbnailUploadedAt: thumbnailAsset.asset?.createdAt || null,
     });
+  }
+
+  const activeAssets = await getActiveMemorialMediaAssets(admin, memorialId);
+  const referencedAssetIds = collectMemorialMediaAssetIds(normalized);
+  const thumbnailsByVideoId = new Map<string, StoredMediaAsset>();
+
+  for (const asset of activeAssets) {
+    if (asset.kind !== 'video_thumbnail') continue;
+
+    const videoAssetId = asset.metadata?.videoAssetId;
+    if (typeof videoAssetId === 'string' && videoAssetId) {
+      thumbnailsByVideoId.set(videoAssetId, asset);
+    }
+  }
+
+  if (!normalized.step1.profilePhotoPreview) {
+    const latestProfile = activeAssets.filter((asset) => asset.kind === 'profile_photo').at(-1);
+    if (latestProfile) {
+      normalized.step1 = {
+        ...normalized.step1,
+        profilePhoto: null,
+        profilePhotoPreview: latestProfile.publicUrl,
+        profilePhotoAssetId: latestProfile.id,
+        profilePhotoBucket: latestProfile.bucket,
+        profilePhotoStoragePath: latestProfile.storagePath,
+        profilePhotoMimeType: latestProfile.mimeType,
+        profilePhotoFileSize: latestProfile.fileSize,
+        profilePhotoUploadedAt: latestProfile.createdAt,
+        profilePhotoUploadStatus: 'ready',
+        profilePhotoUploadError: null,
+        profilePhotoHash: latestProfile.sha256Hash,
+      };
+      referencedAssetIds.add(latestProfile.id);
+    }
+  }
+
+  if (!normalized.step8.coverPhotoPreview) {
+    const latestCover = activeAssets.filter((asset) => asset.kind === 'cover_photo').at(-1);
+    if (latestCover) {
+      normalized.step8.coverPhoto = null;
+      normalized.step8.coverPhotoPreview = latestCover.publicUrl;
+      normalized.step8.coverPhotoAssetId = latestCover.id;
+      normalized.step8.coverPhotoBucket = latestCover.bucket;
+      normalized.step8.coverPhotoStoragePath = latestCover.storagePath;
+      normalized.step8.coverPhotoMimeType = latestCover.mimeType;
+      normalized.step8.coverPhotoFileSize = latestCover.fileSize;
+      normalized.step8.coverPhotoUploadedAt = latestCover.createdAt;
+      normalized.step8.coverPhotoUploadStatus = 'ready';
+      normalized.step8.coverPhotoUploadError = null;
+      normalized.step8.coverPhotoHash = latestCover.sha256Hash;
+      referencedAssetIds.add(latestCover.id);
+    }
+  }
+
+  const orphanChildhoodPhotos = activeAssets
+    .filter(
+      (asset) =>
+        asset.kind === 'gallery_photo' &&
+        asset.metadata?.section === 'childhood_photos' &&
+        !referencedAssetIds.has(asset.id)
+    )
+    .sort(sortAssetsByPositionThenCreatedAt);
+
+  for (const asset of orphanChildhoodPhotos) {
+    normalized.step2.childhoodPhotos.push(buildChildhoodPhotoReference(asset));
+    referencedAssetIds.add(asset.id);
+  }
+
+  const orphanGalleryPhotos = activeAssets
+    .filter(
+      (asset) =>
+        asset.kind === 'gallery_photo' &&
+        asset.metadata?.section !== 'childhood_photos' &&
+        !referencedAssetIds.has(asset.id)
+    )
+    .sort(sortAssetsByPositionThenCreatedAt);
+
+  for (const asset of orphanGalleryPhotos) {
+    normalized.step8.gallery.push(buildGalleryPhotoReference(asset));
+    referencedAssetIds.add(asset.id);
+  }
+
+  const orphanInteractiveItems = activeAssets
+    .filter(
+      (asset) => asset.kind === 'interactive_photo' && !referencedAssetIds.has(asset.id)
+    )
+    .sort(sortAssetsByPositionThenCreatedAt);
+
+  for (const asset of orphanInteractiveItems) {
+    normalized.step8.interactiveGallery.push(buildInteractiveMediaReference(asset));
+    referencedAssetIds.add(asset.id);
+  }
+
+  const orphanVoiceRecordings = activeAssets
+    .filter(
+      (asset) => asset.kind === 'voice_recording' && !referencedAssetIds.has(asset.id)
+    )
+    .sort(sortAssetsByPositionThenCreatedAt);
+
+  for (const asset of orphanVoiceRecordings) {
+    normalized.step8.voiceRecordings.push(buildVoiceRecordingReference(asset));
+    referencedAssetIds.add(asset.id);
+  }
+
+  const orphanVideos = activeAssets
+    .filter((asset) => asset.kind === 'video' && !referencedAssetIds.has(asset.id))
+    .sort(sortAssetsByPositionThenCreatedAt);
+
+  for (const asset of orphanVideos) {
+    const thumbnailAsset = thumbnailsByVideoId.get(asset.id) || null;
+    normalized.step9.videos.push(buildVideoReference(asset, thumbnailAsset));
+    referencedAssetIds.add(asset.id);
+    if (thumbnailAsset) {
+      referencedAssetIds.add(thumbnailAsset.id);
+    }
   }
 
   normalized.step1.profilePhoto = null;

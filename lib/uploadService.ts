@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/client';
 
 import type {
   MediaDeleteResponse,
+  MediaMetadataUpdateResponse,
   MediaKind,
   MediaUploadResponse,
   StoredMediaAsset,
@@ -150,6 +151,31 @@ export async function deleteMediaAssets(
   const payload = (await response.json()) as MediaDeleteResponse;
   if (!response.ok || !payload.success) {
     throw new Error(payload.error?.message || 'Media update failed.');
+  }
+
+  return payload.data;
+}
+
+export async function updateMediaAssetMetadata(
+  memorialId: string,
+  assetId: string,
+  metadata: Record<string, unknown>
+) {
+  const response = await fetch('/api/media/metadata', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      memorialId,
+      assetId,
+      metadata,
+    }),
+  });
+
+  const payload = (await response.json()) as MediaMetadataUpdateResponse;
+  if (!response.ok || !payload.success || !payload.data) {
+    throw new Error(payload.error?.message || 'Media metadata update failed.');
   }
 
   return payload.data;

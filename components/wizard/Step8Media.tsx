@@ -23,7 +23,7 @@ import type {
   VoiceRecordingReference,
 } from '@/types/memorial';
 import { DRAFT_MEDIA_LIMIT, PLAN_PRICES_USD } from '@/lib/constants';
-import { deleteMediaAssets, secureUpload } from '@/lib/uploadService';
+import { deleteMediaAssets, secureUpload, updateMediaAssetMetadata } from '@/lib/uploadService';
 
 interface Step8Props {
   data: MediaLegacy;
@@ -140,6 +140,7 @@ export default function Step8Media({
   const voiceRef = useRef<HTMLInputElement>(null);
   const replaceRef = useRef<HTMLInputElement>(null);
   const dataRef = useRef(data);
+  const interactiveMetadataTimersRef = useRef<Record<string, number>>({});
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
@@ -154,10 +155,48 @@ export default function Step8Media({
     dataRef.current = data;
   }, [data]);
 
+  useEffect(() => {
+    return () => {
+      Object.values(interactiveMetadataTimersRef.current).forEach((timerId) => {
+        window.clearTimeout(timerId);
+      });
+    };
+  }, []);
+
   const applyUpdate = (updater: (current: MediaLegacy) => MediaLegacy) => {
     const next = updater(dataRef.current);
     dataRef.current = next;
     onUpdate(next);
+  };
+
+  const syncInteractiveMetadata = async (id: string) => {
+    const currentItem = dataRef.current.interactiveGallery.find((item) => item.id === id);
+
+    if (!memorialId || !currentItem?.assetId) {
+      delete interactiveMetadataTimersRef.current[id];
+      return;
+    }
+
+    try {
+      await updateMediaAssetMetadata(memorialId, currentItem.assetId, {
+        description: currentItem.description || '',
+      });
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Could not save the story text yet.');
+    } finally {
+      delete interactiveMetadataTimersRef.current[id];
+    }
+  };
+
+  const queueInteractiveMetadataSync = (id: string, delay = 500) => {
+    const existingTimer = interactiveMetadataTimersRef.current[id];
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+    }
+
+    interactiveMetadataTimersRef.current[id] = window.setTimeout(() => {
+      void syncInteractiveMetadata(id);
+    }, delay);
   };
 
   const maxAllowed = isPaid ? Number.POSITIVE_INFINITY : DRAFT_MEDIA_LIMIT;
@@ -388,6 +427,8 @@ export default function Step8Media({
             : item
         ),
       }));
+
+      queueInteractiveMetadataSync(tempId);
     }
   };
 
@@ -643,10 +684,13 @@ export default function Step8Media({
           ...(replaceTarget.section === 'gallery'
             ? { gallery: current.gallery.map(updater) }
             : replaceTarget.section === 'interactive'
-              ? { interactiveGallery: current.interactiveGallery.map(updater) }
+            ? { interactiveGallery: current.interactiveGallery.map(updater) }
               : { voiceRecordings: current.voiceRecordings.map(updater) }),
         };
       });
+      if (replaceTarget.section === 'interactive' && replaceTarget.id) {
+        queueInteractiveMetadataSync(replaceTarget.id);
+      }
       setReplaceTarget(null);
     } catch (error: any) {
       setErrorMessage(error.message || 'Could not replace the selected media item.');
@@ -690,6 +734,8 @@ export default function Step8Media({
         item.id === id ? { ...item, description: value } : item
       ),
     }));
+
+    queueInteractiveMetadataSync(id);
   };
 
   const updateVoiceTitle = (id: string, value: string) => {
@@ -864,7 +910,10 @@ export default function Step8Media({
                     <button type="button" onClick={() => setSelectedDetail({ section: 'interactive', id: item.id })} className="block w-full overflow-hidden rounded-xl">
                       <img src={item.preview} alt="Interactive story" className="aspect-video w-full object-cover" />
                     </button>
-                    <textarea value={item.description} onChange={(event) => updateInteractiveDescription(item.id, event.target.value)} rows={4} disabled={readOnly} placeholder="What story should this image reveal?" className="mt-3 w-full rounded-xl border border-warm-border/30 px-3 py-3 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
+                    <textarea value={item.description} onChange={(event) => updateInteractiveDescription(item.id, event.target.value)} onBlur={() => queueInteractiveMetadataSync(item.id, 0)} rows={4} disabled={readOnly} placeholder="What story should this image reveal?" className="mt-3 w-full rounded-xl border border-warm-border/30 px-3 py-3 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
+                    <p className="mt-2 text-xs leading-relaxed text-warm-dark/45">
+                      This text appears on the public memorial and inside the story viewer.
+                    </p>
                     {!readOnly && (
                       <div className="mt-2 flex justify-end">
                         <button onClick={() => removeItem('interactive', item.id)} className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">

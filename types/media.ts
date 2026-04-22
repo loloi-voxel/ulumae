@@ -62,6 +62,15 @@ export interface MediaDeleteResponse {
   error?: MediaUploadError;
 }
 
+export interface MediaMetadataUpdateResponse {
+  success: boolean;
+  data?: {
+    assetId: string;
+    metadata: Record<string, unknown>;
+  };
+  error?: MediaUploadError;
+}
+
 export interface MediaReferenceFields {
   assetId?: string | null;
   bucket?: MediaBucket | null;

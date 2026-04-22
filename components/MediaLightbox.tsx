@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Play, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MousePointer, Play, X } from 'lucide-react';
 
 export interface MediaLightboxItem {
   id: string;
   kind: 'image' | 'video';
+  variant?: 'default' | 'interactive-story';
   src: string;
   thumbnailSrc?: string | null;
   poster?: string | null;
@@ -23,14 +24,26 @@ interface MediaLightboxProps {
   onClose: () => void;
 }
 
+function getInteractiveStoryCopy(item: MediaLightboxItem) {
+  return (
+    item.description ||
+    item.caption ||
+    item.title ||
+    'Move your cursor to reveal the photo.'
+  );
+}
+
 export default function MediaLightbox({
   items,
   initialIndex,
   onClose,
 }: MediaLightboxProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [interactivePointer, setInteractivePointer] = useState({ x: 50, y: 50 });
+  const [isInteractiveHovering, setIsInteractiveHovering] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  const wheelLockRef = useRef<number | null>(null);
 
   useEffect(() => {
     setCurrentIndex(initialIndex);
@@ -82,9 +95,8 @@ export default function MediaLightbox({
       }
     };
 
-    previouslyFocusedRef.current = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
+    previouslyFocusedRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', handleKeyDown);
     dialogRef.current?.querySelector<HTMLElement>('[data-close]')?.focus();
@@ -92,6 +104,9 @@ export default function MediaLightbox({
     return () => {
       document.body.style.overflow = '';
       window.removeEventListener('keydown', handleKeyDown);
+      if (wheelLockRef.current) {
+        window.clearTimeout(wheelLockRef.current);
+      }
       previouslyFocusedRef.current?.focus();
     };
   }, [goToNext, goToPrevious, onClose]);
@@ -100,11 +115,44 @@ export default function MediaLightbox({
 
   const currentItem = items[currentIndex];
   const embedUrl = getVideoEmbedUrl(currentItem);
+  const isInteractiveStory = currentItem.variant === 'interactive-story';
+  const interactiveStoryCopy = getInteractiveStoryCopy(currentItem);
   const hasMeta =
     currentItem.title ||
     currentItem.description ||
     currentItem.caption ||
     currentItem.year;
+
+  const handleInteractiveMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setInteractivePointer({
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
+    setIsInteractiveHovering(true);
+  };
+
+  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!isInteractiveStory || items.length <= 1 || Math.abs(event.deltaY) < 16) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (wheelLockRef.current) {
+      return;
+    }
+
+    if (event.deltaY > 0) {
+      goToNext();
+    } else {
+      goToPrevious();
+    }
+
+    wheelLockRef.current = window.setTimeout(() => {
+      wheelLockRef.current = null;
+    }, 420);
+  };
 
   return (
     <div
@@ -113,6 +161,7 @@ export default function MediaLightbox({
       aria-modal="true"
       aria-label={currentItem.title || `Media viewer ${currentIndex + 1} of ${items.length}`}
       className="fixed inset-0 z-50 flex items-center justify-center bg-warm-dark/95 backdrop-blur-sm"
+      onWheel={handleWheel}
     >
       <button
         data-close
@@ -133,59 +182,138 @@ export default function MediaLightbox({
         </button>
       )}
 
-      <div className="relative mx-auto max-h-[90vh] max-w-7xl px-20">
-        <div className="overflow-hidden rounded-lg shadow-2xl">
-          {currentItem.kind === 'video' ? (
-            embedUrl ? (
-              <div className="aspect-video w-[min(92vw,1200px)] max-w-full bg-black">
-                <iframe
-                  key={currentItem.id}
-                  src={embedUrl}
-                  title={currentItem.title || 'Video viewer'}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  className="h-full w-full"
+      <div className="relative mx-auto w-full max-w-7xl px-4 md:px-20">
+        {isInteractiveStory ? (
+          <div className="grid max-h-[88vh] w-full gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)]">
+            <div
+              className="relative aspect-[4/3] overflow-hidden rounded-[28px] border border-white/10 bg-black shadow-2xl"
+              onMouseMove={handleInteractiveMouseMove}
+              onMouseLeave={() => setIsInteractiveHovering(false)}
+            >
+              <div className="absolute inset-0 z-10 flex items-center justify-center p-6 md:p-10">
+                <div className="max-w-2xl rounded-3xl bg-surface-low/88 px-6 py-5 shadow-xl backdrop-blur-sm">
+                  <p className="font-serif text-xl leading-relaxed text-warm-dark md:text-3xl">
+                    {interactiveStoryCopy}
+                  </p>
+                </div>
+              </div>
+
+              <div
+                className="absolute inset-0 z-20 transition-opacity duration-300"
+                style={{
+                  maskImage: isInteractiveHovering
+                    ? `radial-gradient(circle 140px at ${interactivePointer.x}px ${interactivePointer.y}px, transparent 0%, transparent 45%, rgba(0,0,0,0.3) 72%, black 100%)`
+                    : 'none',
+                  WebkitMaskImage: isInteractiveHovering
+                    ? `radial-gradient(circle 140px at ${interactivePointer.x}px ${interactivePointer.y}px, transparent 0%, transparent 45%, rgba(0,0,0,0.3) 72%, black 100%)`
+                    : 'none',
+                }}
+              >
+                <img
+                  src={currentItem.src}
+                  alt={currentItem.alt || currentItem.title || 'Interactive story'}
+                  className="h-full w-full object-cover"
+                  draggable={false}
                 />
               </div>
-            ) : (
-              <video
-                key={currentItem.id}
-                controls
-                autoPlay
-                preload="metadata"
-                className="max-h-[85vh] max-w-full bg-black object-contain"
-                poster={currentItem.poster || undefined}
-              >
-                <source src={currentItem.src} type={currentItem.mimeType || undefined} />
-              </video>
-            )
-          ) : (
-            <img
-              src={currentItem.src}
-              alt={currentItem.alt || currentItem.caption || currentItem.title || 'Media item'}
-              className="max-h-[85vh] max-w-full object-contain"
-            />
-          )}
-        </div>
 
-        {hasMeta && (
-          <div className="absolute bottom-0 left-0 right-0 rounded-b-lg bg-gradient-to-t from-warm-dark/95 to-transparent p-6">
-            {currentItem.title && (
-              <p className="text-lg text-surface-low">{currentItem.title}</p>
-            )}
-            {currentItem.description && (
-              <p className="mt-1 text-sm text-surface-low/90">{currentItem.description}</p>
-            )}
-            {currentItem.caption && !currentItem.description && (
-              <p className="mt-1 text-sm text-surface-low/90">{currentItem.caption}</p>
-            )}
-            {currentItem.year && (
-              <p className="mt-1 text-xs text-surface-low/70">{currentItem.year}</p>
+              <div className="absolute left-4 top-4 z-30 inline-flex items-center gap-2 rounded-full bg-warm-dark/70 px-3 py-1.5 text-xs tracking-wide text-surface-low">
+                <MousePointer size={14} />
+                Move to reveal
+              </div>
+
+              {items.length > 1 && (
+                <div className="absolute bottom-4 right-4 z-30 rounded-full bg-warm-dark/70 px-3 py-1.5 text-xs tracking-wide text-surface-low">
+                  Scroll to continue
+                </div>
+              )}
+            </div>
+
+            <aside className="flex max-h-[88vh] min-h-0 flex-col overflow-hidden rounded-[28px] border border-white/10 bg-surface-low/96 p-6 shadow-2xl">
+              <p className="text-xs uppercase tracking-[0.28em] text-warm-dark/35">
+                Interactive Story {currentIndex + 1} of {items.length}
+              </p>
+              <h3 className="mt-4 font-serif text-3xl text-warm-dark">
+                {currentItem.title || `Interactive photo story ${currentIndex + 1}`}
+              </h3>
+
+              <div className="mt-5 flex-1 overflow-y-auto pr-2">
+                <p className="whitespace-pre-wrap text-lg leading-relaxed text-warm-dark/82">
+                  {interactiveStoryCopy}
+                </p>
+
+                {currentItem.year && (
+                  <p className="mt-4 text-xs uppercase tracking-[0.22em] text-warm-dark/35">
+                    {currentItem.year}
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-warm-border/25 bg-white/70 p-4 text-sm leading-relaxed text-warm-dark/60">
+                Move your cursor across the image to reveal the moment. Use the mouse wheel,
+                arrow keys, or the story strip below to travel through the full set.
+              </div>
+            </aside>
+          </div>
+        ) : (
+          <div className="relative mx-auto max-h-[90vh] max-w-7xl">
+            <div className="overflow-hidden rounded-lg shadow-2xl">
+              {currentItem.kind === 'video' ? (
+                embedUrl ? (
+                  <div className="aspect-video w-[min(92vw,1200px)] max-w-full bg-black">
+                    <iframe
+                      key={currentItem.id}
+                      src={embedUrl}
+                      title={currentItem.title || 'Video viewer'}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                      className="h-full w-full"
+                    />
+                  </div>
+                ) : (
+                  <video
+                    key={currentItem.id}
+                    controls
+                    autoPlay
+                    preload="metadata"
+                    className="max-h-[85vh] max-w-full bg-black object-contain"
+                    poster={currentItem.poster || undefined}
+                  >
+                    <source src={currentItem.src} type={currentItem.mimeType || undefined} />
+                  </video>
+                )
+              ) : (
+                <img
+                  src={currentItem.src}
+                  alt={currentItem.alt || currentItem.caption || currentItem.title || 'Media item'}
+                  className="max-h-[85vh] max-w-full object-contain"
+                />
+              )}
+            </div>
+
+            {hasMeta && (
+              <div className="absolute bottom-0 left-0 right-0 rounded-b-lg bg-gradient-to-t from-warm-dark/95 to-transparent p-6">
+                {currentItem.title && (
+                  <p className="text-lg text-surface-low">{currentItem.title}</p>
+                )}
+                {currentItem.description && (
+                  <p className="mt-1 text-sm text-surface-low/90">{currentItem.description}</p>
+                )}
+                {currentItem.caption && !currentItem.description && (
+                  <p className="mt-1 text-sm text-surface-low/90">{currentItem.caption}</p>
+                )}
+                {currentItem.year && (
+                  <p className="mt-1 text-xs text-surface-low/70">{currentItem.year}</p>
+                )}
+              </div>
             )}
           </div>
         )}
 
-        <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-warm-dark/80 px-4 py-2" aria-live="polite">
+        <div
+          className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-warm-dark/80 px-4 py-2"
+          aria-live="polite"
+        >
           <p className="text-sm text-surface-low">
             {currentIndex + 1} / {items.length}
           </p>

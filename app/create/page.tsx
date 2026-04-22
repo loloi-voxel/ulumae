@@ -520,43 +520,41 @@ function CreateMemorialPageContent() {
   const loadMemorial = async (id: string) => {
     setIsLoading(true);
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('memorials')
-        .select('*')
-        .eq('id', id)
-        .single();
+      const response = await fetch(`/api/memorials/${id}/state`, {
+        cache: 'no-store',
+      });
+      const payload = await response.json().catch(() => null);
 
-      if (error) throw error;
+      if (!response.ok || !payload?.memorialData || !payload?.memorial) {
+        throw new Error(payload?.error || 'Failed to load archive');
+      }
 
-      if (data) {
-        setMemorialOwnerId(data.user_id || null);
-        // IMPROVED MERGING: Deep merge to ensure missing properties in DB are filled with defaults
+      const { memorial, memorialData: normalizedData } = payload;
+
+      if (normalizedData) {
+        setMemorialOwnerId(memorial.userId || null);
         const initial = getInitialData();
         const loadedData: MemorialData = {
           ...initial,
-          ...data,
-          // Deep merge each step
-          step1: { ...initial.step1, ...(data.step1 || {}) },
-          step2: { ...initial.step2, ...(data.step2 || {}) },
-          step3: { ...initial.step3, ...(data.step3 || {}) },
-          step4: { ...initial.step4, ...(data.step4 || {}) },
-          step5: { ...initial.step5, ...(data.step5 || {}) },
-          step6: { ...initial.step6, ...(data.step6 || {}) },
-          step7: { ...initial.step7, ...(data.step7 || {}) },
-          step8: { ...initial.step8, ...(data.step8 || {}) },
-          step9: { ...initial.step9, ...(data.step9 || {}) },
-
-          paid: data.paid || false,
+          ...normalizedData,
+          step1: { ...initial.step1, ...(normalizedData.step1 || {}) },
+          step2: { ...initial.step2, ...(normalizedData.step2 || {}) },
+          step3: { ...initial.step3, ...(normalizedData.step3 || {}) },
+          step4: { ...initial.step4, ...(normalizedData.step4 || {}) },
+          step5: { ...initial.step5, ...(normalizedData.step5 || {}) },
+          step6: { ...initial.step6, ...(normalizedData.step6 || {}) },
+          step7: { ...initial.step7, ...(normalizedData.step7 || {}) },
+          step8: { ...initial.step8, ...(normalizedData.step8 || {}) },
+          step9: { ...initial.step9, ...(normalizedData.step9 || {}) },
+          paid: memorial.paid || normalizedData.paid || false,
           currentStep: 1,
-          lastSaved: data.updated_at,
-          completedSteps: data.completed_steps || [],
+          lastSaved: memorial.updatedAt || normalizedData.lastSaved,
+          completedSteps: memorial.completedSteps || normalizedData.completedSteps || [],
         };
         setMemorialData(loadedData);
         setCurrentMemorialId(id);
-        // Store the DB mode so auto-save never overwrites it from URL params
-        if (data.mode) {
-          setDbMode(data.mode);
+        if (memorial.mode) {
+          setDbMode(memorial.mode);
         }
         stepEntryDataRef.current = structuredClone(loadedData);
         lastSavedSignatureRef.current = getMemorialSaveSignature(loadedData);
