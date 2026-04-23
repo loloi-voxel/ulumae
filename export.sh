@@ -1,82 +1,23 @@
 #!/usr/bin/env bash
 
-# Préfixe des fichiers de sortie
-OUTPUT_PREFIX="export_code_part_"
-MAX_LINES=5000
-CURRENT_PART=1
-CURRENT_LINES=0
-
-# Fonction pour créer un nouveau fichier
-new_output_file() {
-  echo "${OUTPUT_PREFIX}${CURRENT_PART}.txt"
-}
-
-OUTPUT=$(new_output_file)
+OUTPUT="export_code.txt"
 > "$OUTPUT"
 
-# Dossiers à exclure
-EXCLUDES=(
-  "node_modules"
-  ".git"
-  "dist"
-  "build"
-  ".next"
-  "venv"
-  "__pycache__"
+printf "==== EXPORT CODE ====\n" >> "$OUTPUT"
+
+FILES=(
+  "app/archive/[memorialId]/_hooks/archiveRoleStore.ts"
 )
 
-# Fichiers à exclure explicitement
-EXCLUDE_FILES=(
-  "package-lock.json"
-)
-
-# Construction des patterns d'exclusion pour les dossiers
-EXCLUDE_PARAMS=()
-for e in "${EXCLUDES[@]}"; do
-  EXCLUDE_PARAMS+=(-path "*$e*" -prune -o)
+for FILE in "${FILES[@]}"; do
+  if [ -f "$FILE" ]; then
+    printf "\n===== FICHIER: %s =====\n\n" "$FILE" >> "$OUTPUT"
+    cat "$FILE" >> "$OUTPUT"
+  else
+    printf "\n[ERREUR] Fichier introuvable: %s\n\n" "$FILE" >> "$OUTPUT"
+  fi
 done
 
-# Construction des patterns d'exclusion pour les fichiers
-EXCLUDE_FILE_PARAMS=()
-for f in "${EXCLUDE_FILES[@]}"; do
-  EXCLUDE_FILE_PARAMS+=(! -name "$f")
-done
+printf "\n=== FIN ===\n" >> "$OUTPUT"
 
-# Extensions de fichiers à exporter
-EXTENSIONS="sh js ts jsx tsx py go java cpp hpp c h html css scss json yaml yml md"
-
-echo "==== EXPORT CODE ====" >> "$OUTPUT"
-
-for ext in $EXTENSIONS; do
-  echo -e "\n### EXTENSION .$ext ###\n" >> "$OUTPUT"
-  CURRENT_LINES=$((CURRENT_LINES + 2))
-
-  find . \
-    "${EXCLUDE_PARAMS[@]}" \
-    -type f -name "*.$ext" \
-    "${EXCLUDE_FILE_PARAMS[@]}" \
-    -print | while read -r FILE; do
-      
-      # Compte les lignes du fichier
-      FILE_LINES=$(wc -l < "$FILE")
-      HEADER_LINES=2
-      TOTAL_LINES=$((FILE_LINES + HEADER_LINES))
-      
-      # Si on dépasse la limite, on crée un nouveau fichier
-      if [ $((CURRENT_LINES + TOTAL_LINES)) -gt $MAX_LINES ]; then
-        echo -e "\n=== SUITE DANS PARTIE SUIVANTE ===\n" >> "$OUTPUT"
-        CURRENT_PART=$((CURRENT_PART + 1))
-        OUTPUT=$(new_output_file)
-        > "$OUTPUT"
-        echo "==== EXPORT CODE (PARTIE $CURRENT_PART) ====" >> "$OUTPUT"
-        CURRENT_LINES=1
-      fi
-      
-      echo -e "\n===== FICHIER: $FILE =====\n" >> "$OUTPUT"
-      cat "$FILE" >> "$OUTPUT"
-      CURRENT_LINES=$((CURRENT_LINES + TOTAL_LINES))
-  done
-done
-
-echo -e "\n=== FIN ===\n" >> "$OUTPUT"
-echo "Export terminé en $CURRENT_PART partie(s)"
+echo "Export terminé dans $OUTPUT"
