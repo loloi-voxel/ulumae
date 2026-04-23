@@ -25,7 +25,15 @@ export function useRoleSync(
         let message: string | null = null;
         let href: string | null = null;
 
-        if (status === 'forbidden' && !pathname.includes('/revoked')) {
+        if (status === 'unauthorized') {
+            redirectKey = `login:${memorialId}`;
+            message = 'Your session expired. Please sign in again.';
+            href = `/login?next=${encodeURIComponent(pathname || `/archive/${memorialId}`)}`;
+        } else if (status === 'not_found') {
+            redirectKey = `missing:${memorialId}`;
+            message = 'This archive is no longer available.';
+            href = '/dashboard';
+        } else if (status === 'forbidden' && !pathname.includes('/revoked')) {
             redirectKey = `revoked:${memorialId}`;
             message = 'Your access to this archive has been removed.';
             href = `/archive/${memorialId}/revoked`;
