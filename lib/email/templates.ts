@@ -1,5 +1,7 @@
 // lib/email/templates.ts
 
+import { type DeadManSwitchWarningStage, getDeadManSwitchWarningCopy } from '@/lib/deadManSwitch';
+
 export function getWitnessInvitationEmail(
   inviterName: string,
   deceasedName: string,
@@ -124,6 +126,35 @@ export function getProofOfLifeEmail(userName: string, checkInLink: string): stri
   `;
 }
 
+export function getDeadManSwitchWarningEmail(
+  userName: string,
+  confirmLink: string,
+  stage: DeadManSwitchWarningStage
+): string {
+  const copy = getDeadManSwitchWarningCopy(stage);
+
+  return `
+    <div style="background-color: #fdf6f0; padding: 40px; font-family: sans-serif; color: #5a6b78;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; border-radius: 8px; border: 1px solid #e8d8cc;">
+        <h2 style="font-family: serif; color: #5a6b78; font-size: 24px; margin-bottom: 20px;">
+          Dead Man's Switch warning
+        </h2>
+        <p>Dear ${userName},</p>
+        <p>${copy.title}</p>
+        <p>${copy.body}</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${confirmLink}" style="background-color: #89b896; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">
+            ${copy.buttonLabel}
+          </a>
+        </div>
+        <p style="font-size: 12px; color: #999;">
+          Confirming activity will reset the transfer countdown from today.
+        </p>
+      </div>
+    </div>
+  `;
+}
+
 // Step 1.1.4: Gentle reminder email — no urgency, no guilt
 export function getGentleReminderEmail(
   archiveName: string,
@@ -181,6 +212,34 @@ export function getSuccessorAlertEmail(
         <div style="text-align: center; margin: 30px 0;">
           <a href="${claimLink}" style="background-color: #5a6b78; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">
             View Options & Report Status
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export function getDeadManSwitchTransferEmail(
+  successorName: string,
+  ownerName: string,
+  dashboardLink: string
+): string {
+  return `
+    <div style="background-color: #fdf6f0; padding: 40px; font-family: sans-serif; color: #5a6b78;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; border-radius: 8px; border: 2px solid #89b896;">
+        <h2 style="font-family: serif; color: #5a6b78; font-size: 24px; margin-bottom: 20px;">
+          Stewardship transfer completed
+        </h2>
+        <p>Dear ${successorName},</p>
+        <p>
+          ${ownerName}'s Dead Man's Switch reached its deadline and stewardship has now been transferred to you.
+        </p>
+        <p>
+          You now own the account's memorials. The previous owner remains a reader so every archive and its history stay preserved.
+        </p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${dashboardLink}" style="background-color: #5a6b78; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">
+            Open your dashboard
           </a>
         </div>
       </div>

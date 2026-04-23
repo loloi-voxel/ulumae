@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 import type { ArchiveRoleSnapshot } from '@/lib/archivePermissions';
+import { ARCHIVE_ROLE_REFETCH_GUARD_MS } from '@/lib/constants';
 
 const POLL_INTERVAL_MS = 30_000;
 const BROADCAST_KEY = 'ulumae:archive-role-sync';
@@ -52,6 +53,18 @@ const sourceId = `archive-role-${Math.random().toString(36).slice(2)}`;
 const stores = new Map<string, ArchiveRoleStore>();
 let broadcastChannel: BroadcastChannel | null = null;
 let globalListenersAttached = false;
+
+function areArchiveRoleSnapshotsEqual(
+  left: ArchiveRoleSnapshot | null,
+  right: ArchiveRoleSnapshot | null
+) {
+  if (left === right) return true;
+  if (!left || !right) return false;
+
+  const { resolvedAt: _l, ...leftRest } = left;
+  const { resolvedAt: _r, ...rightRest } = right;
+  return JSON.stringify(leftRest) === JSON.stringify(rightRest);
+}
 
 function createDefaultState(): ArchiveRoleStoreState {
   return {
@@ -190,7 +203,7 @@ class ArchiveRoleStore {
   private pollHandle: ReturnType<typeof setInterval> | null = null;
   private subscriberCount = 0;
 
-  constructor(private readonly memorialId: string) {}
+  constructor(private readonly memorialId: string) { }
 
   getSnapshot = () => this.state;
 
@@ -284,8 +297,13 @@ class ArchiveRoleStore {
           return null;
         }
 
+        const nextPayload = payload as ArchiveRoleSnapshot;
+        const stableData = areArchiveRoleSnapshotsEqual(previous.data, nextPayload)
+          ? previous.data
+          : nextPayload;
+
         const nextState = applyDerivedState({
-          data: payload as ArchiveRoleSnapshot,
+          data: stableData,
           error: null,
           status: 'ready',
           loading: false,
@@ -332,6 +350,18 @@ class ArchiveRoleStore {
   }
 
   private setState(next: ArchiveRoleStoreState) {
+    if (
+      this.state.status === next.status &&
+      this.state.data === next.data &&
+      this.state.error === next.error &&
+      this.state.loading === next.loading &&
+      this.state.hasAccess === next.hasAccess &&
+      this.state.isRevoked === next.isRevoked &&
+      this.state.lastFetchedAt === next.lastFetchedAt
+    ) {
+      return;
+    }
+
     this.state = next;
     this.listeners.forEach((listener) => listener());
   }
@@ -355,6 +385,13 @@ function attachGlobalListeners() {
 
   const refetchActiveStores = (reason: string) => {
     stores.forEach((store) => {
+      const snapshot = store.getSnapshot();
+      if (
+        snapshot.lastFetchedAt &&
+        Date.now() - snapshot.lastFetchedAt < ARCHIVE_ROLE_REFETCH_GUARD_MS
+      ) {
+        return;
+      }
       void store.fetch({ reason });
     });
   };
@@ -369,6 +406,11 @@ function attachGlobalListeners() {
   window.addEventListener('ulumae:archive-role-invalidate', (event: Event) => {
     const detail = (event as CustomEvent<{ memorialId?: string; reason?: string }>).detail;
     if (!detail?.memorialId) return;
+    const snapshot = getStore(detail.memorialId).getSnapshot();
+    if (
+      snapshot.lastFetchedAt &&
+      Date.now() - snapshot.lastFetchedAt < ARCHIVE_ROLE_REFETCH_GUARD_MS
+    ) return;
     void getStore(detail.memorialId).fetch({
       force: true,
       reason: detail.reason ?? 'event',

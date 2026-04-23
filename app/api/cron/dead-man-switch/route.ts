@@ -1,123 +1,341 @@
-// app/api/cron/dead-man-switch/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
-import { sendEmail } from '@/lib/email/sender';
-import { getProofOfLifeEmail, getSuccessorAlertEmail } from '@/lib/email/templates';
 import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { safeLogMemorialActivity } from '@/lib/activityLog';
 import {
-    DMS_INACTIVITY_ALERT_DAYS,
-    DMS_INACTIVITY_WARNING_DAYS,
-    DMS_WARNING_RESEND_INTERVAL_DAYS,
-} from '@/lib/constants';
+  getDeadManSwitchTransferEmail,
+  getDeadManSwitchWarningEmail,
+} from '@/lib/email/templates';
+import { sendEmail } from '@/lib/email/sender';
+import {
+  getDeadManSwitchComputedState,
+  getDeadManSwitchWarningCopy,
+  getMostUrgentDueDeadManSwitchWarning,
+} from '@/lib/deadManSwitch';
 
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
+type UserRow = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  created_at: string | null;
+  last_active_at: string | null;
+  dead_mans_switch_enabled: boolean | null;
+  dead_mans_switch_delay_months: number | null;
+  dead_mans_switch_warning_30_sent_at: string | null;
+  dead_mans_switch_warning_7_sent_at: string | null;
+  dead_mans_switch_warning_1_sent_at: string | null;
+  dead_mans_switch_transferred_at: string | null;
+};
+
+type SuccessorRow = {
+  id: string;
+  successor_name: string;
+  successor_email: string;
+  relationship: string | null;
+  status: string;
+};
+
+function getBaseUrl() {
+  return (process.env.NEXT_PUBLIC_BASE_URL || '').replace(/\/$/, '');
+}
+
+async function ensureSuccessorAccount(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  successor: SuccessorRow
+) {
+  const normalizedEmail = successor.successor_email.trim().toLowerCase();
+
+  const { data: existingUser, error: existingUserError } = await supabaseAdmin
+    .from('users')
+    .select('id, email')
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+
+  if (existingUserError) {
+    throw existingUserError;
+  }
+
+  if (existingUser?.id) {
+    return {
+      id: existingUser.id,
+      email: existingUser.email,
+    };
+  }
+
+  const baseUrl = getBaseUrl();
+  const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+    normalizedEmail,
+    baseUrl ? { redirectTo: `${baseUrl}/login` } : undefined
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data.user?.id) {
+    throw new Error('Could not provision a successor account.');
+  }
+
+  return {
+    id: data.user.id,
+    email: normalizedEmail,
+  };
+}
+
+async function transferDeadManSwitchOwnership(
+  supabaseAdmin: ReturnType<typeof getSupabaseAdmin>,
+  owner: UserRow,
+  successor: SuccessorRow
+) {
+  const successorAccount = await ensureSuccessorAccount(supabaseAdmin, successor);
+
+  const { data: memorials, error: memorialsError } = await supabaseAdmin
+    .from('memorials')
+    .select('id, full_name')
+    .eq('user_id', owner.id);
+
+  if (memorialsError) {
+    throw memorialsError;
+  }
+
+  for (const memorial of memorials || []) {
+    const { error: memorialUpdateError } = await supabaseAdmin
+      .from('memorials')
+      .update({ user_id: successorAccount.id })
+      .eq('id', memorial.id);
+
+    if (memorialUpdateError) {
+      throw memorialUpdateError;
+    }
+
+    const { error: successorRoleError } = await supabaseAdmin
+      .from('user_memorial_roles')
+      .upsert(
+        {
+          user_id: successorAccount.id,
+          memorial_id: memorial.id,
+          role: 'owner',
+          joined_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,memorial_id' }
+      );
+
+    if (successorRoleError) {
+      throw successorRoleError;
+    }
+
+    const { error: originalOwnerRoleError } = await supabaseAdmin
+      .from('user_memorial_roles')
+      .upsert(
+        {
+          user_id: owner.id,
+          memorial_id: memorial.id,
+          role: 'reader',
+          joined_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,memorial_id' }
+      );
+
+    if (originalOwnerRoleError) {
+      throw originalOwnerRoleError;
+    }
+
+    await safeLogMemorialActivity(supabaseAdmin, {
+      memorialId: memorial.id,
+      action: 'member_role_updated',
+      summary: `Ownership transferred to ${successor.successor_name} by the Dead Man Switch.`,
+      actorUserId: owner.id,
+      actorEmail: owner.email,
+      subjectUserId: successorAccount.id,
+      subjectEmail: successorAccount.email,
+      details: {
+        transferSource: 'dead_man_switch',
+        newRole: 'owner',
+        previousOwnerId: owner.id,
+      },
+    });
+  }
+
+  const { error: ownerUpdateError } = await supabaseAdmin
+    .from('users')
+    .update({
+      dead_mans_switch_enabled: false,
+      dead_mans_switch_transferred_at: new Date().toISOString(),
+      dead_mans_switch_warning_30_sent_at: null,
+      dead_mans_switch_warning_7_sent_at: null,
+      dead_mans_switch_warning_1_sent_at: null,
+    })
+    .eq('id', owner.id);
+
+  if (ownerUpdateError) {
+    throw ownerUpdateError;
+  }
+
+  const baseUrl = getBaseUrl();
+  if (baseUrl) {
+    await sendEmail({
+      to: successor.successor_email,
+      subject: 'Stewardship transfer completed',
+      html: getDeadManSwitchTransferEmail(
+        successor.successor_name,
+        owner.full_name || 'The account owner',
+        `${baseUrl}/dashboard`
+      ),
+    });
+  }
+}
 
 export async function GET(request: NextRequest) {
-    // Security: cron secret is REQUIRED. Previously this check was commented
-    // out for "dev/demo" — that left an unauthenticated endpoint that could
-    // trigger emails to every user with DMS enabled. Now it always rejects
-    // missing/invalid secrets, even in development.
-    if (!process.env.CRON_SECRET) {
-        console.error('[cron/dead-man-switch] CRON_SECRET not configured');
-        return NextResponse.json(
-            { error: 'Cron not configured' },
-            { status: 500 }
+  if (!process.env.CRON_SECRET) {
+    console.error('[cron/dead-man-switch] CRON_SECRET not configured');
+    return NextResponse.json({ error: 'Cron not configured' }, { status: 500 });
+  }
+
+  const authHeader = request.headers.get('authorization');
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const supabaseAdmin = getSupabaseAdmin();
+
+  try {
+    const now = new Date();
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select(
+        [
+          'id',
+          'email',
+          'full_name',
+          'created_at',
+          'last_active_at',
+          'dead_mans_switch_enabled',
+          'dead_mans_switch_delay_months',
+          'dead_mans_switch_warning_30_sent_at',
+          'dead_mans_switch_warning_7_sent_at',
+          'dead_mans_switch_warning_1_sent_at',
+          'dead_mans_switch_transferred_at',
+        ].join(', ')
+      )
+      .eq('dead_mans_switch_enabled', true);
+
+    if (error) throw error;
+
+    const users = ((data || []) as unknown) as UserRow[];
+    if (users.length === 0) {
+      return NextResponse.json({ message: 'No users to process' });
+    }
+
+    const results = {
+      warningsSent: 0,
+      transfersCompleted: 0,
+      skippedWithoutSuccessor: 0,
+    };
+
+    for (const user of users) {
+      const { data: successor, error: successorError } = await supabaseAdmin
+        .from('user_successors')
+        .select('id, successor_name, successor_email, relationship, status')
+        .eq('user_id', user.id)
+        .eq('status', 'accepted')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (successorError) {
+        throw successorError;
+      }
+
+      if (!successor) {
+        results.skippedWithoutSuccessor += 1;
+        continue;
+      }
+
+      const computed = getDeadManSwitchComputedState(
+        {
+          enabled: Boolean(user.dead_mans_switch_enabled),
+          delayMonths: user.dead_mans_switch_delay_months ?? 12,
+          lastActiveAt: user.last_active_at,
+          createdAt: user.created_at,
+          warning30SentAt: user.dead_mans_switch_warning_30_sent_at,
+          warning7SentAt: user.dead_mans_switch_warning_7_sent_at,
+          warning1SentAt: user.dead_mans_switch_warning_1_sent_at,
+          transferredAt: user.dead_mans_switch_transferred_at,
+        },
+        now
+      );
+
+      if (computed.transferDue) {
+        await transferDeadManSwitchOwnership(
+          supabaseAdmin,
+          user,
+          successor as SuccessorRow
         );
+        results.transfersCompleted += 1;
+        continue;
+      }
+
+      const stage = getMostUrgentDueDeadManSwitchWarning(
+        {
+          enabled: Boolean(user.dead_mans_switch_enabled),
+          delayMonths: user.dead_mans_switch_delay_months ?? 12,
+          lastActiveAt: user.last_active_at,
+          createdAt: user.created_at,
+          warning30SentAt: user.dead_mans_switch_warning_30_sent_at,
+          warning7SentAt: user.dead_mans_switch_warning_7_sent_at,
+          warning1SentAt: user.dead_mans_switch_warning_1_sent_at,
+          transferredAt: user.dead_mans_switch_transferred_at,
+        },
+        now
+      );
+
+      if (!stage) {
+        continue;
+      }
+
+      const warningField =
+        stage === 30
+          ? 'dead_mans_switch_warning_30_sent_at'
+          : stage === 7
+            ? 'dead_mans_switch_warning_7_sent_at'
+            : 'dead_mans_switch_warning_1_sent_at';
+
+      const baseUrl = getBaseUrl();
+      const confirmLink = baseUrl
+        ? `${baseUrl}/dashboard/dead-man-switch/${user.id}`
+        : '/dashboard';
+      const warningCopy = getDeadManSwitchWarningCopy(stage);
+
+      await sendEmail({
+        to: user.email,
+        subject: warningCopy.subject,
+        html: getDeadManSwitchWarningEmail(
+          user.full_name || 'Valued Member',
+          confirmLink,
+          stage
+        ),
+      });
+
+      const { error: updateError } = await supabaseAdmin
+        .from('users')
+        .update({
+          [warningField]: now.toISOString(),
+          verification_sent_at: now.toISOString(),
+        })
+        .eq('id', user.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      results.warningsSent += 1;
     }
 
-    const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const supabaseAdmin = getSupabaseAdmin();
-
-    try {
-        const now = new Date();
-
-        // 1. Fetch users with Dead Man's Switch ENABLED
-        const { data: users, error } = await supabaseAdmin
-            .from('users')
-            .select('id, email, full_name, last_active_at, verification_sent_at, created_at')
-            .eq('dead_mans_switch_enabled', true);
-
-        if (error) throw error;
-        if (!users || users.length === 0) {
-            return NextResponse.json({ message: 'No users to process' });
-        }
-
-        const results = {
-            warningsSent: 0,
-            alertsSent: 0
-        };
-
-        for (const user of users) {
-            const lastActive = new Date(user.last_active_at || user.created_at); // Fallback to created_at
-            const diffDays = Math.ceil(
-                Math.abs(now.getTime() - lastActive.getTime()) / MS_PER_DAY
-            );
-
-            // Case A: Successor Alert (More than 1 year + 90 days inactive)
-            if (diffDays >= DMS_INACTIVITY_ALERT_DAYS) {
-                // Fetch Successor
-                const { data: successor } = await supabaseAdmin
-                    .from('user_successors')
-                    .select('*')
-                    .eq('user_id', user.id)
-                    .eq('status', 'accepted') // Only accepted successors
-                    .order('created_at', { ascending: false }) // Get latest
-                    .limit(1)
-                    .single();
-
-                if (successor) {
-                    // Send Alert to Successor
-                    await sendEmail({
-                        to: successor.successor_email,
-                        subject: `URGENT: Status Check for ${user.full_name || 'Account Owner'}`,
-                        html: getSuccessorAlertEmail(
-                            successor.successor_name,
-                            user.full_name || 'the account owner',
-                            `${process.env.NEXT_PUBLIC_BASE_URL}/succession/request`
-                        )
-                    });
-                    results.alertsSent++;
-                }
-            }
-            // Case B: User Warning (More than 1 year inactive)
-            else if (diffDays >= DMS_INACTIVITY_WARNING_DAYS) {
-                // Avoid spamming the user — only re-send if it has been long
-                // enough since the last warning email.
-                const lastSent = user.verification_sent_at ? new Date(user.verification_sent_at) : null;
-                const daysSinceLastSend = lastSent
-                    ? Math.ceil((now.getTime() - lastSent.getTime()) / MS_PER_DAY)
-                    : Number.POSITIVE_INFINITY;
-
-                if (daysSinceLastSend > DMS_WARNING_RESEND_INTERVAL_DAYS) {
-                    // Send Warning to User
-                    await sendEmail({
-                        to: user.email,
-                        subject: 'ULUMAE: Annual Verification Required',
-                        html: getProofOfLifeEmail(
-                            user.full_name || 'Valued Member',
-                            `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?checkin=true`
-                        )
-                    });
-
-                    // Update verification_sent_at
-                    await supabaseAdmin
-                        .from('users')
-                        .update({ verification_sent_at: new Date().toISOString() })
-                        .eq('id', user.id);
-
-                    results.warningsSent++;
-                }
-            }
-        }
-
-        return NextResponse.json({ success: true, ...results });
-
-    } catch (err: any) {
-        console.error('Cron job failed:', err);
-        return NextResponse.json({ error: err.message }, { status: 500 });
-    }
+    return NextResponse.json({ success: true, ...results });
+  } catch (err: any) {
+    console.error('[cron/dead-man-switch]', err);
+    return NextResponse.json(
+      { error: err.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
 }

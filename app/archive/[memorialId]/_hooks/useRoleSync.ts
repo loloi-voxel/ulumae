@@ -15,6 +15,10 @@ export function useRoleSync(
     const router = useRouter();
     const pathname = usePathname();
     const redirectKeyRef = useRef<string | null>(null);
+    const canContribute = roleData?.capabilities.canContribute ?? false;
+    const canReview = roleData?.capabilities.canReview ?? false;
+    const permissionSignature = roleData?.permissionSignature ?? null;
+    const plan = roleData?.plan ?? null;
 
     useEffect(() => {
         const userId = roleData?.currentUserId;
@@ -87,17 +91,17 @@ export function useRoleSync(
             redirectKey = `revoked:${memorialId}`;
             message = 'Your access to this archive has been removed.';
             href = `/archive/${memorialId}/revoked`;
-        } else if (roleData) {
-            if (pathname.includes('/steward') && !roleData.capabilities.canReview) {
-                redirectKey = `steward:${roleData.permissionSignature}`;
+        } else if (permissionSignature) {
+            if (pathname.includes('/steward') && !canReview) {
+                redirectKey = `steward:${permissionSignature}`;
                 message = 'Your current permissions no longer allow steward access.';
                 href = `/archive/${memorialId}`;
-            } else if (pathname.includes('/contribute') && !roleData.capabilities.canContribute) {
-                redirectKey = `contribute:${roleData.permissionSignature}`;
+            } else if (pathname.includes('/contribute') && !canContribute) {
+                redirectKey = `contribute:${permissionSignature}`;
                 message = 'Your current permissions no longer allow contributions here.';
                 href = `/archive/${memorialId}`;
-            } else if (pathname.includes('/family') && roleData.plan !== 'family') {
-                redirectKey = `family:${roleData.permissionSignature}`;
+            } else if (pathname.includes('/family') && plan !== 'family') {
+                redirectKey = `family:${permissionSignature}`;
                 message = 'This archive no longer has family-vault access.';
                 href = `/archive/${memorialId}`;
             }
@@ -120,5 +124,5 @@ export function useRoleSync(
         redirectKeyRef.current = redirectKey;
         toast.error(message);
         router.replace(href);
-    }, [memorialId, pathname, roleData, router, status]);
+    }, [canContribute, canReview, memorialId, pathname, permissionSignature, plan, router, status]);
 }

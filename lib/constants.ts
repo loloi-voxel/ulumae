@@ -20,6 +20,9 @@ export const SESSION_ACTIVITY_STALE_HOURS = 24;
 export const DMS_INACTIVITY_WARNING_DAYS = 365;
 export const DMS_INACTIVITY_ALERT_DAYS = 365 + 90;
 export const DMS_WARNING_RESEND_INTERVAL_DAYS = 30;
+export const DEAD_MAN_SWITCH_DELAY_OPTIONS = [3, 6, 12, 24] as const;
+export const DEAD_MAN_SWITCH_WARNING_STAGES = [30, 7, 1] as const;
+export const ARCHIVE_ROLE_REFETCH_GUARD_MS = 60_000;
 
 // ─── Plan pricing (USD, in whole dollars) ───────────────────────────────────
 // Server-side source of truth. Never trust the price the client sends.

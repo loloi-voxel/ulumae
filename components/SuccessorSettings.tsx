@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { Shield, Mail, User, Loader2, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { Shield, Mail, Loader2, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 
 interface SuccessorSettingsProps {
     userId: string;
@@ -12,7 +13,6 @@ export default function SuccessorSettings({ userId }: SuccessorSettingsProps) {
     const [successor, setSuccessor] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
-    const [isSwitchEnabled, setIsSwitchEnabled] = useState(false);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -23,14 +23,6 @@ export default function SuccessorSettings({ userId }: SuccessorSettingsProps) {
 
     useEffect(() => {
         fetchSuccessor();
-    }, [userId]);
-
-    useEffect(() => {
-        const fetchUserStatus = async () => {
-            const { data } = await supabase.from('users').select('dead_mans_switch_enabled').eq('id', userId).single();
-            if (data) setIsSwitchEnabled(data.dead_mans_switch_enabled);
-        };
-        fetchUserStatus();
     }, [userId]);
 
     const fetchSuccessor = async () => {
@@ -75,19 +67,6 @@ export default function SuccessorSettings({ userId }: SuccessorSettingsProps) {
         }
     };
 
-    const toggleDeadMansSwitch = async () => {
-        const newValue = !isSwitchEnabled;
-        const { error } = await supabase
-            .from('users')
-            .update({ dead_mans_switch_enabled: newValue })
-            .eq('id', userId);
-
-        if (!error) {
-            setIsSwitchEnabled(newValue);
-            alert(newValue ? "Dead Man's Switch activated. We will ping you once a year." : "Safety switch deactivated.");
-        }
-    };
-
     if (loading) return <div className="p-8 text-center"><Loader2 className="animate-spin inline text-olive" /></div>;
 
     return (
@@ -126,24 +105,29 @@ export default function SuccessorSettings({ userId }: SuccessorSettingsProps) {
                             * To change your steward, please contact support for security verification.
                         </p>
 
-                        {/* Dead Man's Switch Toggle */}
                         <div className="mt-8 pt-6 border-t border-warm-border/20">
-                            <div className="flex items-center justify-between">
-                                <div className="flex-1 pr-8">
-                                    <h4 className="text-sm font-bold text-warm-dark flex items-center gap-2">
-                                        <Clock size={16} className="text-warm-brown" />
-                                        Dead Man's Switch
-                                    </h4>
-                                    <p className="text-xs text-warm-muted mt-1 leading-relaxed">
-                                        If enabled, we will email you once a year to confirm you are still managing the account. If you don't respond within 90 days, we will automatically notify your steward to begin the succession process.
-                                    </p>
+                            <div className="rounded-none border border-warm-border/20 bg-surface-mid/40 p-4">
+                                <div className="flex items-center gap-2 text-sm font-bold text-warm-dark">
+                                    <Clock size={16} className="text-warm-brown" />
+                                    Dead Man Switch
                                 </div>
-                                <button
-                                    onClick={toggleDeadMansSwitch}
-                                    className={`relative inline-flex h-6 w-11 items-center rounded-none transition-colors focus:outline-none ${isSwitchEnabled ? 'bg-olive' : 'bg-warm-border'}`}
-                                >
-                                    <span className={`inline-block h-4 w-4 transform rounded-none bg-white transition-transform ${isSwitchEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                                </button>
+                                {successor.status === 'accepted' ? (
+                                    <>
+                                        <p className="mt-2 text-xs text-warm-muted leading-relaxed">
+                                            Stewardship is now active. Configure the inactivity timer, transfer date, and proof-of-life confirmations from the dedicated Dead Man Switch page.
+                                        </p>
+                                        <Link
+                                            href={`/dashboard/dead-man-switch/${userId}`}
+                                            className="mt-4 inline-flex items-center justify-center rounded-none bg-warm-dark px-4 py-2 text-xs font-medium text-surface-low transition-colors hover:bg-warm-dark/90"
+                                        >
+                                            Open Dead Man Switch
+                                        </Link>
+                                    </>
+                                ) : (
+                                    <p className="mt-2 text-xs text-warm-muted leading-relaxed">
+                                        This page unlocks as soon as your steward accepts the invitation. Until then, the account cannot schedule an automatic transfer.
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </div>

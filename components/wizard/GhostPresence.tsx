@@ -8,9 +8,20 @@ interface GhostPresenceProps {
   whisper: string;
   count?: number; // for gallery: how many ghost silhouettes to show
   className?: string;
+  plan?: 'draft' | 'personal' | 'family';
 }
 
-export default function GhostPresence({ variant, whisper, count = 3, className = '' }: GhostPresenceProps) {
+export default function GhostPresence({
+  variant,
+  whisper,
+  count = 3,
+  className = '',
+  plan = 'draft',
+}: GhostPresenceProps) {
+  if (plan === 'personal' || plan === 'family') {
+    return null;
+  }
+
   if (variant === 'text') {
     return (
       <div className={`relative overflow-hidden ${className}`}>

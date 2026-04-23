@@ -55,6 +55,9 @@ export async function POST(request: NextRequest) {
             .update({
                 last_active_at: new Date().toISOString(),
                 verification_sent_at: null,
+                dead_mans_switch_warning_30_sent_at: null,
+                dead_mans_switch_warning_7_sent_at: null,
+                dead_mans_switch_warning_1_sent_at: null,
             })
             .eq('id', user.id);
 

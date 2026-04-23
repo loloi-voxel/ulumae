@@ -82,6 +82,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const lastFetchRef = useRef<number>(0);
     const isFetchingRef = useRef(false);
+    const lastHeartbeatRef = useRef<number>(0);
+
+    const sendHeartbeat = useCallback(async () => {
+        if (!state.authenticated || !state.user) return;
+
+        const now = Date.now();
+        if (now - lastHeartbeatRef.current < 5 * 60 * 1000) {
+            return;
+        }
+
+        lastHeartbeatRef.current = now;
+        await fetch('/api/user/heartbeat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        }).catch(() => undefined);
+    }, [state.authenticated, state.user]);
 
     const fetchState = useCallback(async (force = false) => {
         // Debounce non-forced calls to avoid spam
@@ -175,6 +193,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     }, [pathname, fetchState]);
 
+    useEffect(() => {
+        void sendHeartbeat();
+    }, [pathname, sendHeartbeat]);
+
     // Listen for browser back/forward button (popstate event)
     // This is the KEY fix: when the user hits back, the browser fires popstate
     // BEFORE React re-renders, so we force a revalidation immediately
@@ -202,11 +224,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const handleVisibility = () => {
             if (document.visibilityState === 'visible') {
                 fetchState(true);
+                void sendHeartbeat();
             }
         };
         document.addEventListener('visibilitychange', handleVisibility);
         return () => document.removeEventListener('visibilitychange', handleVisibility);
-    }, [fetchState]);
+    }, [fetchState, sendHeartbeat]);
 
     useEffect(() => {
         const handleStorage = (event: StorageEvent) => {

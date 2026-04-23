@@ -14,6 +14,7 @@ interface PreviewModalProps {
 }
 
 export default function PreviewModal({ data, plan = 'draft', onClose }: PreviewModalProps) {
+    const isDraftPreview = plan === 'draft';
     const { enabled, missingDimensions, fragmentCount, state } = calculateEmotionalState(data, plan);
 
     return (
@@ -22,12 +23,16 @@ export default function PreviewModal({ data, plan = 'draft', onClose }: PreviewM
                 <div className="max-w-5xl mx-auto">
                     <div className="flex items-center justify-between mb-6 px-4">
                         <div>
-                            <h2 className="text-2xl font-semibold text-surface-low mb-1">Archive Preview</h2>
-                            <p className="text-surface-low/50 text-sm">
-                                {enabled && state === 'eternal'
-                                    ? 'This is how their archive will appear - complete and luminous.'
-                                    : 'A mirror of what you have built so far.'}
-                            </p>
+                            <h2 className="text-2xl font-semibold text-surface-low mb-1">
+                                {isDraftPreview ? 'Archive Preview' : 'Mobile Render'}
+                            </h2>
+                            {isDraftPreview && (
+                                <p className="text-surface-low/50 text-sm">
+                                    {enabled && state === 'eternal'
+                                        ? 'This is how their archive will appear - complete and luminous.'
+                                        : 'A mirror of what you have built so far.'}
+                                </p>
+                            )}
                         </div>
                         <button
                             onClick={onClose}
@@ -40,12 +45,12 @@ export default function PreviewModal({ data, plan = 'draft', onClose }: PreviewM
                     <div className="rounded-2xl shadow-2xl overflow-hidden">
                         <MemorialRenderer
                             data={data}
-                            isPreview={true}
+                            isPreview={isDraftPreview}
                             compact={false}
                         />
                     </div>
 
-                    {enabled && missingDimensions.length > 0 && state !== 'eternal' && (
+                    {isDraftPreview && enabled && missingDimensions.length > 0 && state !== 'eternal' && (
                         <div className="mt-8 p-6 rounded-xl bg-surface-low/5 border border-surface-low/10">
                             <p className="text-surface-low/40 text-xs uppercase tracking-wider mb-4">
                                 What remains to be preserved

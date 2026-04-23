@@ -7,6 +7,7 @@ import {
     Archive,
     ChevronLeft,
     ChevronRight,
+    Clock,
     HelpCircle,
     History,
     LayoutDashboard,
@@ -27,6 +28,7 @@ import {
 } from '@/components/providers/AuthProvider';
 import NotificationCenter from '@/components/NotificationCenter';
 import SidebarConnectedSpaces from '@/components/dashboard/SidebarConnectedSpaces';
+import { createClient } from '@/utils/supabase/client';
 
 interface DashboardShellProps {
     userId: string;
@@ -61,11 +63,12 @@ function buildItems(options: {
     pathname: string;
     userId: string;
     plan: string;
+    hasDeadManSwitchAccess: boolean;
 }): NavItem[] {
-    const { pathname, userId, plan } = options;
+    const { pathname, userId, plan, hasDeadManSwitchAccess } = options;
 
     if (isPersonalPlan(plan as any)) {
-        return [
+        const items: NavItem[] = [
             {
                 key: 'overview',
                 label: 'Overview',
@@ -98,19 +101,33 @@ function buildItems(options: {
                 icon: UserCheck,
                 active: pathname.startsWith(`/dashboard/succession/${userId}`),
             },
-            {
+        ];
+
+        if (hasDeadManSwitchAccess) {
+            items.push({
+                key: 'dead-man-switch',
+                label: 'Dead Man Switch',
+                description: 'Manage inactivity transfer timing',
+                href: `/dashboard/dead-man-switch/${userId}`,
+                icon: Clock,
+                active: pathname.startsWith(`/dashboard/dead-man-switch/${userId}`),
+            });
+        }
+
+        items.push({
                 key: 'settings',
                 label: 'Settings',
                 description: 'Profile, billing, and security',
                 href: `/dashboard/settings/${userId}`,
                 icon: Settings,
                 active: pathname.startsWith(`/dashboard/settings/${userId}`),
-            },
-        ];
+            });
+
+        return items;
     }
 
     if (isFamilyPlan(plan as any)) {
-        return [
+        const items: NavItem[] = [
             {
                 key: 'overview',
                 label: 'Overview',
@@ -151,15 +168,29 @@ function buildItems(options: {
                 icon: UserCheck,
                 active: pathname.startsWith(`/dashboard/succession/${userId}`),
             },
-            {
+        ];
+
+        if (hasDeadManSwitchAccess) {
+            items.push({
+                key: 'dead-man-switch',
+                label: 'Dead Man Switch',
+                description: 'Manage inactivity transfer timing',
+                href: `/dashboard/dead-man-switch/${userId}`,
+                icon: Clock,
+                active: pathname.startsWith(`/dashboard/dead-man-switch/${userId}`),
+            });
+        }
+
+        items.push({
                 key: 'settings',
                 label: 'Settings',
                 description: 'Profile, billing, and security',
                 href: `/dashboard/settings/${userId}`,
                 icon: Settings,
                 active: pathname.startsWith(`/dashboard/settings/${userId}`),
-            },
-        ];
+            });
+
+        return items;
     }
 
     return [
@@ -282,6 +313,7 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
     const [mobileTopSticky, setMobileTopSticky] = useState(false);
     const [desktopNavStyle, setDesktopNavStyle] = useState<CSSProperties>({});
     const [desktopNavHeight, setDesktopNavHeight] = useState<number | null>(null);
+    const [hasDeadManSwitchAccess, setHasDeadManSwitchAccess] = useState(false);
     const desktopSidebarRef = useRef<HTMLElement | null>(null);
     const desktopSidebarPanelRef = useRef<HTMLDivElement | null>(null);
     const desktopContactSupportRef = useRef<HTMLAnchorElement | null>(null);
@@ -292,14 +324,46 @@ export default function DashboardShell({ userId, children }: DashboardShellProps
         setMobileOpen(false);
     }, [pathname, searchParams]);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        if (!auth.authenticated || (!isFamilyPlan(auth.plan) && !isPersonalPlan(auth.plan))) {
+            setHasDeadManSwitchAccess(false);
+            return;
+        }
+
+        const supabase = createClient();
+        supabase
+            .from('user_successors')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('status', 'accepted')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (cancelled) return;
+                if (error) {
+                    setHasDeadManSwitchAccess(false);
+                    return;
+                }
+                setHasDeadManSwitchAccess(Boolean(data?.id));
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [auth.authenticated, auth.plan, userId]);
+
     const items = useMemo(
         () =>
             buildItems({
                 pathname,
                 userId,
                 plan: auth.plan,
+                hasDeadManSwitchAccess,
             }),
-        [pathname, userId, auth.plan]
+        [pathname, userId, auth.plan, hasDeadManSwitchAccess]
     );
 
     useEffect(() => {

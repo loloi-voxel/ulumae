@@ -13,7 +13,8 @@ export type NotificationType =
   | 'creation_request_approved'
   | 'creation_request_rejected'
   | 'invite_accepted'
-  | 'role_changed';
+  | 'role_changed'
+  | 'dead_man_switch_warning';
 
 export type NotificationGroupKey =
   | 'pending'
@@ -112,6 +113,8 @@ export function getNotificationHref(options: {
       return `/dashboard/family/${userId}?members=${memorialId}`;
     case 'role_changed':
       return `/archive/${memorialId}`;
+    case 'dead_man_switch_warning':
+      return `/dashboard/dead-man-switch/${userId}`;
     default:
       return `/archive/${memorialId}`;
   }
@@ -171,6 +174,7 @@ export function getNotificationGroupKey(type: NotificationType): NotificationGro
     case 'invite_accepted':
       return 'invites';
     case 'role_changed':
+    case 'dead_man_switch_warning':
       return 'membership';
     default:
       return 'membership';
@@ -251,6 +255,8 @@ function getNotificationTitle(
       return 'Invitation accepted';
     case 'role_changed':
       return details?.newRole ? `Role changed to ${formatRole(details.newRole)}` : 'Role updated';
+    case 'dead_man_switch_warning':
+      return 'Dead Man\'s Switch warning';
     default:
       return fallback || 'Update';
   }

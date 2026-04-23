@@ -209,6 +209,7 @@ export default function MemorialRenderer({
         galleryGrid: compact ? 'grid-cols-2' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4',
         quoteSize: compact ? 'text-lg' : 'text-3xl md:text-4xl',
     };
+    const ghostPlan = isPreview ? 'draft' : 'personal';
     const galleryItems = (data.step8?.gallery || [])
         .filter((photo: any) => !!photo?.preview)
         .filter((photo: any) => !brokenImages[photo.id]);
@@ -372,7 +373,7 @@ export default function MemorialRenderer({
                             </p>
                         </div>
                     ) : isPreview ? (
-                        <GhostPresence variant="text" whisper="Their defining words have not yet been spoken." />
+                        <GhostPresence plan={ghostPlan} variant="text" whisper="Their defining words have not yet been spoken." />
                     ) : null}
 
                     {/* Quick Facts Grid */}
@@ -470,7 +471,7 @@ export default function MemorialRenderer({
                             </div>
                         </section>
                     ) : isPreview ? (
-                        <GhostPresence variant="text" whisper="Their story remains unwritten." />
+                        <GhostPresence plan={ghostPlan} variant="text" whisper="Their story remains unwritten." />
                     ) : null}
 
                     {/* Life Chapters */}
@@ -496,7 +497,7 @@ export default function MemorialRenderer({
                             </div>
                         </section>
                     ) : isPreview ? (
-                        <GhostPresence variant="text" whisper="The chapters of their life await." />
+                        <GhostPresence plan={ghostPlan} variant="text" whisper="The chapters of their life await." />
                     ) : null}
 
                     {/* Early Life */}
@@ -596,7 +597,7 @@ export default function MemorialRenderer({
                             </div>
                         </section>
                     ) : isPreview ? (
-                        <GhostPresence variant="text" whisper="Where they came from remains untold." />
+                        <GhostPresence plan={ghostPlan} variant="text" whisper="Where they came from remains untold." />
                     ) : null}
 
                     {/* Career & Education */}
@@ -659,7 +660,7 @@ export default function MemorialRenderer({
                             </div>
                         </section>
                     ) : isPreview ? (
-                        <GhostPresence variant="text" whisper="Their life's work has not been recorded." />
+                        <GhostPresence plan={ghostPlan} variant="text" whisper="Their life's work has not been recorded." />
                     ) : null}
 
                     {/* Family & Relationships */}
@@ -746,7 +747,7 @@ export default function MemorialRenderer({
                             )}
                         </section>
                     ) : isPreview ? (
-                        <GhostPresence variant="text" whisper="The people who shaped their world are unnamed." />
+                        <GhostPresence plan={ghostPlan} variant="text" whisper="The people who shaped their world are unnamed." />
                     ) : null}
 
                     {/* Personality & Values */}
@@ -829,7 +830,7 @@ export default function MemorialRenderer({
                             </div>
                         </section>
                     ) : isPreview ? (
-                        <GhostPresence variant="text" whisper="Their character has not yet been captured." />
+                        <GhostPresence plan={ghostPlan} variant="text" whisper="Their character has not yet been captured." />
                     ) : null}
 
                     {/* Memories & Stories */}
@@ -852,7 +853,7 @@ export default function MemorialRenderer({
                             </div>
                         </section>
                     ) : isPreview ? (
-                        <GhostPresence variant="text" whisper="No one has shared a memory yet." />
+                        <GhostPresence plan={ghostPlan} variant="text" whisper="No one has shared a memory yet." />
                     ) : null}
 
                     {/* Interactive Photo Stories */}
@@ -933,7 +934,7 @@ export default function MemorialRenderer({
                             </div>
                         </MediaSectionFrame>
                     ) : isPreview ? (
-                        <GhostPresence variant="gallery" whisper="Moments waiting to be revealed." />
+                        <GhostPresence plan={ghostPlan} variant="gallery" whisper="Moments waiting to be revealed." />
                     ) : null}
 
                     {/* Photo Gallery */}
@@ -987,7 +988,7 @@ export default function MemorialRenderer({
                             </div>
                         </MediaSectionFrame>
                     ) : isPreview ? (
-                        <GhostPresence variant="gallery" whisper="No images preserve their face." />
+                        <GhostPresence plan={ghostPlan} variant="gallery" whisper="No images preserve their face." />
                     ) : null}
 
                     {/* Videos */}
@@ -1051,7 +1052,7 @@ export default function MemorialRenderer({
                             </div>
                         </MediaSectionFrame>
                     ) : isPreview ? (
-                        <GhostPresence variant="video" whisper="No moving images have been gathered." />
+                        <GhostPresence plan={ghostPlan} variant="video" whisper="No moving images have been gathered." />
                     ) : null}
 
                     {/* Voice Recordings */}
@@ -1087,7 +1088,7 @@ export default function MemorialRenderer({
                             </div>
                         </section>
                     ) : isPreview ? (
-                        <GhostPresence variant="voice" whisper="Their voice is waiting to be heard." />
+                        <GhostPresence plan={ghostPlan} variant="voice" whisper="Their voice is waiting to be heard." />
                     ) : null}
 
                     {/* Legacy Statement */}
@@ -1100,7 +1101,7 @@ export default function MemorialRenderer({
                             </p>
                         </section>
                     ) : isPreview ? (
-                        <GhostPresence variant="text" whisper="Their legacy message awaits." />
+                        <GhostPresence plan={ghostPlan} variant="text" whisper="Their legacy message awaits." />
                     ) : null}
                 </div>
 

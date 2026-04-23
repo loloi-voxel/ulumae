@@ -15,8 +15,14 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     dead_mans_switch_enabled BOOLEAN DEFAULT FALSE,
+    dead_mans_switch_delay_months INTEGER DEFAULT 12
+        CHECK (dead_mans_switch_delay_months IN (3, 6, 12, 24)),
     last_active_at TIMESTAMPTZ DEFAULT NOW(),
     verification_sent_at TIMESTAMPTZ,
+    dead_mans_switch_warning_30_sent_at TIMESTAMPTZ,
+    dead_mans_switch_warning_7_sent_at TIMESTAMPTZ,
+    dead_mans_switch_warning_1_sent_at TIMESTAMPTZ,
+    dead_mans_switch_transferred_at TIMESTAMPTZ,
     highest_plan TEXT DEFAULT 'none',
     family_display_name TEXT
 );

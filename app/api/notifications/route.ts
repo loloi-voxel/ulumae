@@ -13,6 +13,11 @@ import {
   isMissingNotificationReadsTable,
   type NotificationItem,
 } from '@/lib/notifications';
+import {
+  getDeadManSwitchComputedState,
+  getDeadManSwitchWarningCopy,
+  hasDeadManSwitchWarningBeenSentForCycle,
+} from '@/lib/deadManSwitch';
 
 interface MemorialSummary {
   id: string;
@@ -35,7 +40,13 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const [ownedMemorialsResult, membershipResult, targetedActivityResult] =
+    const [
+      ownedMemorialsResult,
+      membershipResult,
+      targetedActivityResult,
+      deadManSwitchResult,
+      activeSuccessorResult,
+    ] =
       await Promise.all([
         supabaseAdmin
           .from('memorials')
@@ -57,11 +68,40 @@ export async function GET() {
           .then((res) =>
             isMissingNotificationReadsTable(res.error) ? { data: [], error: null } : res
           ),
+        supabaseAdmin
+          .from('users')
+          .select(
+            [
+              'id',
+              'created_at',
+              'dead_mans_switch_enabled',
+              'dead_mans_switch_delay_months',
+              'last_active_at',
+              'dead_mans_switch_warning_30_sent_at',
+              'dead_mans_switch_warning_7_sent_at',
+              'dead_mans_switch_warning_1_sent_at',
+              'dead_mans_switch_transferred_at',
+            ].join(', ')
+          )
+          .eq('id', user.id)
+          .maybeSingle(),
+        supabaseAdmin
+          .from('user_successors')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('status', 'accepted')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
       ]);
 
     if (ownedMemorialsResult.error) throw ownedMemorialsResult.error;
     if (membershipResult.error) throw membershipResult.error;
     if (targetedActivityResult.error) throw targetedActivityResult.error;
+    if (deadManSwitchResult.error) throw deadManSwitchResult.error;
+    if (activeSuccessorResult.error) throw activeSuccessorResult.error;
+
+    const deadManSwitchData = deadManSwitchResult.data as any;
 
     const memorialMap = new Map<string, MemorialSummary>();
     const ownedMemorialIds = new Set<string>();
@@ -273,9 +313,71 @@ export async function GET() {
       })),
     ];
 
+    const accountNotifications: NotificationItem[] = [];
+    if (deadManSwitchData && activeSuccessorResult.data) {
+      const deadManSwitchState = {
+        enabled: Boolean(deadManSwitchData.dead_mans_switch_enabled),
+        delayMonths: deadManSwitchData.dead_mans_switch_delay_months ?? 12,
+        lastActiveAt: deadManSwitchData.last_active_at,
+        createdAt: deadManSwitchData.created_at,
+        warning30SentAt: deadManSwitchData.dead_mans_switch_warning_30_sent_at,
+        warning7SentAt: deadManSwitchData.dead_mans_switch_warning_7_sent_at,
+        warning1SentAt: deadManSwitchData.dead_mans_switch_warning_1_sent_at,
+        transferredAt: deadManSwitchData.dead_mans_switch_transferred_at,
+      };
+      const deadManSwitchComputed = getDeadManSwitchComputedState(deadManSwitchState);
+      const activeWarningStage = deadManSwitchComputed.activeWarningStage;
+
+      if (
+        activeWarningStage &&
+        hasDeadManSwitchWarningBeenSentForCycle(
+          deadManSwitchState,
+          activeWarningStage
+        )
+      ) {
+        const warningCopy = getDeadManSwitchWarningCopy(activeWarningStage);
+        const warningCreatedAt =
+          activeWarningStage === 30
+            ? deadManSwitchData.dead_mans_switch_warning_30_sent_at
+            : activeWarningStage === 7
+              ? deadManSwitchData.dead_mans_switch_warning_7_sent_at
+              : deadManSwitchData.dead_mans_switch_warning_1_sent_at;
+
+        accountNotifications.push({
+          id: getNotificationId(
+            'dead_man_switch_warning',
+            `${activeWarningStage}:${deadManSwitchComputed.anchorDate || user.id}`
+          ),
+          sourceId: `dead-man-switch:${activeWarningStage}`,
+          type: 'dead_man_switch_warning',
+          groupKey: getNotificationGroupKey('dead_man_switch_warning'),
+          groupLabel: getNotificationGroupLabel(
+            getNotificationGroupKey('dead_man_switch_warning')
+          ),
+          title: warningCopy.subject,
+          body: warningCopy.title,
+          href: getNotificationHref({
+            type: 'dead_man_switch_warning',
+            memorialId: `account:${user.id}`,
+            userId: user.id,
+            sourceId: `dead-man-switch:${activeWarningStage}`,
+          }),
+          memorialId: `account:${user.id}`,
+          memorialName: 'Account stewardship',
+          createdAt: warningCreatedAt || new Date().toISOString(),
+          unread: true,
+          requiresAction: true,
+          actionLabel: 'Confirm activity',
+          actorEmail: null,
+          subjectEmail: user.email || null,
+        });
+      }
+    }
+
     const readIds = new Set<string>();
     const allNotificationIds = [
       ...pendingNotifications.map((item) => item.id),
+      ...accountNotifications.map((item) => item.id),
     ];
 
     const activityRows = [
@@ -348,7 +450,11 @@ export async function GET() {
       }
     }
 
-    const notifications = [...pendingNotifications, ...activityNotificationSeeds]
+    const notifications = [
+      ...pendingNotifications,
+      ...accountNotifications,
+      ...activityNotificationSeeds,
+    ]
       .map((item) => ({
         ...item,
         unread: item.requiresAction ? true : !readIds.has(item.id),
