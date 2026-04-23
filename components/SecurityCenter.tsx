@@ -18,6 +18,7 @@ import {
     getOrCreateSessionFingerprint,
     SESSION_FINGERPRINT_HEADER,
 } from '@/lib/sessionFingerprint';
+import { getApiErrorMessage, parseApiPayload } from '@/lib/apiResponse';
 
 interface SecurityCenterProps {
     userId: string;
@@ -136,14 +137,14 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
 
             if (userError) throw userError;
 
-            const twoFactorPayload = await twoFactorResponse.json();
-            if (!twoFactorResponse.ok) {
-                throw new Error(twoFactorPayload.error || 'Could not load two-factor settings.');
+            const { data: twoFactorPayload } = await parseApiPayload<TwoFactorState & { error?: string }>(twoFactorResponse);
+            if (!twoFactorResponse.ok || !twoFactorPayload) {
+                throw new Error(getApiErrorMessage(twoFactorResponse, twoFactorPayload, 'Could not load two-factor settings.'));
             }
 
-            const sessionsPayload = await sessionsResponse.json();
-            if (!sessionsResponse.ok) {
-                throw new Error(sessionsPayload.error || 'Could not load session history.');
+            const { data: sessionsPayload } = await parseApiPayload<any>(sessionsResponse);
+            if (!sessionsResponse.ok || !sessionsPayload) {
+                throw new Error(getApiErrorMessage(sessionsResponse, sessionsPayload, 'Could not load session history.'));
             }
 
             setSessionSummary({
@@ -159,7 +160,7 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
             setTwoFactorState(twoFactorPayload);
             setEmailInput(userData.user?.email || auth.user?.email || '');
         } catch (loadError: any) {
-            console.error('[SecurityCenter]', loadError);
+            console.warn('[SecurityCenter] Security state load failed.', loadError);
             setError(loadError.message || 'Could not load security settings.');
         } finally {
             setLoading(false);
@@ -181,9 +182,9 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
             body: JSON.stringify({ type: 'scope', scope }),
         });
 
-        const payload = await response.json();
+        const { data: payload } = await parseApiPayload<{ error?: string }>(response);
         if (!response.ok) {
-            throw new Error(payload.error || 'Could not sync session state.');
+            throw new Error(getApiErrorMessage(response, payload, 'Could not sync session state.'));
         }
     };
 

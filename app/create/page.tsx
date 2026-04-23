@@ -41,6 +41,7 @@ import { createClient } from '@/utils/supabase/client';
 import { calculateEmotionalState, getPathDepth, isEmotionalStateEnabled } from '@/lib/emotionalState';
 import { hasPendingMemorialMedia, serializeMemorialDataForSave } from '@/lib/memorialSave';
 import { getMemorialSaveSignature } from '@/lib/versioning';
+import { getApiErrorMessage, parseApiPayload } from '@/lib/apiResponse';
 
 const PATH_CONFIG: Record<PathId, { steps: number[]; labels: string[] }> = {
   facts: {
@@ -523,10 +524,28 @@ function CreateMemorialPageContent() {
       const response = await fetch(`/api/memorials/${id}/state`, {
         cache: 'no-store',
       });
-      const payload = await response.json().catch(() => null);
+      const { data: payload } = await parseApiPayload<{
+        error?: string;
+        memorial?: {
+          id: string;
+          userId: string;
+          mode: string | null;
+          paid: boolean;
+          updatedAt: string | null;
+          completedSteps: number[];
+        };
+        memorialData?: MemorialData;
+      }>(response);
 
       if (!response.ok || !payload?.memorialData || !payload?.memorial) {
-        throw new Error(payload?.error || 'Failed to load archive');
+        const message = getApiErrorMessage(response, payload, 'Failed to load archive');
+
+        if (response.status === 404) {
+          setCurrentMemorialId(null);
+          setMemorialData(getInitialData());
+        }
+
+        throw new Error(message);
       }
 
       const { memorial, memorialData: normalizedData } = payload;
@@ -560,7 +579,7 @@ function CreateMemorialPageContent() {
         lastSavedSignatureRef.current = getMemorialSaveSignature(loadedData);
       }
     } catch (error) {
-      console.error('Error loading memorial:', error);
+      console.warn('Memorial load skipped:', error);
     } finally {
       setIsLoading(false);
     }

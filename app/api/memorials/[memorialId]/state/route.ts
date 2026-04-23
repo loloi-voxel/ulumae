@@ -4,6 +4,8 @@ import { requireMemorialAccess } from '@/lib/apiAuth';
 import { normalizeMemorialMediaData } from '@/lib/mediaManager';
 import type { MemorialData } from '@/types/memorial';
 
+export const dynamic = 'force-dynamic';
+
 function buildMemorialData(record: any): MemorialData {
   return {
     step1: record.step1 || {},
@@ -30,7 +32,7 @@ export async function GET(
     const { memorialId } = await params;
     const access = await requireMemorialAccess({
       memorialId,
-      action: 'edit_archive',
+      action: 'view_archive',
     });
     if (!access.ok) return access.response;
 

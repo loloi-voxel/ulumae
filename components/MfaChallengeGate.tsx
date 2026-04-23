@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { parseApiPayload } from '@/lib/apiResponse';
 
 const SKIP_PATHS = ['/login', '/signup', '/two-factor', '/auth/callback'];
 
@@ -27,9 +28,9 @@ export default function MfaChallengeGate() {
                 const response = await fetch('/api/security/two-factor/state', {
                     cache: 'no-store',
                 });
-                const payload = await response.json();
+                const { data: payload } = await parseApiPayload<{ requiresChallenge?: boolean }>(response);
 
-                if (!response.ok || cancelled) {
+                if (!response.ok || !payload || cancelled) {
                     return;
                 }
 
@@ -38,7 +39,7 @@ export default function MfaChallengeGate() {
                     router.replace(`/two-factor?next=${encodeURIComponent(currentPath)}`);
                 }
             } catch (error) {
-                console.error('[MfaChallengeGate]', error);
+                console.warn('[MfaChallengeGate] Two-factor state check skipped.', error);
             }
         };
 

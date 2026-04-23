@@ -5,6 +5,8 @@ import {
 } from '@/lib/security/twoFactor';
 import { getAuthenticatedTwoFactorContext } from '@/lib/security/twoFactorServer';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
     try {
         const { user, sessionId } = await getAuthenticatedTwoFactorContext();

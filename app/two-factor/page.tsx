@@ -7,6 +7,7 @@ import { AlertCircle, ArrowLeft, Loader2, Shield, Smartphone } from 'lucide-reac
 import { createClient } from '@/utils/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { ExperiencePage, ExperienceHero, ExperiencePanel } from '@/components/ui/experience';
+import { getApiErrorMessage, parseApiPayload } from '@/lib/apiResponse';
 
 interface TwoFactorFactorSummary {
     id: string;
@@ -50,10 +51,10 @@ function TwoFactorChallengeScreen() {
                 const response = await fetch('/api/security/two-factor/state', {
                     cache: 'no-store',
                 });
-                const payload = await response.json();
+                const { data: payload } = await parseApiPayload<TwoFactorState & { error?: string }>(response);
 
-                if (!response.ok) {
-                    throw new Error(payload.error || 'Could not load two-factor settings.');
+                if (!response.ok || !payload) {
+                    throw new Error(getApiErrorMessage(response, payload, 'Could not load two-factor settings.'));
                 }
 
                 if (cancelled) return;
@@ -99,9 +100,9 @@ function TwoFactorChallengeScreen() {
                 ),
             });
 
-            const payload = await response.json();
+            const { data: payload } = await parseApiPayload<{ error?: string }>(response);
             if (!response.ok) {
-                throw new Error(payload.error || 'Could not verify the second factor.');
+                throw new Error(getApiErrorMessage(response, payload, 'Could not verify the second factor.'));
             }
 
             await auth.revalidate();
