@@ -6,7 +6,7 @@ import type { ArchiveRoleSnapshot } from '@/lib/archivePermissions';
 import { ARCHIVE_ROLE_REFETCH_GUARD_MS } from '@/lib/constants';
 import { createClient } from '@/utils/supabase/client';
 
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 300_000;
 const BROADCAST_KEY = 'ulumae:archive-role-sync';
 const BROADCAST_CHANNEL = 'ulumae:archive-role-sync';
 
