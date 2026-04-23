@@ -1,11 +1,62 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireMemorialAccess } from '@/lib/apiAuth';
+import { safeLogMemorialActivity } from '@/lib/activityLog';
+import type { ArchivePermissionContext } from '@/lib/archivePermissions';
 import {
     isAssignableArchiveMemberRole,
     removeArchiveMemberAccess,
     updateArchiveMemberRole,
 } from '@/lib/archiveMemberAccess';
-import { safeLogMemorialActivity } from '@/lib/activityLog';
+import { getOwnerFamilyMemorials } from '@/lib/familyWorkspace';
+import type { WitnessRole } from '@/types/roles';
+
+async function getAffectedMemorialIds(
+    admin: SupabaseClient,
+    context: ArchivePermissionContext,
+    roles: Array<WitnessRole | null>
+) {
+    const includesCoGuardianChange = roles.some((role) => role === 'co_guardian');
+
+    if (context.plan !== 'family' || !includesCoGuardianChange) {
+        return [context.memorialId];
+    }
+
+    const memorials = await getOwnerFamilyMemorials(admin, context.ownerUserId);
+    return memorials.length > 0
+        ? memorials.map((memorial) => memorial.id)
+        : [context.memorialId];
+}
+
+async function broadcastRoleChange(
+    admin: SupabaseClient,
+    memorialIds: string[],
+    affectedUserId: string,
+    newRole: WitnessRole | null
+) {
+    const uniqueMemorialIds = Array.from(new Set(memorialIds.filter(Boolean)));
+
+    await Promise.all(
+        uniqueMemorialIds.map(async (memorialId) => {
+            const channel = admin.channel(`role-change:${memorialId}:${affectedUserId}`);
+
+            try {
+                await channel.send({
+                    type: 'broadcast',
+                    event: 'role_changed',
+                    payload: {
+                        memorialId,
+                        affectedUserId,
+                        newRole,
+                        reason: 'owner_action',
+                    },
+                });
+            } finally {
+                await admin.removeChannel(channel).catch(() => undefined);
+            }
+        })
+    );
+}
 
 export async function PATCH(
     req: NextRequest,
@@ -44,6 +95,23 @@ export async function PATCH(
                     newRole: result.newRole,
                 },
             });
+
+            try {
+                const affectedMemorialIds = await getAffectedMemorialIds(
+                    admin,
+                    context,
+                    [result.oldRole, result.newRole]
+                );
+
+                await broadcastRoleChange(
+                    admin,
+                    affectedMemorialIds,
+                    targetUserId,
+                    result.newRole
+                );
+            } catch (broadcastError) {
+                console.error('Role change broadcast error:', broadcastError);
+            }
         }
 
         return NextResponse.json({
@@ -97,6 +165,23 @@ export async function DELETE(
                 removedRole: result.removedRole,
             },
         });
+
+        try {
+            const affectedMemorialIds = await getAffectedMemorialIds(
+                admin,
+                context,
+                [result.removedRole, null]
+            );
+
+            await broadcastRoleChange(
+                admin,
+                affectedMemorialIds,
+                targetUserId,
+                null
+            );
+        } catch (broadcastError) {
+            console.error('Role removal broadcast error:', broadcastError);
+        }
 
         return NextResponse.json({ success: true, removedRole: result.removedRole });
     } catch (error: any) {

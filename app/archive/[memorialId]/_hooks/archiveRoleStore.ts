@@ -1,8 +1,10 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { ArchiveRoleSnapshot } from '@/lib/archivePermissions';
 import { ARCHIVE_ROLE_REFETCH_GUARD_MS } from '@/lib/constants';
+import { createClient } from '@/utils/supabase/client';
 
 const POLL_INTERVAL_MS = 30_000;
 const BROADCAST_KEY = 'ulumae:archive-role-sync';
@@ -43,6 +45,13 @@ interface RoleNoticeDetail {
   message: string;
 }
 
+interface RoleChangeBroadcastPayload {
+  memorialId: string;
+  affectedUserId: string;
+  newRole: string | null;
+  reason?: string;
+}
+
 interface BroadcastMessage {
   memorialId: string;
   reason?: string;
@@ -53,6 +62,12 @@ const sourceId = `archive-role-${Math.random().toString(36).slice(2)}`;
 const stores = new Map<string, ArchiveRoleStore>();
 let broadcastChannel: BroadcastChannel | null = null;
 let globalListenersAttached = false;
+let realtimeClient: ReturnType<typeof createClient> | null = null;
+
+function getRealtimeClient() {
+  realtimeClient ??= createClient();
+  return realtimeClient;
+}
 
 function areArchiveRoleSnapshotsEqual(
   left: ArchiveRoleSnapshot | null,
@@ -196,14 +211,24 @@ function maybeEmitChangeNotice(
   });
 }
 
+function shouldSkipPassiveRefetch(lastFetchedAt: number | null) {
+  return (
+    lastFetchedAt !== null &&
+    Date.now() - lastFetchedAt < ARCHIVE_ROLE_REFETCH_GUARD_MS
+  );
+}
+
 class ArchiveRoleStore {
   private state = createDefaultState();
   private readonly listeners = new Set<() => void>();
   private inflight: Promise<ArchiveRoleSnapshot | null> | null = null;
   private pollHandle: ReturnType<typeof setInterval> | null = null;
   private subscriberCount = 0;
+  private roleChannel: RealtimeChannel | null = null;
+  private roleChannelUserId: string | null = null;
+  private lastKnownUserId: string | null = null;
 
-  constructor(private readonly memorialId: string) { }
+  constructor(private readonly memorialId: string) {}
 
   getSnapshot = () => this.state;
 
@@ -213,6 +238,7 @@ class ArchiveRoleStore {
 
     if (this.subscriberCount === 1) {
       this.ensurePolling();
+      this.ensureRoleChannel(this.state.data?.currentUserId ?? this.lastKnownUserId);
       void this.fetch({ force: true, reason: 'subscribe' });
     }
 
@@ -220,9 +246,12 @@ class ArchiveRoleStore {
       this.listeners.delete(listener);
       this.subscriberCount = Math.max(0, this.subscriberCount - 1);
 
-      if (this.subscriberCount === 0 && this.pollHandle) {
-        clearInterval(this.pollHandle);
-        this.pollHandle = null;
+      if (this.subscriberCount === 0) {
+        if (this.pollHandle) {
+          clearInterval(this.pollHandle);
+          this.pollHandle = null;
+        }
+        this.teardownRoleChannel();
       }
     };
   };
@@ -292,12 +321,23 @@ class ArchiveRoleStore {
             lastFetchedAt: Date.now(),
           });
 
+          if (status === 'unauthorized' || status === 'not_found') {
+            this.lastKnownUserId = null;
+            this.teardownRoleChannel();
+          } else if (previous.data?.currentUserId) {
+            this.lastKnownUserId = previous.data.currentUserId;
+            this.ensureRoleChannel(this.lastKnownUserId);
+          }
+
           this.setState(nextState);
           maybeEmitChangeNotice(this.memorialId, previous, nextState);
           return null;
         }
 
         const nextPayload = payload as ArchiveRoleSnapshot;
+        this.lastKnownUserId = nextPayload.currentUserId;
+        this.ensureRoleChannel(nextPayload.currentUserId);
+
         const stableData = areArchiveRoleSnapshotsEqual(previous.data, nextPayload)
           ? previous.data
           : nextPayload;
@@ -317,7 +357,7 @@ class ArchiveRoleStore {
           broadcastInvalidation(this.memorialId, reason);
         }
 
-        return payload as ArchiveRoleSnapshot;
+        return nextPayload;
       })
       .catch((error: unknown) => {
         const nextState = applyDerivedState({
@@ -347,6 +387,58 @@ class ArchiveRoleStore {
     this.pollHandle = setInterval(() => {
       void this.fetch({ reason: 'poll' });
     }, POLL_INTERVAL_MS);
+  }
+
+  private ensureRoleChannel(userId: string | null) {
+    if (!userId || this.subscriberCount === 0 || typeof window === 'undefined') {
+      return;
+    }
+
+    if (this.roleChannel && this.roleChannelUserId === userId) {
+      return;
+    }
+
+    this.teardownRoleChannel();
+
+    const channel = getRealtimeClient().channel(
+      `role-change:${this.memorialId}:${userId}`
+    );
+
+    (channel as any).on(
+      'broadcast',
+      { event: 'role_changed' },
+      (message: { payload?: RoleChangeBroadcastPayload }) => {
+        const payload = message.payload;
+        if (
+          !payload ||
+          payload.memorialId !== this.memorialId ||
+          payload.affectedUserId !== userId
+        ) {
+          return;
+        }
+
+        void this.fetch({
+          force: true,
+          reason: payload.reason ?? 'owner_action',
+        });
+      }
+    );
+
+    channel.subscribe();
+
+    this.roleChannel = channel;
+    this.roleChannelUserId = userId;
+  }
+
+  private teardownRoleChannel() {
+    if (!this.roleChannel) {
+      this.roleChannelUserId = null;
+      return;
+    }
+
+    void getRealtimeClient().removeChannel(this.roleChannel);
+    this.roleChannel = null;
+    this.roleChannelUserId = null;
   }
 
   private setState(next: ArchiveRoleStoreState) {
@@ -386,10 +478,7 @@ function attachGlobalListeners() {
   const refetchActiveStores = (reason: string) => {
     stores.forEach((store) => {
       const snapshot = store.getSnapshot();
-      if (
-        snapshot.lastFetchedAt &&
-        Date.now() - snapshot.lastFetchedAt < ARCHIVE_ROLE_REFETCH_GUARD_MS
-      ) {
+      if (shouldSkipPassiveRefetch(snapshot.lastFetchedAt)) {
         return;
       }
       void store.fetch({ reason });
@@ -406,11 +495,6 @@ function attachGlobalListeners() {
   window.addEventListener('ulumae:archive-role-invalidate', (event: Event) => {
     const detail = (event as CustomEvent<{ memorialId?: string; reason?: string }>).detail;
     if (!detail?.memorialId) return;
-    const snapshot = getStore(detail.memorialId).getSnapshot();
-    if (
-      snapshot.lastFetchedAt &&
-      Date.now() - snapshot.lastFetchedAt < ARCHIVE_ROLE_REFETCH_GUARD_MS
-    ) return;
     void getStore(detail.memorialId).fetch({
       force: true,
       reason: detail.reason ?? 'event',

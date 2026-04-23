@@ -3,9 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { createClient } from '@/utils/supabase/client';
 import type { ArchiveRoleData } from './useArchiveRole';
-import { invalidateArchiveRole } from './archiveRoleStore';
 
 export function useRoleSync(
     memorialId: string,
@@ -19,66 +17,6 @@ export function useRoleSync(
     const canReview = roleData?.capabilities.canReview ?? false;
     const permissionSignature = roleData?.permissionSignature ?? null;
     const plan = roleData?.plan ?? null;
-
-    useEffect(() => {
-        const userId = roleData?.currentUserId;
-        if (!memorialId || !userId) return;
-        const supabase = createClient();
-
-        const refresh = (reason: string) =>
-            invalidateArchiveRole(memorialId, {
-                reason,
-                broadcast: true,
-            });
-
-        const membershipChannel = supabase
-            .channel(`role-sync:membership:${memorialId}:${userId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'user_memorial_roles',
-                    filter: `memorial_id=eq.${memorialId}`,
-                },
-                (payload) => {
-                    const nextUserId =
-                        payload.eventType === 'DELETE'
-                            ? payload.old.user_id
-                            : payload.new.user_id;
-
-                    const roleChanged =
-                        payload.eventType !== 'UPDATE' ||
-                        payload.old?.role !== payload.new?.role;
-
-                    if (nextUserId === userId && roleChanged) {
-                        refresh(`realtime:user_memorial_roles:${payload.eventType}`);
-                    }
-                }
-            )
-            .subscribe();
-
-        const memorialChannel = supabase
-            .channel(`role-sync:memorial:${memorialId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'memorials',
-                    filter: `id=eq.${memorialId}`,
-                },
-                (payload) => {
-                    refresh(`realtime:memorials:${payload.eventType}`);
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(membershipChannel);
-            supabase.removeChannel(memorialChannel);
-        };
-    }, [memorialId, roleData?.currentUserId]);
 
     useEffect(() => {
         if (!memorialId) return;
