@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Image as ImageIcon,
-  Lock,
   MousePointer,
   Plus,
   Sparkles,
@@ -1101,18 +1100,6 @@ export default function Step8Media({
               <button onClick={() => setShowPaywall(false)} className="w-full rounded-xl px-4 py-3 text-sm text-warm-dark/45 hover:bg-warm-border/10">
                 Keep working in draft mode
               </button>
-              <div className="rounded-2xl border border-warm-border/20 bg-gradient-to-br from-olive/5 to-warm-brown/5 p-5 text-left">
-                <div className="mb-3 flex items-center gap-2 text-warm-dark/55">
-                  <Lock size={16} />
-                  <span className="text-sm font-medium">Need a hand?</span>
-                </div>
-                <p className="text-sm leading-relaxed text-warm-dark/55">
-                  A dedicated guardian can help gather and organize the archive for you.
-                </p>
-                <button onClick={() => { setShowPaywall(false); window.location.href = '/concierge'; }} className="mt-4 w-full rounded-xl border border-olive/30 px-4 py-3 text-sm font-medium text-olive hover:bg-olive/5">
-                  Let someone help me preserve this life
-                </button>
-              </div>
             </div>
           </div>
         </div>

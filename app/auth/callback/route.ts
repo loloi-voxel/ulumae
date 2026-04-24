@@ -7,10 +7,13 @@ import {
   PENDING_INVITE_COOKIE,
   PENDING_INVITE_COOKIE_MAX_AGE_SECONDS,
 } from '@/lib/inviteFlow';
+import type { EmailOtpType } from '@supabase/supabase-js';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
+  const tokenHash = searchParams.get('token_hash');
+  const verificationType = searchParams.get('type');
   const requestedNext = normalizeRelativePath(searchParams.get('next'));
   const cookieInvite = request.headers
     .get('cookie')
@@ -27,6 +30,30 @@ export async function GET(request: Request) {
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (!error) {
+      const response = NextResponse.redirect(`${origin}${next}`);
+
+      if (inviteToken) {
+        response.cookies.set(PENDING_INVITE_COOKIE, inviteToken, {
+          path: '/',
+          sameSite: 'lax',
+          maxAge: PENDING_INVITE_COOKIE_MAX_AGE_SECONDS,
+        });
+      } else {
+        response.cookies.delete(PENDING_INVITE_COOKIE);
+      }
+
+      return response;
+    }
+  }
+
+  if (tokenHash && verificationType) {
+    const supabase = await createClient();
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: verificationType as EmailOtpType,
+    });
 
     if (!error) {
       const response = NextResponse.redirect(`${origin}${next}`);

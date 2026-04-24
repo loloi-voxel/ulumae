@@ -11,7 +11,7 @@
 import { type ReactNode, useCallback, useState } from 'react';
 import {
     Calendar, MapPin, Heart, Briefcase, GraduationCap, Quote, Star, Home,
-    Sparkles, MessageCircle, Share2, Mail, Users, BookOpen, Lightbulb, Award,
+    Sparkles, MessageCircle, Users, BookOpen, Lightbulb, Award,
     MousePointer, Play, Mic, Image as ImageIcon, Clapperboard, X
 } from 'lucide-react';
 import MediaLightbox, { type MediaLightboxItem } from '@/components/MediaLightbox';
@@ -348,17 +348,6 @@ export default function MemorialRenderer({
                         </div>
                     </div>
 
-                    {/* Share buttons — only on full view */}
-                    {!compact && (
-                        <div className="absolute top-6 right-6 flex gap-3">
-                            <button className="p-3 bg-surface-low/90 hover:bg-surface-low rounded-full shadow-lg transition-all">
-                                <Share2 size={20} className="text-warm-dark" />
-                            </button>
-                            <button className="p-3 bg-surface-low/90 hover:bg-surface-low rounded-full shadow-lg transition-all">
-                                <Mail size={20} className="text-warm-dark" />
-                            </button>
-                        </div>
-                    )}
                 </div>
 
                 {/* MAIN CONTENT */}
@@ -444,7 +433,15 @@ export default function MemorialRenderer({
                                 Life Story
                             </h2>
                             <div className="prose prose-lg max-w-none">
-                                <div className={`text-warm-dark/80 leading-relaxed font-serif ${s.bodyText}`}>
+                                <div
+                                    className={`text-warm-dark/80 leading-relaxed normal-case ${s.bodyText}`}
+                                    style={{
+                                        fontFamily: 'Georgia, serif',
+                                        fontVariant: 'normal',
+                                        fontVariantCaps: 'normal',
+                                        textTransform: 'none',
+                                    }}
+                                >
                                     <BioWithLinks
                                         text={compact
                                             ? data.step6.biography.substring(0, 500) + (data.step6.biography.length > 500 ? '...' : '')
@@ -462,7 +459,7 @@ export default function MemorialRenderer({
                                                 ? '\u2026The story of their final chapter remains unwritten. Perhaps someone, somewhere, still carries the words.'
                                                 : '\u2026There is more to tell. Every life holds stories that have not yet found their way here.';
                                         return (
-                                            <p className="mt-6 text-warm-dark/30 italic font-serif text-sm leading-relaxed">
+                                            <p className="mt-6 text-sm italic leading-relaxed text-warm-dark/30 normal-case">
                                                 {appendage}
                                             </p>
                                         );

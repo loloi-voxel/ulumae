@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Eye, Save, Sparkles, Shield, Users, User, EthernetPort, History, Lock } from 'lucide-react';
+import { ArrowLeft, Eye, Shield, Users, User, History, Lock } from 'lucide-react';
 import PreviewModal from '@/components/wizard/PreviewModal';
 import { Panel, Group, Separator } from 'react-resizable-panels';
 import PathCard from '@/components/wizard/PathCard';
@@ -1055,7 +1055,6 @@ function CreateMemorialPageContent() {
 
             {/* Version History Button */}
             {currentMemorialId && isMemorialOwner && (
-              <>
                 <button
                   onClick={() => setShowHistory(true)}
                   className="flex items-center gap-2 px-3 py-1.5 border border-warm-border/30 rounded-lg hover:bg-warm-border/10 transition-all text-xs text-warm-muted"
@@ -1063,21 +1062,7 @@ function CreateMemorialPageContent() {
                   <History size={14} />
                   <span className="hidden sm:inline">History</span>
                 </button>
-
-                {/* NEW ARCHE PREVIEW BUTTON */}
-                <button
-                  onClick={() => window.open(`/api/arche/preview-html?id=${currentMemorialId}`, '_blank')}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-warm-dark text-warm-bg border border-warm-dark rounded-lg hover:opacity-90 transition-all text-xs"
-                  title="Preview the offline export HTML"
-                >
-                  <EthernetPort size={14} />
-                  <span className="hidden sm:inline">Arche HTML</span>
-                </button>
-              </>
             )}
-
-
-            {/* ... Arche HTML Button ... */}
 
             {false && (
               <>

@@ -2,6 +2,69 @@
 
 import { type DeadManSwitchWarningStage, getDeadManSwitchWarningCopy } from '@/lib/deadManSwitch';
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+export function getSignupConfirmationEmail(
+  email: string,
+  confirmationLink: string
+): string {
+  const safeEmail = escapeHtml(email);
+  const safeConfirmationLink = escapeHtml(confirmationLink);
+
+  return `
+    <div style="margin:0; padding:48px 20px; background:#f4efe6; font-family: Georgia, serif; color:#4f4338;">
+      <div style="max-width:640px; margin:0 auto; background:#fcfaf5; border:1px solid #ddd0bf; overflow:hidden; box-shadow:0 10px 30px rgba(79, 67, 56, 0.06);">
+        <div style="padding:16px 28px; background:#f0e7da; border-bottom:1px solid #ddd0bf; text-align:center;">
+          <p style="margin:0; font-size:11px; letter-spacing:0.28em; text-transform:uppercase; color:#8d7765;">ULUMAE</p>
+        </div>
+
+        <div style="padding:48px 36px 30px;">
+          <p style="margin:0 0 14px; font-size:12px; letter-spacing:0.22em; text-transform:uppercase; color:#9a8572;">Confirm your account</p>
+          <h1 style="margin:0; font-size:38px; line-height:1.08; font-weight:400; color:#4f4338;">
+            Preserve your place
+            <span style="display:block; font-style:italic; color:#7b8a63;">inside ULUMAE</span>
+          </h1>
+
+          <p style="margin:26px 0 0; font-size:17px; line-height:1.8; color:#5e5145;">
+            Your account is almost ready. Confirm your email address to activate access and continue the archive journey you just began.
+          </p>
+
+          <div style="margin:28px 0 0; padding:18px 20px; background:#f7f2ea; border:1px solid #e3d7c8;">
+            <p style="margin:0; font-size:11px; letter-spacing:0.18em; text-transform:uppercase; color:#9a8572;">Email address</p>
+            <p style="margin:10px 0 0; font-size:16px; line-height:1.6; color:#4f4338; word-break:break-word;">${safeEmail}</p>
+          </div>
+
+          <div style="margin:34px 0 0; text-align:center;">
+            <a href="${safeConfirmationLink}" style="display:inline-block; padding:16px 32px; background:#667552; color:#fcfaf5; text-decoration:none; border:1px solid #667552; font-size:13px; letter-spacing:0.16em; text-transform:uppercase;">
+              Confirm my account
+            </a>
+          </div>
+
+          <p style="margin:28px 0 0; font-size:14px; line-height:1.8; color:#7a6a5c; text-align:center;">
+            If the button does not open, copy and paste this link into your browser:
+          </p>
+          <p style="margin:12px 0 0; font-size:13px; line-height:1.7; word-break:break-all; text-align:center;">
+            <a href="${safeConfirmationLink}" style="color:#667552; text-decoration:underline;">${safeConfirmationLink}</a>
+          </p>
+        </div>
+
+        <div style="padding:24px 36px 34px; border-top:1px solid #e7dccd; background:#f8f4ec;">
+          <p style="margin:0; font-size:13px; line-height:1.8; color:#7a6a5c; text-align:center;">
+            You received this message because someone used this email address to create a ULUMAE account.
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 export function getWitnessInvitationEmail(
   inviterName: string,
   deceasedName: string,

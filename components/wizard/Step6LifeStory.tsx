@@ -211,7 +211,13 @@ export default function Step6LifeStory({ data, onUpdate, onNext, onBack, readOnl
                                 : "Tell their complete story here...\n\nStart with who they were in essence, then guide us through their journey from early life through their final years. What made them special? What did they overcome? How did they touch lives?\n\nDon't worry about making it perfect - just write from the heart. You can always edit later."
                             }
                             rows={20}
-                            className="w-full px-6 py-4 border border-warm-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-olive/30 focus:border-olive transition-all resize-none font-serif text-base leading-relaxed disabled:opacity-60 disabled:bg-warm-border/10"
+                            className="w-full px-6 py-4 border border-warm-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-olive/30 focus:border-olive transition-all resize-none normal-case text-base leading-relaxed disabled:opacity-60 disabled:bg-warm-border/10"
+                            style={{
+                                fontFamily: 'Georgia, serif',
+                                fontVariant: 'normal',
+                                fontVariantCaps: 'normal',
+                                textTransform: 'none',
+                            }}
                             disabled={readOnly}
                         />
 

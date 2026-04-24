@@ -1,15 +1,13 @@
 'use client';
 
 import { useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
+import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Mail, Lock, Loader2, Check } from 'lucide-react';
 import Link from 'next/link';
-import { ExperiencePage, ExperienceHero, ExperiencePanel } from '@/components/ui/experience';
+import { ExperienceCard, ExperiencePage, ExperienceHero, ExperiencePanel } from '@/components/ui/experience';
 import PasswordInput from '@/components/ui/PasswordInput';
 
 function SignupForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get('next') || '/dashboard';
 
@@ -36,46 +34,119 @@ function SignupForm() {
 
     setLoading(true);
 
-    const supabase = createClient();
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const response = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        email: normalizedEmail,
+        password,
+        next,
+      }),
     });
 
-    if (signUpError) {
-      setError(signUpError.message);
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      setError(payload?.error || 'Could not create your account.');
       setLoading(false);
       return;
     }
 
+    setEmail(normalizedEmail);
     setConfirmationSent(true);
     setLoading(false);
   };
 
   if (confirmationSent) {
     return (
-      <ExperiencePage containerClassName="flex min-h-screen items-center justify-center">
-        <ExperiencePanel className="mx-auto w-full max-w-xl text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-none bg-olive/10">
-            <Check size={32} className="text-olive" />
+      <ExperiencePage containerClassName="max-w-5xl">
+        <div className="grid gap-8 lg:grid-cols-[0.95fr_0.85fr] lg:items-center">
+          <div>
+            <ExperienceHero
+              kicker={<span className="experience-kicker">Account Created</span>}
+              title={
+                <>
+                  Confirm your
+                  <br />
+                  <span className="italic text-olive">sign up</span>
+                </>
+              }
+              subtitle="Your ULUMAE account is almost ready. Confirm the email we just sent, and we will return you to the archive flow that brought you here."
+            />
+
+            <ExperienceCard className="max-w-xl">
+              <p className="text-xs uppercase tracking-[0.22em] text-warm-outline">What happens next</p>
+              <div className="mt-5 space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-olive/10 text-olive">
+                    <Mail size={15} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-warm-dark">Open the confirmation email</p>
+                    <p className="mt-1 text-sm leading-relaxed text-warm-muted">
+                      Use the message sent to your inbox to verify this address and activate your account.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-warm-brown/10 text-warm-brown">
+                    <Check size={15} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-warm-dark">Return to the same flow</p>
+                    <p className="mt-1 text-sm leading-relaxed text-warm-muted">
+                      Once confirmed, you&apos;ll come back into ULUMAE with your archive context intact.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </ExperienceCard>
           </div>
-          <p className="text-xs uppercase tracking-[0.22em] text-warm-outline">Account Created</p>
-          <h1 className="mt-3 font-serif text-4xl text-warm-dark">Check your email</h1>
-          <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-warm-muted">
-            We sent a confirmation link to <strong className="text-warm-dark">{email}</strong>. Open it to
-            activate your account, then you&apos;ll return to the flow that brought you here.
-          </p>
-          <p className="mt-5 text-xs text-warm-outline">
-            Didn&apos;t receive it? Check spam, or{' '}
-            <button onClick={() => setConfirmationSent(false)} className="experience-link rounded-none underline underline-offset-4">
-              try again
-            </button>
-            .
-          </p>
-        </ExperiencePanel>
+
+          <ExperiencePanel className="mx-auto w-full max-w-xl overflow-hidden">
+            <div className="rounded-[1.75rem] border border-warm-border/20 bg-gradient-to-br from-white via-surface-low to-warm-border/10 p-6 md:p-7">
+              <div className="mb-6 flex items-center gap-4">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-olive/10 text-olive shadow-sm">
+                  <Check size={30} />
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-warm-outline">Confirmation Sent</p>
+                  <h1 className="mt-2 font-serif text-3xl text-warm-dark md:text-4xl">Check your inbox</h1>
+                </div>
+              </div>
+
+              <p className="text-sm leading-relaxed text-warm-muted md:text-[15px]">
+                We sent a confirmation link to your email address. Open it to activate your account and continue the preservation journey.
+              </p>
+
+              <div className="mt-6 rounded-2xl border border-warm-border/25 bg-white/85 px-5 py-4 shadow-sm">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-warm-outline">Email Address</p>
+                <p className="mt-2 break-all text-base text-warm-dark">{email}</p>
+              </div>
+
+              <div className="mt-6 space-y-3 rounded-2xl border border-warm-border/20 bg-warm-border/10 p-5">
+                <p className="text-[11px] uppercase tracking-[0.22em] text-warm-outline">If you don&apos;t see it</p>
+                <p className="text-sm leading-relaxed text-warm-muted">
+                  Check spam or promotions, then return here if you need to send the confirmation again.
+                </p>
+              </div>
+
+              <div className="experience-divider my-6" />
+
+              <p className="text-sm text-warm-muted">
+                Didn&apos;t receive it?{' '}
+                <button onClick={() => setConfirmationSent(false)} className="experience-link rounded-none underline underline-offset-4">
+                  Try again
+                </button>
+                .
+              </p>
+            </div>
+          </ExperiencePanel>
+        </div>
       </ExperiencePage>
     );
   }

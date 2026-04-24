@@ -126,9 +126,10 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
 
         if (data) {
             const activeMemorials = data.filter(m => !m.deleted);
+            const visibleMemorialCount = activeMemorials.filter(m => m.full_name).length;
             setMemorials(activeMemorials);
             setDeletedMemorials(data.filter(m => m.deleted));
-            try { sessionStorage.setItem(`family-count-${userId}`, String(activeMemorials.length || 1)); } catch { /* noop */ }
+            try { sessionStorage.setItem(`family-count-${userId}`, String(visibleMemorialCount || activeMemorials.length || 1)); } catch { /* noop */ }
         }
         setLoading(false);
     };
@@ -326,7 +327,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                 )}
                             </div>
                             <p className="text-warm-muted font-sans text-sm tracking-wide">
-                                {memorials.length} memorial{memorials.length !== 1 ? 's' : ''} &bull; {pendingRequestCount} pending item{pendingRequestCount !== 1 ? 's' : ''} &bull; 0 devices anchored
+                                {realMemorials.length} memorial{realMemorials.length !== 1 ? 's' : ''} &bull; {pendingRequestCount} pending item{pendingRequestCount !== 1 ? 's' : ''} &bull; 0 devices anchored
                             </p>
                         </div>
 
