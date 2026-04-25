@@ -13,7 +13,7 @@ import {
 
 import TutorialPopup from '@/components/TutorialPopup';
 import { DRAFT_VIDEO_LIMIT, MAX_VIDEO_FILE_SIZE_BYTES, PAID_VIDEO_LIMIT } from '@/lib/constants';
-import { deleteMediaAssets, secureUpload } from '@/lib/uploadService';
+import { deleteMediaAssets, secureUpload, updateMediaAssetMetadata } from '@/lib/uploadService';
 import type { VideoContent, VideoReference } from '@/types/memorial';
 
 interface Step9Props {
@@ -127,6 +127,7 @@ export default function Step9Videos({
   const videoRef = useRef<HTMLInputElement>(null);
   const replaceRef = useRef<HTMLInputElement>(null);
   const dataRef = useRef(data);
+  const videoMetadataTimersRef = useRef<Record<string, number>>({});
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
@@ -139,6 +140,14 @@ export default function Step9Videos({
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(videoMetadataTimersRef.current).forEach((timerId) => {
+        window.clearTimeout(timerId);
+      });
+    };
+  }, []);
 
   useEffect(() => {
     if (data.videos.length === 0 && !readOnly) {
@@ -160,6 +169,38 @@ export default function Step9Videos({
   );
 
   const maxVideos = isPaid ? PAID_VIDEO_LIMIT : DRAFT_VIDEO_LIMIT;
+
+  const syncVideoMetadata = async (id: string) => {
+    const currentVideo = dataRef.current.videos.find((item) => item.id === id);
+
+    if (!memorialId || !currentVideo?.assetId) {
+      delete videoMetadataTimersRef.current[id];
+      return;
+    }
+
+    try {
+      await updateMediaAssetMetadata(memorialId, currentVideo.assetId, {
+        title: currentVideo.title || '',
+        description: currentVideo.description || '',
+        duration: currentVideo.duration || '',
+      });
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Could not save the video details yet.');
+    } finally {
+      delete videoMetadataTimersRef.current[id];
+    }
+  };
+
+  const queueVideoMetadataSync = (id: string, delay = 500) => {
+    const existingTimer = videoMetadataTimersRef.current[id];
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+    }
+
+    videoMetadataTimersRef.current[id] = window.setTimeout(() => {
+      void syncVideoMetadata(id);
+    }, delay);
+  };
 
   const ensureMemorial = () => {
     if (!memorialId) {
@@ -192,7 +233,7 @@ export default function Step9Videos({
           file,
           url: localUrl!,
           thumbnail: localUrl!,
-          title: file.name.replace(/\.[^/.]+$/, ''),
+          title: '',
           description: '',
           duration,
           uploadStatus: 'uploading',
@@ -389,6 +430,8 @@ export default function Step9Videos({
       ...current,
       videos: current.videos.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
     }));
+
+    queueVideoMetadataSync(id);
   };
 
   const bulkDelete = async () => {
@@ -498,8 +541,8 @@ export default function Step9Videos({
                           </div>
                         )}
                       </div>
-                      <input type="text" value={video.title} onChange={(event) => updateVideoField(video.id, 'title', event.target.value)} disabled={readOnly} placeholder="Title" className="rounded-xl border border-warm-border/30 px-3 py-2 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
-                      <textarea value={video.description || ''} onChange={(event) => updateVideoField(video.id, 'description', event.target.value)} rows={3} disabled={readOnly} placeholder="Description" className="rounded-xl border border-warm-border/30 px-3 py-3 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
+                      <input type="text" value={video.title} onChange={(event) => updateVideoField(video.id, 'title', event.target.value)} onBlur={() => queueVideoMetadataSync(video.id, 0)} disabled={readOnly} placeholder="Optional title" className="rounded-xl border border-warm-border/30 px-3 py-2 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
+                      <textarea value={video.description || ''} onChange={(event) => updateVideoField(video.id, 'description', event.target.value)} onBlur={() => queueVideoMetadataSync(video.id, 0)} rows={3} disabled={readOnly} placeholder="Optional description" className="rounded-xl border border-warm-border/30 px-3 py-3 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
                       {video.uploadError && (
                         <p className="text-xs text-red-600">{video.uploadError}</p>
                       )}

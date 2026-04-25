@@ -140,6 +140,7 @@ export default function Step8Media({
   const replaceRef = useRef<HTMLInputElement>(null);
   const dataRef = useRef(data);
   const interactiveMetadataTimersRef = useRef<Record<string, number>>({});
+  const galleryMetadataTimersRef = useRef<Record<string, number>>({});
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
@@ -156,6 +157,9 @@ export default function Step8Media({
 
   useEffect(() => {
     return () => {
+      Object.values(galleryMetadataTimersRef.current).forEach((timerId) => {
+        window.clearTimeout(timerId);
+      });
       Object.values(interactiveMetadataTimersRef.current).forEach((timerId) => {
         window.clearTimeout(timerId);
       });
@@ -195,6 +199,37 @@ export default function Step8Media({
 
     interactiveMetadataTimersRef.current[id] = window.setTimeout(() => {
       void syncInteractiveMetadata(id);
+    }, delay);
+  };
+
+  const syncGalleryMetadata = async (id: string) => {
+    const currentItem = dataRef.current.gallery.find((item) => item.id === id);
+
+    if (!memorialId || !currentItem?.assetId) {
+      delete galleryMetadataTimersRef.current[id];
+      return;
+    }
+
+    try {
+      await updateMediaAssetMetadata(memorialId, currentItem.assetId, {
+        caption: currentItem.caption || '',
+        year: currentItem.year || '',
+      });
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Could not save the photo details yet.');
+    } finally {
+      delete galleryMetadataTimersRef.current[id];
+    }
+  };
+
+  const queueGalleryMetadataSync = (id: string, delay = 500) => {
+    const existingTimer = galleryMetadataTimersRef.current[id];
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+    }
+
+    galleryMetadataTimersRef.current[id] = window.setTimeout(() => {
+      void syncGalleryMetadata(id);
     }, delay);
   };
 
@@ -724,6 +759,8 @@ export default function Step8Media({
       ...current,
       gallery: current.gallery.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
     }));
+
+    queueGalleryMetadataSync(id);
   };
 
   const updateInteractiveDescription = (id: string, value: string) => {
@@ -867,8 +904,8 @@ export default function Step8Media({
                           </div>
                         )}
                       </div>
-                      <input type="text" value={item.caption} onChange={(event) => updateGalleryField(item.id, 'caption', event.target.value)} placeholder="Caption" disabled={readOnly} className="rounded-xl border border-warm-border/30 px-3 py-2 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
-                      <input type="text" value={item.year} onChange={(event) => updateGalleryField(item.id, 'year', event.target.value)} placeholder="Year" disabled={readOnly} className="rounded-xl border border-warm-border/30 px-3 py-2 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
+                      <input type="text" value={item.caption} onChange={(event) => updateGalleryField(item.id, 'caption', event.target.value)} onBlur={() => queueGalleryMetadataSync(item.id, 0)} placeholder="Optional title" disabled={readOnly} className="rounded-xl border border-warm-border/30 px-3 py-2 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
+                      <input type="text" value={item.year} onChange={(event) => updateGalleryField(item.id, 'year', event.target.value)} onBlur={() => queueGalleryMetadataSync(item.id, 0)} placeholder="Year" disabled={readOnly} className="rounded-xl border border-warm-border/30 px-3 py-2 text-sm focus:border-olive focus:outline-none disabled:bg-warm-border/10" />
                     </div>
                   </div>
                 ))}

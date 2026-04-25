@@ -60,6 +60,7 @@ export async function GET(
         memorialId,
         userId: memorial.user_id,
         data: buildMemorialData(memorial),
+        preferAssetMetadata: true,
       }),
       supabaseAdmin
         .from('memorial_contributions')
@@ -102,7 +103,7 @@ export async function GET(
         id: contribution.id,
         url: contribution.content.url,
         thumbnail: contribution.content?.thumbnail || '',
-        title: contribution.content?.title || 'Video memory',
+        title: contribution.content?.title || '',
         description: contribution.content?.description || '',
       }));
 

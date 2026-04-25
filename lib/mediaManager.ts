@@ -135,6 +135,7 @@ interface SyncMediaOptions {
   memorialId: string;
   userId: string;
   data: MemorialData;
+  preferAssetMetadata?: boolean;
 }
 
 interface ResolvedMediaAsset {
@@ -604,7 +605,7 @@ function buildVideoReference(
     id: asset.id,
     url: asset.publicUrl,
     thumbnail: thumbnailAsset?.publicUrl || asset.publicUrl,
-    title: getAssetMetadataString(asset, 'title') || stripExtension(asset.originalFileName) || 'Video memory',
+    title: getAssetMetadataString(asset, 'title'),
     description: getAssetMetadataString(asset, 'description'),
     duration: getAssetMetadataString(asset, 'duration'),
     assetId: asset.id,
@@ -913,6 +914,7 @@ export async function normalizeMemorialMediaData({
   memorialId,
   userId,
   data,
+  preferAssetMetadata = false,
 }: SyncMediaOptions): Promise<MemorialData> {
   const step1 = { ...data.step1 };
   const step2 = {
@@ -1034,17 +1036,28 @@ export async function normalizeMemorialMediaData({
       continue;
     }
 
-    await updateAssetMetadata(admin, resolved.asset.id, {
-      caption: item.caption || '',
-      year: item.year || '',
-      position: index,
-      section: 'childhood_photos',
-    });
+    const resolvedCaption = preferAssetMetadata
+      ? getAssetMetadataString(resolved.asset, 'caption')
+      : item.caption || '';
+    const resolvedYear = preferAssetMetadata
+      ? getAssetMetadataString(resolved.asset, 'year')
+      : item.year || '';
+
+    if (!preferAssetMetadata) {
+      await updateAssetMetadata(admin, resolved.asset.id, {
+        caption: resolvedCaption,
+        year: resolvedYear,
+        position: index,
+        section: 'childhood_photos',
+      });
+    }
 
     normalized.step2.childhoodPhotos.push({
       ...stripTransientFileFields(item),
       id: item.id || resolved.asset.id,
       preview: resolved.sourceUrl,
+      caption: resolvedCaption,
+      year: resolvedYear,
       assetId: resolved.asset.id,
       bucket: resolved.asset.bucket,
       storagePath: resolved.asset.storagePath,
@@ -1077,14 +1090,25 @@ export async function normalizeMemorialMediaData({
       continue;
     }
 
-    await updateAssetMetadata(admin, resolved.asset.id, {
-      caption: item.caption || '',
-      year: item.year || '',
-      position: index,
-    });
+    const resolvedCaption = preferAssetMetadata
+      ? getAssetMetadataString(resolved.asset, 'caption')
+      : item.caption || '';
+    const resolvedYear = preferAssetMetadata
+      ? getAssetMetadataString(resolved.asset, 'year')
+      : item.year || '';
+
+    if (!preferAssetMetadata) {
+      await updateAssetMetadata(admin, resolved.asset.id, {
+        caption: resolvedCaption,
+        year: resolvedYear,
+        position: index,
+      });
+    }
 
     normalized.step8.gallery.push({
       ...stripTransientFileFields(item),
+      caption: resolvedCaption,
+      year: resolvedYear,
       preview: resolved.sourceUrl,
       assetId: resolved.asset.id,
       bucket: resolved.asset.bucket,
@@ -1117,13 +1141,20 @@ export async function normalizeMemorialMediaData({
       continue;
     }
 
-    await updateAssetMetadata(admin, resolved.asset.id, {
-      description: item.description || '',
-      position: index,
-    });
+    const resolvedDescription = preferAssetMetadata
+      ? getAssetMetadataString(resolved.asset, 'description')
+      : item.description || '';
+
+    if (!preferAssetMetadata) {
+      await updateAssetMetadata(admin, resolved.asset.id, {
+        description: resolvedDescription,
+        position: index,
+      });
+    }
 
     normalized.step8.interactiveGallery.push({
       ...stripTransientFileFields(item),
+      description: resolvedDescription,
       preview: resolved.sourceUrl,
       assetId: resolved.asset.id,
       bucket: resolved.asset.bucket,
@@ -1156,13 +1187,20 @@ export async function normalizeMemorialMediaData({
       continue;
     }
 
-    await updateAssetMetadata(admin, resolved.asset.id, {
-      title: item.title || '',
-      position: index,
-    });
+    const resolvedTitle = preferAssetMetadata
+      ? getAssetMetadataString(resolved.asset, 'title')
+      : item.title || '';
+
+    if (!preferAssetMetadata) {
+      await updateAssetMetadata(admin, resolved.asset.id, {
+        title: resolvedTitle,
+        position: index,
+      });
+    }
 
     normalized.step8.voiceRecordings.push({
       ...stripTransientFileFields(item),
+      title: resolvedTitle,
       assetId: resolved.asset.id,
       bucket: resolved.asset.bucket,
       storagePath: resolved.asset.storagePath,
@@ -1210,16 +1248,31 @@ export async function normalizeMemorialMediaData({
       },
     });
 
-    await updateAssetMetadata(admin, videoAsset.asset.id, {
-      title: item.title || '',
-      description: item.description || '',
-      duration: item.duration || '',
-      position: index,
-      thumbnailAssetId: thumbnailAsset.asset?.id || null,
-    });
+    const resolvedTitle = preferAssetMetadata
+      ? getAssetMetadataString(videoAsset.asset, 'title')
+      : item.title || '';
+    const resolvedDescription = preferAssetMetadata
+      ? getAssetMetadataString(videoAsset.asset, 'description')
+      : item.description || '';
+    const resolvedDuration = preferAssetMetadata
+      ? getAssetMetadataString(videoAsset.asset, 'duration')
+      : item.duration || '';
+
+    if (!preferAssetMetadata) {
+      await updateAssetMetadata(admin, videoAsset.asset.id, {
+        title: resolvedTitle,
+        description: resolvedDescription,
+        duration: resolvedDuration,
+        position: index,
+        thumbnailAssetId: thumbnailAsset.asset?.id || null,
+      });
+    }
 
     normalized.step9.videos.push({
       ...stripTransientFileFields(item),
+      title: resolvedTitle,
+      description: resolvedDescription,
+      duration: resolvedDuration,
       url: videoAsset.sourceUrl,
       thumbnail: thumbnailAsset.sourceUrl || videoAsset.sourceUrl,
       assetId: videoAsset.asset.id,

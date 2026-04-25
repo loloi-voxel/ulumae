@@ -33,7 +33,7 @@ function getInteractiveStoryCopy(item: MediaLightboxItem) {
   );
 }
 
-function getRevealMaskStyle(isActive: boolean, x: number, y: number) {
+function getRevealMaskStyle(isActive: boolean, x: number, y: number, radius = 120) {
   if (!isActive) {
     return {
       maskImage: 'none',
@@ -41,7 +41,9 @@ function getRevealMaskStyle(isActive: boolean, x: number, y: number) {
     };
   }
 
-  const mask = `radial-gradient(circle 120px at ${x}px ${y}px, transparent 0%, transparent 42%, rgba(0,0,0,0.3) 72%, black 100%)`;
+  const transparentEdge = Math.round(radius * 0.42);
+  const featherEdge = Math.round(radius * 0.72);
+  const mask = `radial-gradient(circle ${radius}px at ${x}px ${y}px, transparent 0%, transparent ${transparentEdge}px, rgba(0,0,0,0.3) ${featherEdge}px, black 100%)`;
   return {
     maskImage: mask,
     WebkitMaskImage: mask,
@@ -189,7 +191,7 @@ export default function MediaLightbox({
       role="dialog"
       aria-modal="true"
       aria-label={currentItem.title || `Media viewer ${currentIndex + 1} of ${items.length}`}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-warm-dark/95 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-white/95 backdrop-blur-sm"
       onWheel={handleWheel}
       onClick={(event) => {
         if (event.target === event.currentTarget) {
@@ -200,19 +202,19 @@ export default function MediaLightbox({
       <button
         data-close
         onClick={onClose}
-        className="absolute right-4 top-4 z-10 rounded-full bg-white/10 p-3 transition-all hover:bg-white/20"
+        className="absolute right-4 top-4 z-10 rounded-full bg-black/10 p-3 transition-all hover:bg-black/20"
         aria-label="Close viewer"
       >
-        <X size={24} className="text-surface-low" />
+        <X size={24} className="text-gray-700" />
       </button>
 
       {items.length > 1 && (
         <button
           onClick={goToPrevious}
-          className="absolute left-4 z-10 rounded-full bg-white/10 p-3 transition-all hover:bg-white/20"
+          className="absolute left-4 z-10 rounded-full bg-black/10 p-3 transition-all hover:bg-black/20"
           aria-label="Previous item"
         >
-          <ChevronLeft size={32} className="text-surface-low" />
+          <ChevronLeft size={32} className="text-gray-700" />
         </button>
       )}
 
@@ -220,15 +222,15 @@ export default function MediaLightbox({
         {isInteractiveStory ? (
           <div className="mx-auto flex w-full max-w-6xl items-center justify-center">
             <div
-              className="relative w-full overflow-hidden rounded-[30px] shadow-2xl"
+              className="relative w-full overflow-hidden rounded-[30px] bg-warm-border/10 shadow-2xl"
               style={interactiveStoryStyle}
               onMouseMove={handleInteractiveMouseMove}
               onMouseLeave={() => setIsInteractiveHovering(false)}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="absolute inset-0 z-10 flex items-center justify-center p-6 md:p-10">
-                <div className="max-w-2xl rounded-[28px] bg-surface-low/92 px-6 py-5 shadow-xl backdrop-blur-md">
-                  <p className="font-serif text-xl leading-relaxed text-warm-dark md:text-3xl">
+              <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
+                <div className="max-w-[84%] rounded-[24px] bg-surface-low/80 px-5 py-4 shadow-xl backdrop-blur-md">
+                  <p className="font-serif text-center font-medium leading-relaxed text-warm-dark drop-shadow-sm text-2xl md:text-3xl">
                     {interactiveStoryCopy}
                   </p>
                 </div>
@@ -236,7 +238,7 @@ export default function MediaLightbox({
 
               <div
                 className="absolute inset-0 z-20"
-                style={getRevealMaskStyle(isInteractiveHovering, interactivePointer.x, interactivePointer.y)}
+                style={getRevealMaskStyle(isInteractiveHovering, interactivePointer.x, interactivePointer.y, 220)}
               >
                 <img
                   src={currentItem.src}
@@ -288,15 +290,15 @@ export default function MediaLightbox({
             </div>
 
             {hasMeta && (
-              <div className="w-full max-w-3xl rounded-[28px] border border-white/10 bg-white/8 px-5 py-4 text-center shadow-lg backdrop-blur-md">
+              <div className="w-full max-w-3xl rounded-[28px] border border-black/10 bg-black/5 px-5 py-4 text-center shadow-lg backdrop-blur-md">
                 {displayTitle && (
-                  <p className="text-lg text-surface-low">{displayTitle}</p>
+                  <p className="text-lg text-gray-800">{displayTitle}</p>
                 )}
                 {displayDescription && (
-                  <p className="mt-1 text-sm leading-relaxed text-surface-low/82">{displayDescription}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-gray-600">{displayDescription}</p>
                 )}
                 {displayYear && (
-                  <p className="mt-2 text-xs uppercase tracking-[0.22em] text-surface-low/55">{displayYear}</p>
+                  <p className="mt-2 text-xs uppercase tracking-[0.22em] text-gray-400">{displayYear}</p>
                 )}
               </div>
             )}
@@ -304,10 +306,10 @@ export default function MediaLightbox({
         )}
 
         <div
-          className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-warm-dark/80 px-4 py-2"
+          className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-black/10 px-4 py-2"
           aria-live="polite"
         >
-          <p className="text-sm text-surface-low">
+          <p className="text-sm text-gray-700">
             {currentIndex + 1} / {items.length}
           </p>
         </div>
@@ -316,10 +318,10 @@ export default function MediaLightbox({
       {items.length > 1 && (
         <button
           onClick={goToNext}
-          className="absolute right-4 z-10 rounded-full bg-white/10 p-3 transition-all hover:bg-white/20"
+          className="absolute right-4 z-10 rounded-full bg-black/10 p-3 transition-all hover:bg-black/20"
           aria-label="Next item"
         >
-          <ChevronRight size={32} className="text-surface-low" />
+          <ChevronRight size={32} className="text-gray-700" />
         </button>
       )}
     </div>

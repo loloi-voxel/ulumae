@@ -15,6 +15,7 @@ import {
     MousePointer, Play, Mic, Image as ImageIcon, Clapperboard
 } from 'lucide-react';
 import MediaLightbox, { type MediaLightboxItem } from '@/components/MediaLightbox';
+import MemorialMediaGallery from '@/components/MemorialMediaGallery';
 import IntegrityBadge from '@/components/IntegrityBadge';
 import BioWithLinks from '@/components/BioWithLinks';
 import GhostPresence from '@/components/wizard/GhostPresence';
@@ -165,6 +166,26 @@ export default function MemorialRenderer({
         mimeType: video.mimeType || null,
         title: video.title || undefined,
         description: video.description || undefined,
+    }));
+    const gallerySectionPhotos = galleryItems.map((photo: any) => ({
+        id: photo.id,
+        src: photo.preview,
+        alt: photo.caption || 'Photo',
+        name: photo.caption || '',
+        caption: photo.caption || '',
+        year: photo.year || '',
+        integrityHash: photo.sha256_hash,
+    }));
+    const gallerySectionVideos = videoItems.map((video: any) => ({
+        id: video.id,
+        src: video.url,
+        name: video.title || '',
+        title: video.title || '',
+        description: video.description || '',
+        thumbnailSrc: video.thumbnail || null,
+        poster: video.thumbnail || null,
+        mimeType: video.mimeType || null,
+        integrityHash: video.sha256_hash,
     }));
 
     const visibleGalleryItems = compact ? galleryItems.slice(0, compactVisibleCount) : galleryItems;
@@ -825,7 +846,13 @@ export default function MemorialRenderer({
                     ) : null}
 
                     {/* Photo Gallery */}
-                    {galleryItems.length > 0 ? (
+                    {!compact && (galleryItems.length > 0 || videoItems.length > 0) ? (
+                        <MemorialMediaGallery
+                            photos={gallerySectionPhotos}
+                            videos={gallerySectionVideos}
+                            isPreview={isPreview}
+                        />
+                    ) : compact && galleryItems.length > 0 ? (
                         <MediaSectionFrame
                             title="Photo Gallery"
                             icon={<ImageIcon size={compact ? 18 : 22} className="text-olive" />}
@@ -859,7 +886,7 @@ export default function MemorialRenderer({
                     ) : null}
 
                     {/* Videos */}
-                    {videoItems.length > 0 ? (
+                    {compact && videoItems.length > 0 ? (
                         <MediaSectionFrame
                             title="Video Memories"
                             icon={<Clapperboard size={compact ? 18 : 22} className="text-olive" />}
@@ -900,7 +927,7 @@ export default function MemorialRenderer({
                                 )})}
                             </div>
                         </MediaSectionFrame>
-                    ) : isPreview ? (
+                    ) : compact && isPreview ? (
                         <GhostPresence plan={ghostPlan} variant="video" whisper="No moving images have been gathered." />
                     ) : null}
 
