@@ -290,7 +290,6 @@ function renderInteractiveGallery(data: MemorialData, map?: ResourceMap): string
                     <div class="icon-box">${ICONS.mouse}</div>
                     Interactive Photo Stories
                 </h2>
-                ${items.length > 1 ? `<button class="media-section-action" type="button" onclick="window.ulumaeMediaViewer.open('interactiveStories', 0)">Open story viewer</button>` : ''}
             </div>
             <div class="story-grid">
                 ${items.map((item: any, index: number) => {
@@ -308,12 +307,8 @@ function renderInteractiveGallery(data: MemorialData, map?: ResourceMap): string
                                     <p>${storyText}</p>
                                 </div>
                                 <img src="${processMedia(item.preview, map)}" class="story-card-image" alt="${item.title || storyText}">
-                                <div class="story-card-pill">Reveal the story</div>
                                 ${item.sha256_hash ? `<div class="integrity-badge">Verified ✓</div>` : ''}
                             </button>
-                            <div class="story-card-footer">
-                                <p>${storyText}</p>
-                            </div>
                         </article>
                     `;
                 }).join('')}
@@ -333,19 +328,12 @@ function renderGallery(data: MemorialData, map?: ResourceMap): string {
                     <div class="icon-box">${ICONS.image}</div>
                     Photo Gallery
                 </h2>
-                ${photos.length > 1 ? `<button class="media-section-action" type="button" onclick="window.ulumaeMediaViewer.open('photos', 0)">Open gallery</button>` : ''}
             </div>
             <div class="gallery-grid">
                 ${photos.map((photo, index) => `
                     <button class="gallery-item gallery-panel" type="button" onclick="window.ulumaeMediaViewer.open('photos', ${index})">
                         <img src="${processMedia(photo.preview, map)}" alt="${photo.caption || 'Photo'}">
                         ${photo.sha256_hash ? `<div class="integrity-badge">Verified ✓</div>` : ''}
-                        ${(photo.caption || photo.year) ? `
-                            <div class="gallery-panel-caption">
-                                ${photo.caption ? `<div style="font-size: 12px;">${photo.caption}</div>` : ''}
-                                ${photo.year ? `<div style="font-size: 10px; opacity: 0.7;">${photo.year}</div>` : ''}
-                            </div>
-                        ` : ''}
                     </button>
                 `).join('')}
             </div>
@@ -364,7 +352,6 @@ function renderVideos(data: MemorialData, map?: ResourceMap): string {
                     <div class="icon-box">${ICONS.clapperboard}</div>
                     Video Memories
                 </h2>
-                ${videos.length > 1 ? `<button class="media-section-action" type="button" onclick="window.ulumaeMediaViewer.open('videos', 0)">Open video viewer</button>` : ''}
             </div>
             <div class="video-grid">
                 ${videos.map((video, index) => `
@@ -376,10 +363,6 @@ function renderVideos(data: MemorialData, map?: ResourceMap): string {
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="8,5 19,12 8,19"></polygon></svg>
                                 </span>
                             </div>
-                        </div>
-                        <div class="video-memory-copy">
-                            <h4>${video.title || `Video memory ${index + 1}`}</h4>
-                            ${video.description ? `<p>${video.description}</p>` : ''}
                         </div>
                     </button>
                 `).join('')}
@@ -397,9 +380,9 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
             src: processMedia(photo.preview, map) || '',
             thumbnailSrc: processMedia(photo.preview, map) || '',
             alt: photo.caption || 'Photo',
-            title: photo.caption || 'Photo',
-            caption: photo.caption || '',
-            year: photo.year || '',
+            title: photo.caption || undefined,
+            caption: photo.caption || undefined,
+            year: photo.year || undefined,
         }));
 
     const interactiveStories: StandaloneMediaItem[] = (data.step8.interactiveGallery || [])
@@ -413,8 +396,8 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
             alt: item.title || item.caption || getInteractiveStoryText(item, index),
             title: item.title || item.caption || `Interactive photo story ${index + 1}`,
             description: getInteractiveStoryText(item, index),
-            caption: item.caption || '',
-            year: item.year || '',
+            caption: item.caption || undefined,
+            year: item.year || undefined,
         }));
 
     const videos: StandaloneMediaItem[] = (data.step9.videos || [])
@@ -426,10 +409,10 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
             thumbnailSrc: processMedia(video.thumbnail, map) || processMedia(video.url, map) || '',
             poster: processMedia(video.thumbnail, map) || null,
             mimeType: video.mimeType || null,
-            title: video.title || `Video memory ${index + 1}`,
-            description: video.description || '',
-            caption: video.caption || '',
-            year: video.year || '',
+            title: video.title || undefined,
+            description: video.description || undefined,
+            caption: video.caption || undefined,
+            year: video.year || undefined,
         }));
 
     if (!photos.length && !interactiveStories.length && !videos.length) {
@@ -446,20 +429,6 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                 justify-content: space-between;
                 gap: 16px;
                 margin-bottom: 32px;
-            }
-            .media-section-action {
-                border: 1px solid rgba(232, 216, 204, 0.45);
-                background: transparent;
-                color: var(--color-charcoal);
-                padding: 10px 16px;
-                border-radius: 14px;
-                font-size: 0.9rem;
-                cursor: pointer;
-                transition: background 0.2s ease, border-color 0.2s ease;
-            }
-            .media-section-action:hover {
-                background: rgba(232, 216, 204, 0.22);
-                border-color: rgba(138, 171, 180, 0.38);
             }
             .story-grid {
                 display: grid;
@@ -484,6 +453,7 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                 overflow: hidden;
                 cursor: pointer;
                 text-align: left;
+                background: rgba(232, 216, 204, 0.14);
             }
             .story-card-copy {
                 position: absolute;
@@ -496,17 +466,17 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
             }
             .story-card-copy p {
                 margin: 0;
-                max-width: 90%;
+                max-width: 84%;
                 border-radius: 24px;
-                background: linear-gradient(135deg, rgba(138, 171, 180, 0.2), rgba(253, 246, 240, 0.92), rgba(158, 142, 130, 0.14));
-                padding: 18px 20px;
+                background: rgba(253, 246, 240, 0.92);
+                padding: 18px 22px;
                 font-family: var(--font-serif);
                 font-size: 1.25rem;
                 line-height: 1.45;
                 text-align: center;
                 color: var(--color-charcoal);
-                box-shadow: 0 12px 24px rgba(0,0,0,0.12);
-                backdrop-filter: blur(6px);
+                box-shadow: 0 18px 30px rgba(0,0,0,0.14);
+                backdrop-filter: blur(8px);
             }
             .story-card-image {
                 position: absolute;
@@ -515,63 +485,43 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                 width: 100%;
                 height: 100%;
                 object-fit: cover;
-            }
-            .story-card-pill {
-                position: absolute;
-                left: 12px;
-                bottom: 12px;
-                z-index: 30;
-                border-radius: 9999px;
-                background: rgba(90, 107, 120, 0.72);
-                color: #fdf6f0;
-                padding: 8px 12px;
-                font-size: 0.72rem;
-                letter-spacing: 0.08em;
-                text-transform: uppercase;
-            }
-            .story-card-footer {
-                border-top: 1px solid rgba(232, 216, 204, 0.3);
-                padding: 16px 18px 18px;
-            }
-            .story-card-footer p {
-                margin: 0;
-                font-family: var(--font-serif);
-                font-size: 1rem;
-                line-height: 1.6;
-                color: rgba(90, 107, 120, 0.82);
+                object-position: center;
             }
             .gallery-panel {
-                border: none;
+                display: block;
+                border: 1px solid rgba(232, 216, 204, 0.28);
+                border-radius: 24px;
                 padding: 0;
                 cursor: pointer;
                 text-align: left;
+                background: rgba(255,255,255,0.7);
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
             }
-            .gallery-panel-caption {
-                position: absolute;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                background: linear-gradient(to top, rgba(90,107,120,0.88), transparent);
-                padding: 12px;
-                color: #fdf6f0;
-                text-align: left;
-                pointer-events: none;
-                opacity: 0;
-                transition: opacity 0.2s ease;
+            .gallery-panel:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 16px 30px rgba(0,0,0,0.08);
             }
-            .gallery-panel:hover .gallery-panel-caption,
-            .gallery-panel:focus-visible .gallery-panel-caption {
-                opacity: 1;
+            .gallery-panel img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                object-position: center;
+                transition: transform 0.3s ease;
+            }
+            .gallery-panel:hover img {
+                transform: scale(1.03);
             }
             .video-memory-card {
                 border: 1px solid rgba(232, 216, 204, 0.35);
-                border-radius: 20px;
-                background: #fff;
-                padding: 16px;
+                border-radius: 24px;
+                background: rgba(255,255,255,0.7);
+                padding: 0;
                 cursor: pointer;
                 text-align: left;
                 box-shadow: 0 1px 3px rgba(0,0,0,0.05);
                 transition: transform 0.2s ease, box-shadow 0.2s ease;
+                overflow: hidden;
             }
             .video-memory-card:hover {
                 transform: translateY(-2px);
@@ -579,10 +529,8 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
             }
             .video-memory-visual {
                 position: relative;
-                margin-bottom: 12px;
                 aspect-ratio: 16 / 9;
                 overflow: hidden;
-                border-radius: 16px;
                 background: rgba(90, 107, 120, 0.08);
             }
             .video-memory-visual img,
@@ -590,6 +538,13 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                 width: 100%;
                 height: 100%;
                 object-fit: cover;
+                object-position: center;
+            }
+            .video-memory-visual img {
+                transition: transform 0.3s ease;
+            }
+            .video-memory-card:hover .video-memory-visual img {
+                transform: scale(1.03);
             }
             .video-memory-fallback {
                 display: flex;
@@ -619,17 +574,6 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                 background: rgba(253, 246, 240, 0.92);
                 color: var(--color-charcoal);
                 box-shadow: 0 10px 24px rgba(0,0,0,0.18);
-            }
-            .video-memory-copy h4 {
-                margin: 0;
-                font-size: 1rem;
-                color: var(--color-charcoal);
-            }
-            .video-memory-copy p {
-                margin: 8px 0 0;
-                font-size: 0.92rem;
-                line-height: 1.6;
-                color: rgba(90, 107, 120, 0.72);
             }
             .ulumae-viewer {
                 position: fixed;
@@ -696,45 +640,58 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                 width: 100%;
                 max-width: 1320px;
                 padding: 0 80px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
             }
             .ulumae-viewer-standard {
-                position: relative;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 18px;
                 margin: 0 auto;
+                width: 100%;
                 max-width: 1200px;
-                max-height: 90vh;
             }
             .ulumae-viewer-frame {
+                position: relative;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
                 overflow: hidden;
-                border-radius: 18px;
-                box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
-                background: #111;
+                border-radius: 30px;
+                box-shadow: 0 25px 50px -12px rgba(0,0,0,0.42);
+            }
+            .ulumae-viewer-frame.is-image {
+                height: clamp(320px, 72vw, 820px);
+                max-height: 82vh;
+            }
+            .ulumae-viewer-frame.is-video {
+                height: clamp(260px, 56vw, 720px);
+                max-height: 82vh;
             }
             .ulumae-viewer-frame img,
             .ulumae-viewer-frame video,
             .ulumae-viewer-frame iframe {
                 display: block;
-                max-width: 100%;
-                max-height: 85vh;
-                width: auto;
-                height: auto;
-                object-fit: contain;
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                object-position: center;
             }
             .ulumae-viewer-frame iframe {
-                width: min(92vw, 1200px);
-                aspect-ratio: 16 / 9;
                 border: 0;
-                background: #000;
             }
             .ulumae-viewer-meta {
-                position: absolute;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                padding: 24px;
-                border-radius: 0 0 18px 18px;
-                background: linear-gradient(to top, rgba(90,107,120,0.95), transparent);
+                width: min(100%, 760px);
+                padding: 18px 20px;
+                border-radius: 28px;
+                border: 1px solid rgba(255,255,255,0.1);
+                background: rgba(255,255,255,0.08);
                 color: #fdf6f0;
-                text-align: left;
+                text-align: center;
+                backdrop-filter: blur(8px);
             }
             .ulumae-viewer-meta h3 {
                 margin: 0;
@@ -750,82 +707,26 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
             }
             .ulumae-viewer-meta small {
                 display: block;
-                margin-top: 8px;
+                margin-top: 10px;
                 font-size: 0.74rem;
-                letter-spacing: 0.12em;
+                letter-spacing: 0.22em;
                 text-transform: uppercase;
                 color: rgba(253,246,240,0.66);
             }
-            .ulumae-viewer-thumbs {
-                position: absolute;
-                left: 50%;
-                bottom: 16px;
-                transform: translateX(-50%);
-                z-index: 10001;
-                display: flex;
-                gap: 8px;
-                max-width: min(92vw, 920px);
-                overflow-x: auto;
-                padding: 0 16px;
-                scrollbar-width: none;
-            }
-            .ulumae-viewer-thumbs::-webkit-scrollbar {
-                display: none;
-            }
-            .ulumae-viewer-thumb {
-                position: relative;
-                flex: 0 0 auto;
-                width: 64px;
-                height: 64px;
-                overflow: hidden;
-                border: 2px solid transparent;
-                border-radius: 10px;
-                background: rgba(255,255,255,0.08);
-                opacity: 0.6;
-                cursor: pointer;
-                transition: transform 0.2s ease, opacity 0.2s ease, border-color 0.2s ease;
-            }
-            .ulumae-viewer-thumb.active {
-                transform: scale(1.08);
-                border-color: #8AABB4;
-                opacity: 1;
-            }
-            .ulumae-viewer-thumb img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-            .ulumae-viewer-thumb.video::after {
-                content: '';
-                position: absolute;
-                inset: 0;
-                background: rgba(90, 107, 120, 0.28);
-            }
-            .ulumae-viewer-thumb.video::before {
-                content: '';
-                position: absolute;
-                left: 50%;
-                top: 50%;
-                z-index: 1;
-                transform: translate(-38%, -50%);
-                border-top: 7px solid transparent;
-                border-bottom: 7px solid transparent;
-                border-left: 12px solid #fdf6f0;
-            }
             .ulumae-viewer-story {
-                display: grid;
-                gap: 24px;
-                max-height: 88vh;
-                grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.9fr);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                width: 100%;
             }
             .ulumae-viewer-story-visual {
                 position: relative;
-                aspect-ratio: 4 / 3;
+                width: min(100%, 1180px);
+                height: clamp(320px, 72vw, 760px);
+                max-height: 82vh;
                 overflow: hidden;
-                border-radius: 28px;
-                border: 1px solid rgba(255,255,255,0.1);
-                background: #111;
-                box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+                border-radius: 30px;
+                box-shadow: 0 25px 50px -12px rgba(0,0,0,0.42);
             }
             .ulumae-viewer-story-copy {
                 position: absolute;
@@ -839,8 +740,8 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
             .ulumae-viewer-story-copy p {
                 margin: 0;
                 max-width: 720px;
-                border-radius: 24px;
-                background: rgba(253, 246, 240, 0.88);
+                border-radius: 28px;
+                background: rgba(253, 246, 240, 0.92);
                 padding: 24px 28px;
                 font-family: var(--font-serif);
                 font-size: clamp(1.4rem, 3vw, 2.3rem);
@@ -856,81 +757,7 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                 width: 100%;
                 height: 100%;
                 object-fit: cover;
-            }
-            .ulumae-viewer-story-pill {
-                position: absolute;
-                left: 16px;
-                top: 16px;
-                z-index: 30;
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                border-radius: 9999px;
-                background: rgba(90, 107, 120, 0.75);
-                color: #fdf6f0;
-                padding: 10px 14px;
-                font-size: 0.76rem;
-                letter-spacing: 0.08em;
-                text-transform: uppercase;
-            }
-            .ulumae-viewer-story-scroll {
-                position: absolute;
-                right: 16px;
-                bottom: 16px;
-                z-index: 30;
-                border-radius: 9999px;
-                background: rgba(90, 107, 120, 0.75);
-                color: #fdf6f0;
-                padding: 10px 14px;
-                font-size: 0.76rem;
-                letter-spacing: 0.08em;
-                text-transform: uppercase;
-            }
-            .ulumae-viewer-story-panel {
-                display: flex;
-                flex-direction: column;
-                min-height: 0;
-                overflow: hidden;
-                border-radius: 28px;
-                border: 1px solid rgba(255,255,255,0.1);
-                background: rgba(253,246,240,0.96);
-                padding: 24px;
-                box-shadow: 0 25px 50px -12px rgba(0,0,0,0.38);
-            }
-            .ulumae-viewer-story-kicker {
-                font-size: 0.76rem;
-                letter-spacing: 0.18em;
-                text-transform: uppercase;
-                color: rgba(90, 107, 120, 0.45);
-            }
-            .ulumae-viewer-story-panel h3 {
-                margin: 16px 0 0;
-                font-size: 2rem;
-                color: var(--color-charcoal);
-            }
-            .ulumae-viewer-story-body {
-                margin-top: 20px;
-                flex: 1;
-                overflow-y: auto;
-                color: rgba(90, 107, 120, 0.82);
-                font-size: 1.05rem;
-                line-height: 1.8;
-                white-space: pre-wrap;
-            }
-            .ulumae-viewer-story-note {
-                margin-top: 20px;
-                border-radius: 18px;
-                border: 1px solid rgba(232, 216, 204, 0.55);
-                background: rgba(255,255,255,0.7);
-                padding: 16px;
-                font-size: 0.92rem;
-                line-height: 1.65;
-                color: rgba(90, 107, 120, 0.65);
-            }
-            @media (max-width: 1024px) {
-                .ulumae-viewer-story {
-                    grid-template-columns: 1fr;
-                }
+                object-position: center;
             }
             @media (max-width: 768px) {
                 .media-section-header {
@@ -948,13 +775,6 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                 .ulumae-viewer-story-copy p {
                     padding: 18px 20px;
                 }
-                .ulumae-viewer-thumb {
-                    width: 56px;
-                    height: 56px;
-                }
-                .ulumae-viewer-thumbs {
-                    justify-content: flex-start;
-                }
             }
         </style>
         <div id="ulumae-media-viewer" class="ulumae-viewer" aria-hidden="true">
@@ -969,14 +789,12 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
             <button id="ulumae-viewer-next" class="ulumae-viewer-nav next" type="button" aria-label="Next item">
                 <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
             </button>
-            <div id="ulumae-viewer-thumbs" class="ulumae-viewer-thumbs"></div>
         </div>
         <script>
             (() => {
                 const collections = ${collections};
                 const viewer = document.getElementById('ulumae-media-viewer');
                 const stage = document.getElementById('ulumae-viewer-stage');
-                const thumbs = document.getElementById('ulumae-viewer-thumbs');
                 const counter = document.getElementById('ulumae-viewer-counter');
                 const closeButton = document.getElementById('ulumae-viewer-close');
                 const prevButton = document.getElementById('ulumae-viewer-prev');
@@ -1026,7 +844,7 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                 const applyStoryMask = (container, x, y) => {
                     const image = container.querySelector('.story-card-image, .ulumae-viewer-story-image');
                     if (!image) return;
-                    const mask = 'radial-gradient(circle 140px at ' + x + 'px ' + y + 'px, transparent 0%, transparent 45%, rgba(0,0,0,0.3) 72%, black 100%)';
+                    const mask = 'radial-gradient(circle 120px at ' + x + 'px ' + y + 'px, transparent 0%, transparent 42%, rgba(0,0,0,0.3) 72%, black 100%)';
                     image.style.webkitMaskImage = mask;
                     image.style.maskImage = mask;
                 };
@@ -1036,32 +854,6 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                     if (!image) return;
                     image.style.webkitMaskImage = 'none';
                     image.style.maskImage = 'none';
-                };
-
-                const renderThumbs = (items) => {
-                    if (items.length <= 1) {
-                        thumbs.innerHTML = '';
-                        thumbs.style.display = 'none';
-                        return;
-                    }
-
-                    thumbs.style.display = 'flex';
-                    thumbs.innerHTML = items.map((item, index) => {
-                        const previewSrc = item.thumbnailSrc || item.poster || item.src || '';
-                        const isActive = index === state.index ? ' active' : '';
-                        const kindClass = item.kind === 'video' ? ' video' : '';
-
-                        return '<button class="ulumae-viewer-thumb' + isActive + kindClass + '" type="button" data-index="' + index + '" aria-label="View item ' + (index + 1) + '">' +
-                            (previewSrc ? '<img src="' + escapeHtml(previewSrc) + '" alt="">' : '') +
-                            '</button>';
-                    }).join('');
-
-                    thumbs.querySelectorAll('[data-index]').forEach((button) => {
-                        button.addEventListener('click', () => {
-                            state.index = Number(button.getAttribute('data-index')) || 0;
-                            renderViewer();
-                        });
-                    });
                 };
 
                 const renderViewer = () => {
@@ -1078,19 +870,7 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                             '<div class="ulumae-viewer-story-visual">' +
                                 '<div class="ulumae-viewer-story-copy"><p>' + escapeHtml(item.description || item.caption || item.title || 'Move your cursor to reveal the photo.') + '</p></div>' +
                                 '<img class="ulumae-viewer-story-image" src="' + escapeHtml(item.src) + '" alt="' + escapeHtml(item.alt || item.title || 'Interactive story') + '">' +
-                                '<div class="ulumae-viewer-story-pill">' +
-                                    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z"></path><path d="m13 13 6 6"></path></svg>' +
-                                    '<span>Move to reveal</span>' +
-                                '</div>' +
-                                (items.length > 1 ? '<div class="ulumae-viewer-story-scroll">Scroll to continue</div>' : '') +
                             '</div>' +
-                            '<aside class="ulumae-viewer-story-panel">' +
-                                '<div class="ulumae-viewer-story-kicker">Interactive Story ' + (state.index + 1) + ' of ' + items.length + '</div>' +
-                                '<h3>' + escapeHtml(item.title || ('Interactive photo story ' + (state.index + 1))) + '</h3>' +
-                                '<div class="ulumae-viewer-story-body">' + escapeHtml(item.description || item.caption || item.title || '') + '</div>' +
-                                (item.year ? '<div class="ulumae-viewer-story-kicker" style="margin-top: 16px;">' + escapeHtml(item.year) + '</div>' : '') +
-                                '<div class="ulumae-viewer-story-note">Move your cursor across the image to reveal the moment. Use the arrow keys, mouse wheel, or the strip below to travel through the full set.</div>' +
-                            '</aside>' +
                         '</div>';
 
                         const visual = stage.querySelector('.ulumae-viewer-story-visual');
@@ -1110,7 +890,7 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                             : '<img src="' + escapeHtml(item.src) + '" alt="' + escapeHtml(item.alt || item.caption || item.title || 'Media item') + '">';
 
                         stage.innerHTML = '<div class="ulumae-viewer-standard">' +
-                            '<div class="ulumae-viewer-frame">' + mediaMarkup + '</div>' +
+                            '<div class="ulumae-viewer-frame ' + (item.kind === 'video' ? 'is-video' : 'is-image') + '">' + mediaMarkup + '</div>' +
                             (hasMeta ? '<div class="ulumae-viewer-meta">' +
                                 (item.title ? '<h3>' + escapeHtml(item.title) + '</h3>' : '') +
                                 (description ? '<p>' + escapeHtml(description) + '</p>' : '') +
@@ -1118,8 +898,6 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                             '</div>' : '') +
                         '</div>';
                     }
-
-                    renderThumbs(items);
                 };
 
                 const clampIndex = (itemsLength, nextIndex) => {
@@ -1143,7 +921,6 @@ function renderMediaViewer(data: MemorialData, map?: ResourceMap): string {
                         viewer.setAttribute('aria-hidden', 'true');
                         document.body.style.overflow = '';
                         stage.innerHTML = '';
-                        thumbs.innerHTML = '';
                     },
                     next: () => {
                         const items = getCollection();

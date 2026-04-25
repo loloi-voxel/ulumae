@@ -12,7 +12,7 @@ import { type ReactNode, useCallback, useState } from 'react';
 import {
     Calendar, MapPin, Heart, Briefcase, GraduationCap, Quote, Star, Home,
     Sparkles, MessageCircle, Users, BookOpen, Lightbulb, Award,
-    MousePointer, Play, Mic, Image as ImageIcon, Clapperboard, X
+    MousePointer, Play, Mic, Image as ImageIcon, Clapperboard
 } from 'lucide-react';
 import MediaLightbox, { type MediaLightboxItem } from '@/components/MediaLightbox';
 import IntegrityBadge from '@/components/IntegrityBadge';
@@ -28,18 +28,27 @@ interface MemorialRendererProps {
     className?: string;
 }
 
-interface MediaCollectionState {
-    title: string;
-    subtitle: string;
-    items: MediaLightboxItem[];
-}
-
 function getInteractiveStoryText(item: any, index: number) {
     return item.description
         || item.story
         || item.caption
         || item.title
         || `Interactive photo story ${index + 1}`;
+}
+
+function getRevealMaskStyle(isActive: boolean, x: number, y: number) {
+    if (!isActive) {
+        return {
+            maskImage: 'none',
+            WebkitMaskImage: 'none',
+        };
+    }
+
+    const mask = `radial-gradient(circle 120px at ${x}px ${y}px, transparent 0%, transparent 42%, rgba(0,0,0,0.3) 72%, black 100%)`;
+    return {
+        maskImage: mask,
+        WebkitMaskImage: mask,
+    };
 }
 
 function MediaSectionFrame({
@@ -75,95 +84,6 @@ function MediaSectionFrame({
     );
 }
 
-function MediaCollectionModal({
-    state,
-    onClose,
-    onSelect,
-}: {
-    state: MediaCollectionState;
-    onClose: () => void;
-    onSelect: (index: number) => void;
-}) {
-    const hasVideoItems = state.items.some((item) => item.kind === 'video');
-
-    return (
-        <div className="fixed inset-0 z-40 bg-warm-dark/70 p-4 backdrop-blur-sm">
-            <div className="mx-auto flex h-full max-w-6xl items-center justify-center">
-                <div className="flex h-[min(88vh,960px)] w-full flex-col overflow-hidden rounded-3xl border border-warm-border/20 bg-surface-low shadow-2xl">
-                    <div className="flex items-start justify-between gap-4 border-b border-warm-border/20 px-5 py-4 md:px-6">
-                        <div>
-                            <h3 className="font-serif text-2xl text-warm-dark">{state.title}</h3>
-                            <p className="mt-1 text-sm text-warm-dark/55">{state.subtitle}</p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="rounded-full p-2 text-warm-dark/55 transition-all hover:bg-warm-border/10 hover:text-warm-dark"
-                            aria-label={`Close ${state.title}`}
-                        >
-                            <X size={20} />
-                        </button>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-6">
-                        <div className={`grid gap-4 ${hasVideoItems ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4'}`}>
-                            {state.items.map((item, index) => {
-                                const previewSrc = item.thumbnailSrc || item.poster || item.src;
-                                const supportingText = item.description || item.caption || '';
-
-                                return (
-                                    <button
-                                        key={item.id}
-                                        type="button"
-                                        onClick={() => onSelect(index)}
-                                        className="overflow-hidden rounded-2xl border border-warm-border/30 bg-white text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
-                                    >
-                                        <div className={`relative overflow-hidden bg-warm-border/15 ${item.kind === 'video' ? 'aspect-video' : 'aspect-square'}`}>
-                                            {previewSrc ? (
-                                                <img
-                                                    src={previewSrc}
-                                                    alt={item.alt || item.title || `Media item ${index + 1}`}
-                                                    className="h-full w-full object-cover"
-                                                />
-                                            ) : (
-                                                <div className="flex h-full w-full items-center justify-center text-warm-dark/35">
-                                                    {item.kind === 'video' ? <Clapperboard size={28} /> : <ImageIcon size={28} />}
-                                                </div>
-                                            )}
-                                            {item.kind === 'video' && (
-                                                <div className="absolute inset-0 flex items-center justify-center bg-warm-dark/20">
-                                                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/85 shadow-lg">
-                                                        <Play size={18} className="fill-warm-dark text-warm-dark" />
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="space-y-1 px-3 py-3">
-                                            <p className="text-sm font-semibold text-warm-dark">
-                                                {item.title || item.caption || `Item ${index + 1}`}
-                                            </p>
-                                            {supportingText && (
-                                                <p className="text-sm leading-relaxed text-warm-dark/60">
-                                                    {supportingText}
-                                                </p>
-                                            )}
-                                            {item.year && (
-                                                <p className="text-xs uppercase tracking-wide text-warm-dark/35">
-                                                    {item.year}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
 export default function MemorialRenderer({
     data,
     relations = [],
@@ -173,13 +93,12 @@ export default function MemorialRenderer({
 }: MemorialRendererProps) {
     const [hoveredInteractive, setHoveredInteractive] = useState<string | null>(null);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-    const [collectionState, setCollectionState] = useState<MediaCollectionState | null>(null);
     const [lightboxState, setLightboxState] = useState<{
         items: MediaLightboxItem[];
         initialIndex: number;
     } | null>(null);
     const [brokenImages, setBrokenImages] = useState<Record<string, boolean>>({});
-    const defaultVisibleCount = compact ? 4 : 8;
+    const compactVisibleCount = 4;
 
     const calculateAge = () => {
         if (!data.step1?.birthDate) return null;
@@ -222,9 +141,9 @@ export default function MemorialRenderer({
         src: photo.preview,
         thumbnailSrc: photo.preview,
         alt: photo.caption || 'Photo',
-        title: photo.caption || 'Photo',
-        caption: photo.caption || '',
-        year: photo.year || '',
+        title: photo.caption || undefined,
+        caption: photo.caption || undefined,
+        year: photo.year || undefined,
     }));
     const interactiveLightboxItems: MediaLightboxItem[] = interactiveGalleryItems.map((item: any, index: number) => ({
         id: item.id,
@@ -235,6 +154,7 @@ export default function MemorialRenderer({
         alt: item.title || item.caption || getInteractiveStoryText(item, index),
         title: item.title || item.caption || `Interactive photo story ${index + 1}`,
         description: getInteractiveStoryText(item, index),
+        year: item.year || undefined,
     }));
     const videoLightboxItems: MediaLightboxItem[] = videoItems.map((video: any, index: number) => ({
         id: video.id,
@@ -243,13 +163,13 @@ export default function MemorialRenderer({
         thumbnailSrc: video.thumbnail || video.url,
         poster: video.thumbnail || null,
         mimeType: video.mimeType || null,
-        title: video.title || `Video memory ${index + 1}`,
-        description: video.description || '',
+        title: video.title || undefined,
+        description: video.description || undefined,
     }));
 
-    const visibleGalleryItems = galleryItems.slice(0, defaultVisibleCount);
-    const visibleInteractiveItems = interactiveGalleryItems.slice(0, defaultVisibleCount);
-    const visibleVideoItems = videoItems.slice(0, defaultVisibleCount);
+    const visibleGalleryItems = compact ? galleryItems.slice(0, compactVisibleCount) : galleryItems;
+    const visibleInteractiveItems = compact ? interactiveGalleryItems.slice(0, compactVisibleCount) : interactiveGalleryItems;
+    const visibleVideoItems = compact ? videoItems.slice(0, compactVisibleCount) : videoItems;
 
     const openLightbox = useCallback((items: MediaLightboxItem[], initialIndex: number) => {
         setLightboxState({
@@ -260,10 +180,6 @@ export default function MemorialRenderer({
 
     const handleBrokenImage = useCallback((photoId: string) => {
         setBrokenImages((current) => ({ ...current, [photoId]: true }));
-    }, []);
-
-    const openCollection = useCallback((state: MediaCollectionState) => {
-        setCollectionState(state);
     }, []);
 
     return (
@@ -859,15 +775,6 @@ export default function MemorialRenderer({
                             title="Interactive Photo Stories"
                             icon={<MousePointer size={compact ? 18 : 22} className="text-olive" />}
                             compact={compact}
-                            action={interactiveGalleryItems.length > 1 ? (
-                                <button
-                                    type="button"
-                                    onClick={() => openLightbox(interactiveLightboxItems, 0)}
-                                    className="rounded-xl border border-warm-border/30 px-4 py-2 text-sm text-warm-dark transition-all hover:bg-warm-border/10"
-                                >
-                                    Open story viewer
-                                </button>
-                            ) : undefined}
                         >
                             <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-${compact ? '3' : '6'}`}>
                                 {visibleInteractiveItems.map((item: any, index: number) => {
@@ -882,13 +789,13 @@ export default function MemorialRenderer({
                                             <button
                                                 type="button"
                                                 onClick={() => openLightbox(interactiveLightboxItems, absoluteIndex)}
-                                                className="group relative block aspect-video w-full overflow-hidden text-left"
+                                                className="group relative block aspect-video w-full overflow-hidden bg-warm-border/10 text-left"
                                                 onMouseMove={(e) => handleInteractiveMouseMove(e, item.id)}
                                                 onMouseLeave={() => setHoveredInteractive(null)}
                                                 style={{ cursor: 'pointer' }}
                                             >
                                                 <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
-                                                    <div className="rounded-2xl bg-gradient-to-br from-olive/20 via-surface-low/90 to-warm-brown/20 p-4 shadow-lg backdrop-blur-sm">
+                                                    <div className="max-w-[84%] rounded-[24px] bg-surface-low/92 px-5 py-4 shadow-xl backdrop-blur-md">
                                                         <p className={`font-serif text-center font-medium leading-relaxed text-warm-dark drop-shadow-sm ${compact ? 'text-base' : 'text-2xl md:text-3xl'}`}>
                                                             {storyText}
                                                         </p>
@@ -896,36 +803,19 @@ export default function MemorialRenderer({
                                                 </div>
 
                                                 <div
-                                                    className="absolute inset-0 z-20 transition-opacity duration-300"
-                                                    style={{
-                                                        maskImage: hoveredInteractive === item.id
-                                                            ? `radial-gradient(circle 110px at ${mousePos.x}px ${mousePos.y}px, transparent 0%, transparent 40%, rgba(0,0,0,0.3) 70%, black 100%)`
-                                                            : 'none',
-                                                        WebkitMaskImage: hoveredInteractive === item.id
-                                                            ? `radial-gradient(circle 110px at ${mousePos.x}px ${mousePos.y}px, transparent 0%, transparent 40%, rgba(0,0,0,0.3) 70%, black 100%)`
-                                                            : 'none',
-                                                    }}
+                                                    className="absolute inset-0 z-20"
+                                                    style={getRevealMaskStyle(hoveredInteractive === item.id, mousePos.x, mousePos.y)}
                                                 >
                                                     <img
                                                         src={item.preview}
                                                         alt={storyText}
-                                                        className="h-full w-full object-cover"
+                                                        className="h-full w-full object-cover object-center"
                                                         draggable={false}
                                                     />
                                                 </div>
 
-                                                <div className="absolute bottom-3 left-3 z-30 rounded-full bg-warm-dark/70 px-3 py-1 text-xs tracking-wide text-surface-low">
-                                                    Reveal the story
-                                                </div>
-
                                                 <IntegrityBadge hash={item.sha256_hash} />
                                             </button>
-
-                                            <div className={`border-t border-warm-border/20 ${compact ? 'px-3 py-3' : 'px-4 py-4'}`}>
-                                                <p className={`font-serif leading-relaxed text-warm-dark/80 ${compact ? 'text-sm' : 'text-base'}`}>
-                                                    {storyText}
-                                                </p>
-                                            </div>
                                         </article>
                                 )})}
                             </div>
@@ -940,19 +830,6 @@ export default function MemorialRenderer({
                             title="Photo Gallery"
                             icon={<ImageIcon size={compact ? 18 : 22} className="text-olive" />}
                             compact={compact}
-                            action={galleryItems.length > defaultVisibleCount ? (
-                                <button
-                                    type="button"
-                                    onClick={() => openCollection({
-                                        title: 'Photo Gallery',
-                                        subtitle: 'Scroll through the full gallery in one place.',
-                                        items: galleryLightboxItems,
-                                    })}
-                                    className="px-4 py-2 text-sm border border-warm-border/30 rounded-xl text-warm-dark hover:bg-warm-border/10 transition-all"
-                                >
-                                    View all photos
-                                </button>
-                            ) : undefined}
                         >
                             <div className={`grid ${s.galleryGrid} gap-${compact ? '2' : '4'}`}>
                                 {visibleGalleryItems.map((photo: any, index: number) => {
@@ -963,23 +840,16 @@ export default function MemorialRenderer({
                                         key={photo.id}
                                         type="button"
                                         onClick={() => openLightbox(galleryLightboxItems, absoluteIndex)}
-                                        className={`group relative aspect-square rounded-xl overflow-hidden bg-warm-border/20 shadow-sm cursor-pointer hover:shadow-lg transition-all ${isPreview && index > 0 ? 'opacity-50 pointer-events-none' : ''}`}
+                                        className={`group relative aspect-square overflow-hidden rounded-[24px] border border-warm-border/25 bg-white/70 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg ${isPreview && index > 0 ? 'opacity-50 pointer-events-none' : ''}`}
                                     >
                                         <img
                                             src={photo.preview}
                                             alt={photo.caption}
-                                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                            className="h-full w-full object-cover object-center transition-transform duration-300 group-hover:scale-[1.03]"
                                             onError={() => handleBrokenImage(photo.id)}
                                         />
 
                                         <IntegrityBadge hash={photo.sha256_hash} />
-
-                                        {(photo.caption || photo.year) && (
-                                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-warm-dark/80 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {photo.caption && <p className="text-surface-low text-xs">{photo.caption}</p>}
-                                                {photo.year && <p className="text-surface-low/70 text-[10px]">{photo.year}</p>}
-                                            </div>
-                                        )}
                                     </button>
                                 )})}
                             </div>
@@ -994,22 +864,9 @@ export default function MemorialRenderer({
                             title="Video Memories"
                             icon={<Clapperboard size={compact ? 18 : 22} className="text-olive" />}
                             compact={compact}
-                            action={videoItems.length > defaultVisibleCount ? (
-                                <button
-                                    type="button"
-                                    onClick={() => openCollection({
-                                        title: 'Video Memories',
-                                        subtitle: 'Open a scrolling reel of every recorded memory.',
-                                        items: videoLightboxItems,
-                                    })}
-                                    className="px-4 py-2 text-sm border border-warm-border/30 rounded-xl text-warm-dark hover:bg-warm-border/10 transition-all"
-                                >
-                                    View all videos
-                                </button>
-                            ) : undefined}
                         >
                             <div className={`grid grid-cols-1 ${compact ? '' : 'md:grid-cols-2'} gap-${compact ? '3' : '6'}`}>
-                                {visibleVideoItems.map((video: any) => {
+                                {visibleVideoItems.map((video: any, index: number) => {
                                     const absoluteIndex = videoItems.findIndex((entry: any) => entry.id === video.id);
 
                                     return (
@@ -1017,17 +874,16 @@ export default function MemorialRenderer({
                                         key={video.id}
                                         type="button"
                                         onClick={() => openLightbox(videoLightboxItems, absoluteIndex)}
-                                        className={`relative overflow-hidden rounded-xl border border-warm-border/30 bg-white text-left shadow-sm transition-all hover:shadow-lg ${compact ? 'p-3' : 'p-4'}`}
+                                        className={`group relative aspect-video overflow-hidden rounded-[24px] border border-warm-border/25 bg-white/70 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg ${isPreview && index > 0 ? 'opacity-50 pointer-events-none' : ''}`}
                                     >
-
                                         <IntegrityBadge hash={video.sha256_hash} className="top-2 left-2" />
 
-                                        <div className="relative mb-2 aspect-video overflow-hidden rounded-lg bg-warm-dark/10">
+                                        <div className="relative h-full w-full overflow-hidden bg-warm-dark/10">
                                             {video.thumbnail ? (
                                                 <img
                                                     src={video.thumbnail}
                                                     alt={video.title || 'Video memory'}
-                                                    className="h-full w-full object-cover"
+                                                    className="h-full w-full object-cover object-center transition-transform duration-300 group-hover:scale-[1.03]"
                                                 />
                                             ) : (
                                                 <div className="flex h-full w-full items-center justify-center bg-warm-dark/15">
@@ -1040,10 +896,6 @@ export default function MemorialRenderer({
                                                 </div>
                                             </div>
                                         </div>
-                                        {video.title && <h3 className={`font-semibold text-warm-dark ${compact ? 'text-xs' : ''}`}>{video.title}</h3>}
-                                        {video.description && !compact && (
-                                            <p className="mt-2 text-sm text-warm-dark line-clamp-2">{video.description}</p>
-                                        )}
                                     </button>
                                 )})}
                             </div>
@@ -1117,13 +969,6 @@ export default function MemorialRenderer({
                     items={lightboxState.items}
                     initialIndex={lightboxState.initialIndex}
                     onClose={() => setLightboxState(null)}
-                />
-            )}
-            {collectionState && (
-                <MediaCollectionModal
-                    state={collectionState}
-                    onClose={() => setCollectionState(null)}
-                    onSelect={(index) => openLightbox(collectionState.items, index)}
                 />
             )}
         </div>

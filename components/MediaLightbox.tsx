@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, MousePointer, Play, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 export interface MediaLightboxItem {
   id: string;
@@ -33,6 +33,21 @@ function getInteractiveStoryCopy(item: MediaLightboxItem) {
   );
 }
 
+function getRevealMaskStyle(isActive: boolean, x: number, y: number) {
+  if (!isActive) {
+    return {
+      maskImage: 'none',
+      WebkitMaskImage: 'none',
+    };
+  }
+
+  const mask = `radial-gradient(circle 120px at ${x}px ${y}px, transparent 0%, transparent 42%, rgba(0,0,0,0.3) 72%, black 100%)`;
+  return {
+    maskImage: mask,
+    WebkitMaskImage: mask,
+  };
+}
+
 export default function MediaLightbox({
   items,
   initialIndex,
@@ -54,6 +69,10 @@ export default function MediaLightbox({
       setCurrentIndex(Math.max(items.length - 1, 0));
     }
   }, [currentIndex, items.length]);
+
+  useEffect(() => {
+    setIsInteractiveHovering(false);
+  }, [currentIndex]);
 
   const goToPrevious = useCallback(() => {
     setCurrentIndex((previous) => (previous > 0 ? previous - 1 : items.length - 1));
@@ -117,11 +136,21 @@ export default function MediaLightbox({
   const embedUrl = getVideoEmbedUrl(currentItem);
   const isInteractiveStory = currentItem.variant === 'interactive-story';
   const interactiveStoryCopy = getInteractiveStoryCopy(currentItem);
-  const hasMeta =
-    currentItem.title ||
-    currentItem.description ||
-    currentItem.caption ||
-    currentItem.year;
+  const displayTitle = currentItem.title?.trim();
+  const displayDescription = currentItem.description?.trim() || currentItem.caption?.trim();
+  const displayYear = currentItem.year?.trim();
+  const hasMeta = displayTitle || displayDescription || displayYear;
+  const standardFrameStyle = {
+    height:
+      currentItem.kind === 'video'
+        ? 'clamp(260px, 56vw, 720px)'
+        : 'clamp(320px, 72vw, 820px)',
+    maxHeight: '82vh',
+  };
+  const interactiveStoryStyle = {
+    height: 'clamp(320px, 72vw, 760px)',
+    maxHeight: '82vh',
+  };
 
   const handleInteractiveMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -162,6 +191,11 @@ export default function MediaLightbox({
       aria-label={currentItem.title || `Media viewer ${currentIndex + 1} of ${items.length}`}
       className="fixed inset-0 z-50 flex items-center justify-center bg-warm-dark/95 backdrop-blur-sm"
       onWheel={handleWheel}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
     >
       <button
         data-close
@@ -184,14 +218,16 @@ export default function MediaLightbox({
 
       <div className="relative mx-auto w-full max-w-7xl px-4 md:px-20">
         {isInteractiveStory ? (
-          <div className="grid max-h-[88vh] w-full gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)]">
+          <div className="mx-auto flex w-full max-w-6xl items-center justify-center">
             <div
-              className="relative aspect-[4/3] overflow-hidden rounded-[28px] border border-white/10 bg-black shadow-2xl"
+              className="relative w-full overflow-hidden rounded-[30px] shadow-2xl"
+              style={interactiveStoryStyle}
               onMouseMove={handleInteractiveMouseMove}
               onMouseLeave={() => setIsInteractiveHovering(false)}
+              onClick={(event) => event.stopPropagation()}
             >
               <div className="absolute inset-0 z-10 flex items-center justify-center p-6 md:p-10">
-                <div className="max-w-2xl rounded-3xl bg-surface-low/88 px-6 py-5 shadow-xl backdrop-blur-sm">
+                <div className="max-w-2xl rounded-[28px] bg-surface-low/92 px-6 py-5 shadow-xl backdrop-blur-md">
                   <p className="font-serif text-xl leading-relaxed text-warm-dark md:text-3xl">
                     {interactiveStoryCopy}
                   </p>
@@ -199,75 +235,35 @@ export default function MediaLightbox({
               </div>
 
               <div
-                className="absolute inset-0 z-20 transition-opacity duration-300"
-                style={{
-                  maskImage: isInteractiveHovering
-                    ? `radial-gradient(circle 140px at ${interactivePointer.x}px ${interactivePointer.y}px, transparent 0%, transparent 45%, rgba(0,0,0,0.3) 72%, black 100%)`
-                    : 'none',
-                  WebkitMaskImage: isInteractiveHovering
-                    ? `radial-gradient(circle 140px at ${interactivePointer.x}px ${interactivePointer.y}px, transparent 0%, transparent 45%, rgba(0,0,0,0.3) 72%, black 100%)`
-                    : 'none',
-                }}
+                className="absolute inset-0 z-20"
+                style={getRevealMaskStyle(isInteractiveHovering, interactivePointer.x, interactivePointer.y)}
               >
                 <img
                   src={currentItem.src}
                   alt={currentItem.alt || currentItem.title || 'Interactive story'}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover object-center"
                   draggable={false}
                 />
               </div>
-
-              <div className="absolute left-4 top-4 z-30 inline-flex items-center gap-2 rounded-full bg-warm-dark/70 px-3 py-1.5 text-xs tracking-wide text-surface-low">
-                <MousePointer size={14} />
-                Move to reveal
-              </div>
-
-              {items.length > 1 && (
-                <div className="absolute bottom-4 right-4 z-30 rounded-full bg-warm-dark/70 px-3 py-1.5 text-xs tracking-wide text-surface-low">
-                  Scroll to continue
-                </div>
-              )}
             </div>
-
-            <aside className="flex max-h-[88vh] min-h-0 flex-col overflow-hidden rounded-[28px] border border-white/10 bg-surface-low/96 p-6 shadow-2xl">
-              <p className="text-xs uppercase tracking-[0.28em] text-warm-dark/35">
-                Interactive Story {currentIndex + 1} of {items.length}
-              </p>
-              <h3 className="mt-4 font-serif text-3xl text-warm-dark">
-                {currentItem.title || `Interactive photo story ${currentIndex + 1}`}
-              </h3>
-
-              <div className="mt-5 flex-1 overflow-y-auto pr-2">
-                <p className="whitespace-pre-wrap text-lg leading-relaxed text-warm-dark/82">
-                  {interactiveStoryCopy}
-                </p>
-
-                {currentItem.year && (
-                  <p className="mt-4 text-xs uppercase tracking-[0.22em] text-warm-dark/35">
-                    {currentItem.year}
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-6 rounded-2xl border border-warm-border/25 bg-white/70 p-4 text-sm leading-relaxed text-warm-dark/60">
-                Move your cursor across the image to reveal the moment. Use the mouse wheel,
-                arrow keys, or the story strip below to travel through the full set.
-              </div>
-            </aside>
           </div>
         ) : (
-          <div className="relative mx-auto max-h-[90vh] max-w-7xl">
-            <div className="overflow-hidden rounded-lg shadow-2xl">
+          <div className="mx-auto flex w-full max-w-6xl flex-col items-center justify-center gap-4">
+            <div
+              className="flex w-full items-center justify-center overflow-hidden rounded-[30px] shadow-2xl"
+              style={standardFrameStyle}
+              onClick={(event) => event.stopPropagation()}
+            >
               {currentItem.kind === 'video' ? (
                 embedUrl ? (
-                  <div className="aspect-video w-[min(92vw,1200px)] max-w-full bg-black">
+                  <div className="h-full w-full">
                     <iframe
                       key={currentItem.id}
                       src={embedUrl}
                       title={currentItem.title || 'Video viewer'}
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                       allowFullScreen
-                      className="h-full w-full"
+                      className="h-full w-full border-0"
                     />
                   </div>
                 ) : (
@@ -276,7 +272,7 @@ export default function MediaLightbox({
                     controls
                     autoPlay
                     preload="metadata"
-                    className="max-h-[85vh] max-w-full bg-black object-contain"
+                    className="block h-full w-full object-cover object-center"
                     poster={currentItem.poster || undefined}
                   >
                     <source src={currentItem.src} type={currentItem.mimeType || undefined} />
@@ -286,24 +282,21 @@ export default function MediaLightbox({
                 <img
                   src={currentItem.src}
                   alt={currentItem.alt || currentItem.caption || currentItem.title || 'Media item'}
-                  className="max-h-[85vh] max-w-full object-contain"
+                  className="block h-full w-full object-cover object-center"
                 />
               )}
             </div>
 
             {hasMeta && (
-              <div className="absolute bottom-0 left-0 right-0 rounded-b-lg bg-gradient-to-t from-warm-dark/95 to-transparent p-6">
-                {currentItem.title && (
-                  <p className="text-lg text-surface-low">{currentItem.title}</p>
+              <div className="w-full max-w-3xl rounded-[28px] border border-white/10 bg-white/8 px-5 py-4 text-center shadow-lg backdrop-blur-md">
+                {displayTitle && (
+                  <p className="text-lg text-surface-low">{displayTitle}</p>
                 )}
-                {currentItem.description && (
-                  <p className="mt-1 text-sm text-surface-low/90">{currentItem.description}</p>
+                {displayDescription && (
+                  <p className="mt-1 text-sm leading-relaxed text-surface-low/82">{displayDescription}</p>
                 )}
-                {currentItem.caption && !currentItem.description && (
-                  <p className="mt-1 text-sm text-surface-low/90">{currentItem.caption}</p>
-                )}
-                {currentItem.year && (
-                  <p className="mt-1 text-xs text-surface-low/70">{currentItem.year}</p>
+                {displayYear && (
+                  <p className="mt-2 text-xs uppercase tracking-[0.22em] text-surface-low/55">{displayYear}</p>
                 )}
               </div>
             )}
@@ -328,40 +321,6 @@ export default function MediaLightbox({
         >
           <ChevronRight size={32} className="text-surface-low" />
         </button>
-      )}
-
-      {items.length > 1 && (
-        <div className="absolute bottom-4 left-1/2 max-w-4xl -translate-x-1/2 overflow-x-auto">
-          <div className="flex gap-2 px-4">
-            {items.map((item, index) => {
-              const previewSrc = item.thumbnailSrc || item.poster || item.src;
-
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setCurrentIndex(index)}
-                  aria-label={`View item ${index + 1}`}
-                  className={`relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
-                    index === currentIndex
-                      ? 'scale-110 border-olive'
-                      : 'border-transparent opacity-60 hover:opacity-100'
-                  }`}
-                >
-                  {previewSrc ? (
-                    <img src={previewSrc} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-white/10" />
-                  )}
-                  {item.kind === 'video' && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-warm-dark/35">
-                      <Play size={14} className="fill-surface-low text-surface-low" />
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
       )}
     </div>
   );
