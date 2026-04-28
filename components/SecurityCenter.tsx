@@ -14,6 +14,7 @@ import {
 import { createClient } from '@/utils/supabase/client';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PasswordInput from '@/components/ui/PasswordInput';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 import {
     getOrCreateSessionFingerprint,
     SESSION_FINGERPRINT_HEADER,
@@ -82,6 +83,11 @@ interface PendingEnrollment {
     secret: string;
 }
 
+type PendingSecurityConfirm =
+    | { kind: 'sign-out-everywhere' }
+    | { kind: 'remove-factor'; factorId: string; friendlyName: string }
+    | { kind: 'regenerate-recovery-codes' };
+
 export default function SecurityCenter({ userId }: SecurityCenterProps) {
     const auth = useAuth();
     const supabase = createClient();
@@ -108,6 +114,7 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
     const [freshRecoveryCodes, setFreshRecoveryCodes] = useState<string[]>([]);
     const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
     const [revokingAnchorId, setRevokingAnchorId] = useState<string | null>(null);
+    const [pendingConfirm, setPendingConfirm] = useState<PendingSecurityConfirm | null>(null);
 
     const verifiedFactors = useMemo(
         () => (twoFactorState?.factors || []).filter((factor) => factor.status === 'verified'),
@@ -270,10 +277,6 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
     };
 
     const handleSignOutEverywhere = async () => {
-        if (!window.confirm('Sign out this device and every other active session for this account?')) {
-            return;
-        }
-
         setSigningOutEverywhere(true);
         setError(null);
 
@@ -413,10 +416,6 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
     };
 
     const handleRemoveFactor = async (factorId: string) => {
-        if (!window.confirm('Remove this authenticator factor from your account?')) {
-            return;
-        }
-
         setRemovingFactorId(factorId);
         setError(null);
         setNotice(null);
@@ -443,10 +442,6 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
     };
 
     const handleRegenerateRecoveryCodes = async () => {
-        if (!window.confirm('Regenerate all recovery codes? Existing unused codes will stop working immediately.')) {
-            return;
-        }
-
         setRegeneratingRecoveryCodes(true);
         setError(null);
         setNotice(null);
@@ -470,6 +465,25 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
         } finally {
             setRegeneratingRecoveryCodes(false);
         }
+    };
+
+    const handlePendingConfirm = async () => {
+        if (!pendingConfirm) return;
+
+        const action = pendingConfirm;
+        setPendingConfirm(null);
+
+        if (action.kind === 'sign-out-everywhere') {
+            await handleSignOutEverywhere();
+            return;
+        }
+
+        if (action.kind === 'remove-factor') {
+            await handleRemoveFactor(action.factorId);
+            return;
+        }
+
+        await handleRegenerateRecoveryCodes();
     };
 
     return (
@@ -597,7 +611,7 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
                                         {signingOutOthers ? 'Signing out others...' : 'Log out other devices'}
                                     </button>
                                     <button
-                                        onClick={handleSignOutEverywhere}
+                                        onClick={() => setPendingConfirm({ kind: 'sign-out-everywhere' })}
                                         disabled={signingOutEverywhere}
                                         className="flex-1 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 transition-colors hover:bg-red-100 disabled:opacity-60"
                                     >
@@ -742,7 +756,13 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
                                                     )}
                                                 </div>
                                                 <button
-                                                    onClick={() => handleRemoveFactor(factor.id)}
+                                                    onClick={() =>
+                                                        setPendingConfirm({
+                                                            kind: 'remove-factor',
+                                                            factorId: factor.id,
+                                                            friendlyName: factor.friendlyName,
+                                                        })
+                                                    }
                                                     disabled={removingFactorId === factor.id}
                                                     className="rounded-xl border border-red-200 px-4 py-2 text-sm text-red-700 transition-colors hover:bg-red-50 disabled:opacity-60"
                                                 >
@@ -846,7 +866,7 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
                             )}
 
                             <button
-                                onClick={handleRegenerateRecoveryCodes}
+                                onClick={() => setPendingConfirm({ kind: 'regenerate-recovery-codes' })}
                                 disabled={!twoFactorState?.enabled || regeneratingRecoveryCodes}
                                 className="mt-4 rounded-xl border border-warm-border/30 px-4 py-3 text-sm text-warm-dark transition-colors hover:bg-surface-low disabled:opacity-60"
                             >
@@ -856,6 +876,35 @@ export default function SecurityCenter({ userId }: SecurityCenterProps) {
                     </div>
                 </div>
             )}
+            <ConfirmDialog
+                open={pendingConfirm !== null}
+                title={
+                    pendingConfirm?.kind === 'sign-out-everywhere'
+                        ? 'Log out all devices?'
+                        : pendingConfirm?.kind === 'remove-factor'
+                            ? 'Remove this authenticator?'
+                            : 'Regenerate recovery codes?'
+                }
+                description={
+                    pendingConfirm?.kind === 'sign-out-everywhere'
+                        ? 'This device and every other active session for this account will be signed out immediately.'
+                        : pendingConfirm?.kind === 'remove-factor'
+                            ? `${pendingConfirm.friendlyName} will be removed from your account.`
+                            : 'Existing unused recovery codes will stop working immediately.'
+                }
+                confirmLabel={
+                    pendingConfirm?.kind === 'sign-out-everywhere'
+                        ? 'Log out all devices'
+                        : pendingConfirm?.kind === 'remove-factor'
+                            ? 'Remove authenticator'
+                            : 'Regenerate codes'
+                }
+                variant={pendingConfirm?.kind === 'remove-factor' || pendingConfirm?.kind === 'sign-out-everywhere' ? 'danger' : 'default'}
+                onConfirm={() => {
+                    void handlePendingConfirm();
+                }}
+                onCancel={() => setPendingConfirm(null)}
+            />
         </section>
     );
 }

@@ -8,6 +8,7 @@ import { Shield, Check, AlertTriangle, ArrowLeft, PenTool, Type, Clock, Loader2,
 import SignaturePad from '@/components/SignaturePad';
 import fp from '@fingerprintjs/fingerprintjs';
 import VideoRecorder from '@/components/VideoRecorder';
+import toast from 'react-hot-toast';
 
 const PUBLIC_FIGURE_KEYWORDS = [
   'President', 'Queen', 'King', 'Senator', 'Governor', 
@@ -208,7 +209,7 @@ export default function AuthorizationPage({ params }: { params: Promise<{ id: st
 
         } catch (err: any) {
             console.error("Authorization failed:", err);
-            alert("Authorization failed: " + err.message);
+            toast.error(`Authorization failed: ${err.message}`);
             setIsSubmitting(false);
         }
     };

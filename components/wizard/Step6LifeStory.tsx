@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { BookOpen, Lightbulb, Plus, X, Trash2, HelpCircle, FileText } from 'lucide-react';
 import { LifeStory } from '@/types/memorial';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 
 interface Step6Props {
     data: LifeStory;
@@ -64,6 +65,7 @@ export default function Step6LifeStory({ data, onUpdate, onNext, onBack, readOnl
     const [showPrompts, setShowPrompts] = useState(true);
     const [showTemplate, setShowTemplate] = useState(false);
     const [previousBiography, setPreviousBiography] = useState<string | null>(null);
+    const [showTemplateConfirm, setShowTemplateConfirm] = useState(false);
 
     const handleChange = (field: keyof LifeStory, value: any) => {
         onUpdate({ ...data, [field]: value });
@@ -72,12 +74,9 @@ export default function Step6LifeStory({ data, onUpdate, onNext, onBack, readOnl
     const wordCount = data.biography.trim().split(/\s+/).filter(w => w.length > 0).length;
 
     const useTemplate = () => {
-        if (window.confirm('This will replace your current biography text. Continue?')) {
-            // Save current text for undo
-            setPreviousBiography(data.biography);
-            handleChange('biography', BIOGRAPHY_TEMPLATE);
-            setShowTemplate(false);
-        }
+        setPreviousBiography(data.biography);
+        handleChange('biography', BIOGRAPHY_TEMPLATE);
+        setShowTemplate(false);
     };
 
     const undoTemplate = () => {
@@ -191,7 +190,7 @@ export default function Step6LifeStory({ data, onUpdate, onNext, onBack, readOnl
                                         <p className="text-sm font-medium text-warm-dark">Suggested Structure</p>
                                     </div>
                                     <button
-                                        onClick={useTemplate}
+                                        onClick={() => setShowTemplateConfirm(true)}
                                         className="text-xs px-3 py-1.5 bg-warm-brown hover:bg-warm-brown/90 text-surface-low rounded-lg transition-all"
                                     >
                                         Use This Template
@@ -468,6 +467,17 @@ export default function Step6LifeStory({ data, onUpdate, onNext, onBack, readOnl
                     Preserve & continue →
                 </button>
             </div>
+            <ConfirmDialog
+                open={showTemplateConfirm}
+                title="Replace the current biography text?"
+                description="Your current biography will be replaced with the suggested template. You can still undo this right after."
+                confirmLabel="Use template"
+                onConfirm={() => {
+                    setShowTemplateConfirm(false);
+                    useTemplate();
+                }}
+                onCancel={() => setShowTemplateConfirm(false)}
+            />
         </div>
     );
 }

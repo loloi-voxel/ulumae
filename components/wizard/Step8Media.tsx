@@ -23,6 +23,7 @@ import type {
 } from '@/types/memorial';
 import { DRAFT_MEDIA_LIMIT, PLAN_PRICES_USD } from '@/lib/constants';
 import { deleteMediaAssets, secureUpload, updateMediaAssetMetadata } from '@/lib/uploadService';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 
 interface Step8Props {
   data: MediaLegacy;
@@ -56,6 +57,10 @@ type DeletedItem =
   | { section: 'gallery'; item: MediaImageReference }
   | { section: 'interactive'; item: InteractiveMediaReference }
   | { section: 'voice'; item: VoiceRecordingReference };
+
+type PendingRemoval =
+  | { kind: 'single'; section: MediaSection; id?: string }
+  | { kind: 'bulk-gallery' };
 
 const PAGE_SIZE = 12;
 
@@ -150,6 +155,7 @@ export default function Step8Media({
   const [recentlyDeleted, setRecentlyDeleted] = useState<DeletedItem[]>([]);
   const [visibleGalleryCount, setVisibleGalleryCount] = useState(PAGE_SIZE);
   const [visibleInteractiveCount, setVisibleInteractiveCount] = useState(PAGE_SIZE);
+  const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null);
 
   useEffect(() => {
     dataRef.current = data;
@@ -534,9 +540,6 @@ export default function Step8Media({
 
   const removeItem = async (section: MediaSection, id?: string) => {
     if (readOnly) return;
-    if (!window.confirm('Remove this media item? You can restore it while you stay on this page.')) {
-      return;
-    }
 
     try {
       if (section === 'cover') {
@@ -747,11 +750,25 @@ export default function Step8Media({
 
   const bulkDeleteGallery = async () => {
     if (selectedGalleryIds.length === 0) return;
-    for (const id of selectedGalleryIds) {
-      // eslint-disable-next-line no-await-in-loop
-      await removeItem('gallery', id);
+    setPendingRemoval({ kind: 'bulk-gallery' });
+  };
+
+  const handleConfirmRemoval = async () => {
+    if (!pendingRemoval) return;
+
+    const action = pendingRemoval;
+    setPendingRemoval(null);
+
+    if (action.kind === 'bulk-gallery') {
+      for (const id of selectedGalleryIds) {
+        // eslint-disable-next-line no-await-in-loop
+        await removeItem('gallery', id);
+      }
+      setSelectedGalleryIds([]);
+      return;
     }
-    setSelectedGalleryIds([]);
+
+    await removeItem(action.section, action.id);
   };
 
   const updateGalleryField = (id: string, field: 'caption' | 'year', value: string) => {
@@ -952,7 +969,7 @@ export default function Step8Media({
                     </p>
                     {!readOnly && (
                       <div className="mt-2 flex justify-end">
-                        <button onClick={() => removeItem('interactive', item.id)} className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
+                        <button onClick={() => setPendingRemoval({ kind: 'single', section: 'interactive', id: item.id })} className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
                           Remove
                         </button>
                       </div>
@@ -1003,7 +1020,7 @@ export default function Step8Media({
                         </button>
                       )}
                       {!readOnly && (
-                        <button onClick={() => removeItem('voice', item.id)} className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
+                        <button onClick={() => setPendingRemoval({ kind: 'single', section: 'voice', id: item.id })} className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
                           Remove
                         </button>
                       )}
@@ -1106,7 +1123,7 @@ export default function Step8Media({
                       </button>
                     </>
                   )}
-                  <button onClick={() => removeItem(detailItem.section, detailItem.section === 'cover' ? undefined : detailItem.item?.id)} className="rounded-xl border border-red-200 px-4 py-2 text-sm text-red-700 hover:bg-red-50">
+                  <button onClick={() => setPendingRemoval({ kind: 'single', section: detailItem.section, id: detailItem.section === 'cover' ? undefined : detailItem.item?.id })} className="rounded-xl border border-red-200 px-4 py-2 text-sm text-red-700 hover:bg-red-50">
                     Delete
                   </button>
                 </div>
@@ -1141,6 +1158,21 @@ export default function Step8Media({
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={pendingRemoval !== null}
+        title={pendingRemoval?.kind === 'bulk-gallery' ? 'Delete the selected photos?' : 'Remove this media item?'}
+        description={
+          pendingRemoval?.kind === 'bulk-gallery'
+            ? 'The selected gallery photos will be removed, but you can still restore them while you stay on this page.'
+            : 'This item will be removed, but you can still restore it while you stay on this page.'
+        }
+        confirmLabel={pendingRemoval?.kind === 'bulk-gallery' ? 'Delete selected' : 'Remove item'}
+        variant="danger"
+        onConfirm={() => {
+          void handleConfirmRemoval();
+        }}
+        onCancel={() => setPendingRemoval(null)}
+      />
     </div>
   );
 }

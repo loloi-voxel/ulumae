@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { MemorialRelation } from '@/types/memorial';
-import { Link2, Plus, X, Loader2, User, ArrowRight } from 'lucide-react';
+import { Link2, Plus, X, Loader2, User } from 'lucide-react';
+import toast from 'react-hot-toast';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 
 interface FamilyLinkerProps {
     currentMemorialId: string;
@@ -22,6 +24,7 @@ export default function FamilyLinker({ currentMemorialId, userId, mode }: Family
     const [selectedType, setSelectedType] = useState('parent');
     const [loading, setLoading] = useState(true);
     const [linking, setLinking] = useState(false);
+    const [pendingUnlinkId, setPendingUnlinkId] = useState<string | null>(null);
 
     useEffect(() => {
         loadData();
@@ -92,16 +95,16 @@ export default function FamilyLinker({ currentMemorialId, userId, mode }: Family
 
             await loadData(); // Refresh list
             setSelectedCandidate(''); // Reset form
+            toast.success('Family connection saved.');
         } catch (e) {
-            alert('Error linking memorials. Please try again.');
+            toast.error('Error linking memorials. Please try again.');
         } finally {
             setLinking(false);
         }
     };
 
-    const unlink = async (id: string) => {
-        if (!confirm("Remove this connection?")) return;
-        const relation = relations.find((item) => item.id === id);
+    const unlink = async (relationId: string) => {
+        const relation = relations.find((item) => item.id === relationId);
         if (!relation) return;
 
         try {
@@ -119,9 +122,10 @@ export default function FamilyLinker({ currentMemorialId, userId, mode }: Family
                 throw new Error(payload.error || 'Failed to remove connection.');
             }
 
-            loadData();
+            await loadData();
+            toast.success('Connection removed.');
         } catch (error: any) {
-            alert(error.message || 'Error removing connection. Please try again.');
+            toast.error(error.message || 'Error removing connection. Please try again.');
         }
     };
 
@@ -152,7 +156,7 @@ export default function FamilyLinker({ currentMemorialId, userId, mode }: Family
                                     <p className="text-xs text-warm-muted capitalize">{rel.relationship_type}</p>
                                 </div>
                             </div>
-                            <button onClick={() => unlink(rel.id)} className="text-warm-outline hover:text-warm-brown p-2">
+                            <button onClick={() => setPendingUnlinkId(rel.id)} className="text-warm-outline hover:text-warm-brown p-2">
                                 <X size={16} />
                             </button>
                         </div>
@@ -205,6 +209,24 @@ export default function FamilyLinker({ currentMemorialId, userId, mode }: Family
                     <p className="text-xs text-warm-muted">Create more memorials to start linking them.</p>
                 </div>
             )}
+            <ConfirmDialog
+                open={pendingUnlinkId !== null}
+                title="Remove this connection?"
+                description={
+                    pendingUnlinkId
+                        ? `This will remove the family link to ${relations.find((item) => item.id === pendingUnlinkId)?.target_name || 'this person'}.`
+                        : ''
+                }
+                confirmLabel="Remove connection"
+                variant="danger"
+                onConfirm={() => {
+                    if (!pendingUnlinkId) return;
+                    const relationId = pendingUnlinkId;
+                    setPendingUnlinkId(null);
+                    void unlink(relationId);
+                }}
+                onCancel={() => setPendingUnlinkId(null)}
+            />
         </div>
     );
 }

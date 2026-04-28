@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { secureUpload } from '@/lib/uploadService';
 import { ShieldAlert, FileText, CheckCircle, Loader2, ArrowLeft, User } from 'lucide-react';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 
 export default function SuccessionRequestPage() {
     const [email, setEmail] = useState('');
@@ -17,7 +18,7 @@ export default function SuccessionRequestPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!files.deathCert || !files.idProof) {
-            alert("Please provide both required documents.");
+            toast.error('Please provide both required documents.');
             return;
         }
         setSubmitting(true);
@@ -46,7 +47,7 @@ export default function SuccessionRequestPage() {
 
             setSubmitted(true);
         } catch (err: any) {
-            alert(err.message);
+            toast.error(err.message);
         } finally {
             setSubmitting(false);
         }

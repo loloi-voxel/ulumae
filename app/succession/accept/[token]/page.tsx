@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { Shield, Check, Loader2, AlertCircle, Scale } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export default function SuccessorAcceptancePage({ params }: { params: Promise<{ token: string }> }) {
     const unwrappedParams = use(params);
@@ -45,11 +46,11 @@ export default function SuccessorAcceptancePage({ params }: { params: Promise<{ 
             const payload = await response.json();
             if (!response.ok) throw new Error(payload.error || 'Could not accept this responsibility.');
 
-            alert("Responsibility Accepted. You are now the designated Archive Steward.");
+            toast.success('Responsibility accepted. You are now the designated Archive Steward.');
             router.push('/'); // Redirect to home or a success page
 
         } catch (err: any) {
-            alert('Error: ' + err.message);
+            toast.error(`Error: ${err.message}`);
         } finally {
             setProcessing(false);
         }

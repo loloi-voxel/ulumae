@@ -17,6 +17,7 @@ import {
     X
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import toast from 'react-hot-toast';
 import type {
     ConciergeProject,
     ConciergeFile,
@@ -152,7 +153,7 @@ export default function ConciergeSpacePage({ params }: { params: Promise<{ id: s
 
             } catch (err: any) {
                 console.error(`Error uploading ${file.name}:`, err);
-                alert(`Failed to upload ${file.name}: ${err.message}`);
+                toast.error(`Failed to upload ${file.name}: ${err.message}`);
             }
         }
 
@@ -208,7 +209,7 @@ export default function ConciergeSpacePage({ params }: { params: Promise<{ id: s
             loadProjectData();
         } catch (err: any) {
             console.error('Error sending note:', err);
-            alert('Failed to send note. Please try again.');
+            toast.error('Failed to send note. Please try again.');
         } finally {
             setSendingNote(false);
         }

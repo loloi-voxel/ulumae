@@ -21,6 +21,7 @@ import Step9Videos from '@/components/wizard/Step9Videos';
 import Step10Review from '@/components/wizard/Step10Review';
 import TutorialPopup from '@/components/TutorialPopup';
 import VersionHistory from '@/components/VersionHistory';
+import toast from 'react-hot-toast';
 import { getPlanDashboardPath } from '@/components/providers/AuthProvider';
 import {
   MemorialData,
@@ -410,7 +411,7 @@ function CreateMemorialPageContent() {
           if (roleRow?.role) {
             setUserRole(roleRow.role as WitnessRole);
           } else {
-            alert("You do not have permission to view this archive.");
+            toast.error('You do not have permission to view this archive.');
             router.replace('/dashboard');
             return;
           }
@@ -909,7 +910,7 @@ function CreateMemorialPageContent() {
       }
     } catch (err) {
       console.error("Payment trigger failed:", err);
-      alert("Could not connect to payment gateway. Please try again.");
+      toast.error('Could not connect to payment gateway. Please try again.');
     }
   };
 
@@ -950,11 +951,11 @@ function CreateMemorialPageContent() {
         }]);
 
       if (error) throw error;
-      alert("Contribution offered. The archive guardian will review it shortly.");
+      toast.success('Contribution offered. The archive guardian will review it shortly.');
 
     } catch (err: any) {
       console.error("Error submitting contribution:", err);
-      alert("Could not offer contribution: " + err.message);
+      toast.error(`Could not offer contribution: ${err.message}`);
     }
   };
 
@@ -1069,7 +1070,7 @@ function CreateMemorialPageContent() {
             {/* NEW: ZIP EXPORT BUTTON */}
             <button
               onClick={async () => {
-                if (!confirm('Generate full archive? This may take a minute.')) return;
+                if (!currentMemorialId) return;
                 try {
                   // Show some loading state if you wish, or just simple alert for now
                   const btn = document.getElementById('btn-export-zip');
@@ -1089,10 +1090,10 @@ function CreateMemorialPageContent() {
                   if (result.success && result.downloadUrl) {
                     window.location.href = result.downloadUrl;
                   } else {
-                    alert('Export failed: ' + (result.error || 'Unknown error'));
+                    toast.error(`Export failed: ${result.error || 'Unknown error'}`);
                   }
                 } catch (e) {
-                  alert('Error generating export');
+                  toast.error('Error generating export.');
                   console.error('Error generating export:', e);
                 }
               }}

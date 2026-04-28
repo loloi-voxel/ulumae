@@ -9,6 +9,7 @@ import { getAssignableRoles } from '@/lib/roles';
 import RoleBadge from './RoleBadge';
 import RoleDropdown from './RoleDropdown';
 import toast from 'react-hot-toast';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 
 interface MemberRecord {
     invitationId?: string | null;
@@ -30,6 +31,10 @@ interface RoleManagementTableProps {
     emptyStateDescription?: string;
 }
 
+type PendingAction =
+    | { kind: 'remove-member'; targetUserId: string; email: string }
+    | { kind: 'cancel-invite'; invitationId: string; email: string };
+
 export default function RoleManagementTable({
     memorialId,
     planType,
@@ -42,6 +47,7 @@ export default function RoleManagementTable({
     const [members, setMembers] = useState<MemberRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [isOwner, setIsOwner] = useState(false);
+    const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
     const [supabase] = useState(() => createClient());
     const visibleMembers = allowedRoles?.length
         ? members.filter((member) => allowedRoles.includes(member.role))
@@ -116,9 +122,7 @@ export default function RoleManagementTable({
         }
     };
 
-    const handleRemoveMember = async (targetUserId: string, email: string) => {
-        if (!window.confirm(`Are you sure you want to revoke access for ${email}?`)) return;
-
+    const removeMember = async (targetUserId: string, email: string) => {
         setMembers((prev) => prev.filter((member) => member.userId !== targetUserId));
         try {
             const res = await fetch(`/api/memorials/${memorialId}/members/${targetUserId}`, {
@@ -146,9 +150,7 @@ export default function RoleManagementTable({
         }
     };
 
-    const handleCancelInvite = async (invitationId: string, email: string) => {
-        if (!window.confirm(`Cancel the pending invitation for ${email}?`)) return;
-
+    const cancelInvite = async (invitationId: string, email: string) => {
         setMembers((prev) => prev.filter((member) => member.invitationId !== invitationId));
         try {
             const res = await fetch(`/api/memorials/${memorialId}/invitations/${invitationId}`, {
@@ -161,6 +163,20 @@ export default function RoleManagementTable({
             fetchMembers();
             toast.error(err.message || 'Cancellation failed');
         }
+    };
+
+    const handlePendingActionConfirm = async () => {
+        if (!pendingAction) return;
+
+        const action = pendingAction;
+        setPendingAction(null);
+
+        if (action.kind === 'remove-member') {
+            await removeMember(action.targetUserId, action.email);
+            return;
+        }
+
+        await cancelInvite(action.invitationId, action.email);
     };
 
     if (loading) {
@@ -234,7 +250,13 @@ export default function RoleManagementTable({
                                             </button>
                                             {isOwner && member.invitationId ? (
                                                 <button
-                                                    onClick={() => handleCancelInvite(member.invitationId!, member.email)}
+                                                    onClick={() =>
+                                                        setPendingAction({
+                                                            kind: 'cancel-invite',
+                                                            invitationId: member.invitationId!,
+                                                            email: member.email,
+                                                        })
+                                                    }
                                                     className="p-2 text-warm-dark/20 hover:text-red-500 transition-colors"
                                                     title="Cancel invitation"
                                                 >
@@ -257,7 +279,13 @@ export default function RoleManagementTable({
 
                                             {canEdit ? (
                                                 <button
-                                                    onClick={() => handleRemoveMember(member.userId!, member.email)}
+                                                    onClick={() =>
+                                                        setPendingAction({
+                                                            kind: 'remove-member',
+                                                            targetUserId: member.userId!,
+                                                            email: member.email,
+                                                        })
+                                                    }
                                                     className="p-2 text-warm-dark/20 hover:text-red-500 transition-colors"
                                                     title="Revoke access"
                                                 >
@@ -277,6 +305,27 @@ export default function RoleManagementTable({
                     })}
                 </div>
             )}
+            <ConfirmDialog
+                open={pendingAction !== null}
+                title={
+                    pendingAction?.kind === 'cancel-invite'
+                        ? 'Cancel this invitation?'
+                        : 'Revoke access?'
+                }
+                description={
+                    pendingAction?.kind === 'cancel-invite'
+                        ? `The pending invitation for ${pendingAction.email} will be withdrawn immediately.`
+                        : pendingAction
+                            ? `${pendingAction.email} will lose access to this archive immediately.`
+                            : ''
+                }
+                confirmLabel={pendingAction?.kind === 'cancel-invite' ? 'Cancel invitation' : 'Revoke access'}
+                variant="danger"
+                onConfirm={() => {
+                    void handlePendingActionConfirm();
+                }}
+                onCancel={() => setPendingAction(null)}
+            />
         </div>
     );
 }

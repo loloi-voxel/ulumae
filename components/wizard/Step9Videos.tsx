@@ -15,6 +15,7 @@ import TutorialPopup from '@/components/TutorialPopup';
 import { DRAFT_VIDEO_LIMIT, MAX_VIDEO_FILE_SIZE_BYTES, PAID_VIDEO_LIMIT } from '@/lib/constants';
 import { deleteMediaAssets, secureUpload, updateMediaAssetMetadata } from '@/lib/uploadService';
 import type { VideoContent, VideoReference } from '@/types/memorial';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 
 interface Step9Props {
   data: VideoContent;
@@ -27,6 +28,7 @@ interface Step9Props {
 }
 
 type DeletedVideo = { video: VideoReference };
+type PendingVideoRemoval = { kind: 'single'; id: string } | { kind: 'bulk' };
 
 const PAGE_SIZE = 8;
 
@@ -136,6 +138,7 @@ export default function Step9Videos({
   const [replaceId, setReplaceId] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [recentlyDeleted, setRecentlyDeleted] = useState<DeletedVideo[]>([]);
+  const [pendingRemoval, setPendingRemoval] = useState<PendingVideoRemoval | null>(null);
 
   useEffect(() => {
     dataRef.current = data;
@@ -376,9 +379,6 @@ export default function Step9Videos({
     if (readOnly) return;
     const video = dataRef.current.videos.find((item) => item.id === id);
     if (!video) return;
-    if (!window.confirm('Remove this video? You can restore it while you stay on this page.')) {
-      return;
-    }
 
     try {
       const assetIds = [video.assetId, video.thumbnailAssetId].filter(Boolean) as string[];
@@ -435,11 +435,26 @@ export default function Step9Videos({
   };
 
   const bulkDelete = async () => {
-    for (const id of selectedIds) {
-      // eslint-disable-next-line no-await-in-loop
-      await removeVideo(id);
+    if (selectedIds.length === 0) return;
+    setPendingRemoval({ kind: 'bulk' });
+  };
+
+  const handleConfirmRemoval = async () => {
+    if (!pendingRemoval) return;
+
+    const action = pendingRemoval;
+    setPendingRemoval(null);
+
+    if (action.kind === 'bulk') {
+      for (const id of selectedIds) {
+        // eslint-disable-next-line no-await-in-loop
+        await removeVideo(id);
+      }
+      setSelectedIds([]);
+      return;
     }
-    setSelectedIds([]);
+
+    await removeVideo(action.id);
   };
 
   const tutorialSteps = [
@@ -558,7 +573,7 @@ export default function Step9Videos({
                             </button>
                           )}
                           {!readOnly && (
-                            <button onClick={() => removeVideo(video.id)} className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
+                            <button onClick={() => setPendingRemoval({ kind: 'single', id: video.id })} className="rounded-xl border border-red-200 px-3 py-2 text-sm text-red-700 hover:bg-red-50">
                               Remove
                             </button>
                           )}
@@ -663,7 +678,7 @@ export default function Step9Videos({
                   <button onClick={() => moveVideo(detailItem.id, 1)} className="rounded-xl border border-warm-border/30 px-4 py-2 text-sm text-warm-dark/70 hover:bg-warm-border/10">
                     Move later
                   </button>
-                  <button onClick={() => removeVideo(detailItem.id)} className="rounded-xl border border-red-200 px-4 py-2 text-sm text-red-700 hover:bg-red-50">
+                  <button onClick={() => setPendingRemoval({ kind: 'single', id: detailItem.id })} className="rounded-xl border border-red-200 px-4 py-2 text-sm text-red-700 hover:bg-red-50">
                     Delete
                   </button>
                 </div>
@@ -680,6 +695,21 @@ export default function Step9Videos({
           onSkip={() => setShowTutorial(false)}
         />
       )}
+      <ConfirmDialog
+        open={pendingRemoval !== null}
+        title={pendingRemoval?.kind === 'bulk' ? 'Delete the selected videos?' : 'Remove this video?'}
+        description={
+          pendingRemoval?.kind === 'bulk'
+            ? 'The selected videos will be removed, but you can still restore them while you stay on this page.'
+            : 'This video will be removed, but you can still restore it while you stay on this page.'
+        }
+        confirmLabel={pendingRemoval?.kind === 'bulk' ? 'Delete selected' : 'Remove video'}
+        variant="danger"
+        onConfirm={() => {
+          void handleConfirmRemoval();
+        }}
+        onCancel={() => setPendingRemoval(null)}
+      />
     </div>
   );
 }

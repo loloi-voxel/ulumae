@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Shield, Mail, Loader2, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface SuccessorSettingsProps {
     userId: string;
@@ -58,10 +59,10 @@ export default function SuccessorSettings({ userId }: SuccessorSettingsProps) {
 
             if (!res.ok) throw new Error('Failed to designate');
 
-            alert("Designation sent! They will receive an email to accept the responsibility.");
+            toast.success('Designation sent. They will receive an email to accept the responsibility.');
             fetchSuccessor(); // Refresh UI
         } catch (err) {
-            alert("Error: Could not send designation.");
+            toast.error('Could not send the designation request.');
         } finally {
             setSubmitting(false);
         }

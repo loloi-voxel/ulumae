@@ -25,6 +25,7 @@ import { getVersionHistory, restoreVersion, MemorialVersion } from '@/lib/versio
 import { applyVersionSnapshot } from '@/lib/versioning';
 import { MemorialData } from '@/types/memorial';
 import MemorialRenderer from '@/components/MemorialRenderer';
+import toast from 'react-hot-toast';
 
 interface VersionHistoryProps {
     memorialId: string;
@@ -183,7 +184,7 @@ export default function VersionHistory({
             setPendingAction(null);
             onRestore(result.restoredData);
         } else {
-            alert(`Restore failed: ${result.error}`);
+            toast.error(`Restore failed: ${result.error}`);
             setRestoringId(null);
         }
     };

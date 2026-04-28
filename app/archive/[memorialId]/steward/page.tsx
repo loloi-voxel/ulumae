@@ -189,11 +189,14 @@ export default function StewardPage({
     ) => {
         setProcessing(id);
         try {
-            const res = await fetch(`/api/archive/${memorialId}/contributions/${id}/review`, {
+            const res = await fetch(
+                `/api/archive/${encodeURIComponent(memorialId)}/contributions/${encodeURIComponent(id)}/review`,
+                {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ decision, adminNotes }),
-            });
+                }
+            );
 
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Review failed');

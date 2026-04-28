@@ -8,6 +8,7 @@ import { createClient } from '@/utils/supabase/client';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getPlanDashboardPath, useAuth } from '@/components/providers/AuthProvider';
+import toast from 'react-hot-toast';
 import {
     clearCurrentMemorialId,
     readCurrentMemorialId,
@@ -172,7 +173,7 @@ function PersonalConfirmationContent() {
             router.replace(`/payment?memorialId=${memorialId}&plan=personal${popupParam}`);
         } catch (error: any) {
             console.error('Payment error:', error);
-            alert(error.message || 'Payment failed. Please try again.');
+            toast.error(error.message || 'Payment failed. Please try again.');
         } finally {
             setIsProcessing(false);
         }
@@ -185,7 +186,7 @@ function PersonalConfirmationContent() {
             const url = `/authorization/${memorialId}?type=individual&popup=true`;
             window.open(url, '_blank', 'width=960,height=820,scrollbars=yes,resizable=yes');
         } catch (err: any) {
-            alert(err.message || 'An error occurred. Please try again.');
+            toast.error(err.message || 'An error occurred. Please try again.');
         } finally {
             setIsOpeningAuth(false);
         }

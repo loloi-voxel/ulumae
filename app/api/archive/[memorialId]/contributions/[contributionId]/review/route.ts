@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedClient } from '@/utils/supabase/api';
-import { hasPermission, resolveArchivePermissionContext } from '@/lib/archivePermissions';
 import { safeLogMemorialActivity } from '@/lib/activityLog';
-import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { getSupabaseAdmin, requireMemorialAccess, requireUser } from '@/lib/apiAuth';
 
 type ReviewDecision = 'approved' | 'rejected' | 'needs_changes';
 
@@ -13,13 +11,9 @@ export async function PATCH(
     { params }: { params: Promise<{ memorialId: string; contributionId: string }> }
 ) {
     try {
-        const supabaseAdmin = getSupabaseAdmin();
         const { memorialId, contributionId } = await params;
-        const { user } = await createAuthenticatedClient();
-
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireUser();
+        if (!auth.ok) return auth.response;
 
         const body = await req.json();
         const decision = body?.decision as ReviewDecision;
@@ -36,26 +30,30 @@ export async function PATCH(
             );
         }
 
-        const [{ data: contribution }, permission] = await Promise.all([
-            supabaseAdmin
-                .from('memorial_contributions')
-                .select('id, memorial_id, user_id, contributor_email, status')
-                .eq('id', contributionId)
-                .maybeSingle(),
-            resolveArchivePermissionContext(supabaseAdmin, memorialId, user.id),
-        ]);
+        const supabaseAdmin = getSupabaseAdmin();
+        const { data: contribution, error: contributionError } = await supabaseAdmin
+            .from('memorial_contributions')
+            .select('id, memorial_id, user_id, contributor_email, status')
+            .eq('id', contributionId)
+            .maybeSingle();
 
-        if (!permission.memorialExists || !permission.context) {
-            return NextResponse.json({ error: 'Memorial not found' }, { status: 404 });
+        if (contributionError) {
+            throw contributionError;
         }
 
-        if (!hasPermission(permission.context, 'review_contributions')) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-
-        if (!contribution || contribution.memorial_id !== memorialId) {
+        if (!contribution) {
             return NextResponse.json({ error: 'Contribution not found' }, { status: 404 });
         }
+
+        const effectiveMemorialId = contribution.memorial_id || memorialId;
+        const access = await requireMemorialAccess({
+            memorialId: effectiveMemorialId,
+            action: 'review_contributions',
+        });
+
+        if (!access.ok) return access.response;
+
+        const { user, admin } = access;
 
         if (contribution.status !== 'pending_approval') {
             return NextResponse.json(
@@ -64,25 +62,26 @@ export async function PATCH(
             );
         }
 
-        const { error } = await supabaseAdmin
+        const { error } = await admin
             .from('memorial_contributions')
             .update({
                 status: decision,
                 admin_notes: adminNotes || null,
                 notified_at: new Date().toISOString(),
             })
-            .eq('id', contributionId);
+            .eq('id', contributionId)
+            .eq('memorial_id', effectiveMemorialId);
 
         if (error) {
             throw error;
         }
 
         const contributorUser = contribution.user_id
-            ? await supabaseAdmin.auth.admin.getUserById(contribution.user_id)
+            ? await admin.auth.admin.getUserById(contribution.user_id)
             : null;
 
-        await safeLogMemorialActivity(supabaseAdmin, {
-            memorialId,
+        await safeLogMemorialActivity(admin, {
+            memorialId: effectiveMemorialId,
             action: 'contribution_reviewed',
             summary: `A contribution was marked ${decision}.`,
             actorUserId: user.id,
@@ -93,10 +92,17 @@ export async function PATCH(
             details: {
                 contributionId,
                 decision,
+                requestedMemorialId: memorialId,
+                resolvedMemorialId: effectiveMemorialId,
             },
         });
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({
+            success: true,
+            contributionId,
+            memorialId: effectiveMemorialId,
+            status: decision,
+        });
     } catch (error: any) {
         console.error('[contribution-review]', error);
         return NextResponse.json(

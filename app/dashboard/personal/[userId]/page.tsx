@@ -15,6 +15,7 @@ import PreservationStatus from '@/components/PreservationStatus';
 import DashboardShell from '@/components/dashboard/DashboardShell';
 import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
+import toast from 'react-hot-toast';
 import {
     getOrCreateSessionFingerprint,
     SESSION_FINGERPRINT_HEADER,
@@ -158,7 +159,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
             return;
         }
         if (activeArchive) {
-            alert('You already have an active Personal Archive. Each account supports one personal archive.');
+            toast.error('You already have an active Personal Archive. Each account supports one personal archive.');
             return;
         }
         window.location.href = '/create?mode=personal';
@@ -166,7 +167,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
 
     const softDelete = (id: string) => {
         if (activeArchive?.id === id && (activeArchive as any).preservation_state === 'preserved') {
-            alert('This archive has been permanently preserved on the blockchain and cannot be removed.');
+            toast.error('This archive has been permanently preserved on the blockchain and cannot be removed.');
             return;
         }
         setPendingConfirm({ kind: 'soft-delete', id });
@@ -174,14 +175,14 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
 
     const restore = async (id: string) => {
         if (activeArchive) {
-            alert('You already have an active archive. Remove it first before restoring another.');
+            toast.error('You already have an active archive. Remove it first before restoring another.');
             return;
         }
         try {
             await apiSoftDelete(id, 'restore');
             loadMemorials();
         } catch {
-            alert('Error restoring archive. Please try again.');
+            toast.error('Error restoring archive. Please try again.');
         }
     };
 
@@ -198,7 +199,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                 await apiSoftDelete(id, 'delete');
                 loadMemorials();
             } catch {
-                alert('Error removing archive. Please try again.');
+                toast.error('Error removing archive. Please try again.');
             }
             return;
         }
@@ -214,7 +215,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                 if (!res.ok) throw new Error('Operation failed');
                 loadMemorials();
             } catch {
-                alert('Error permanently deleting archive. Please try again.');
+                toast.error('Error permanently deleting archive. Please try again.');
             }
         }
     };
@@ -488,10 +489,10 @@ function ActiveArchiveView({
                 return;
             }
 
-            alert('Export failed: ' + (result.error || 'Unknown error'));
+            toast.error(`Export failed: ${result.error || 'Unknown error'}`);
         } catch (error) {
             console.error('Error generating export:', error);
-            alert('Error generating portable archive.');
+            toast.error('Error generating portable archive.');
         } finally {
             setIsExporting(false);
         }

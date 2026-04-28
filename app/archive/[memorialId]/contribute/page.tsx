@@ -6,7 +6,6 @@ import {
   AlertCircle,
   ArrowLeft,
   Check,
-  Clapperboard,
   Image as ImageIcon,
   Loader2,
   MessageCircle,
@@ -16,7 +15,6 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { secureUpload } from '@/lib/uploadService';
-import { MAX_VIDEO_FILE_SIZE_BYTES } from '@/lib/constants';
 import { useArchiveRole } from '../_hooks/useArchiveRole';
 import { useRoleSync } from '../_hooks/useRoleSync';
 
@@ -33,29 +31,6 @@ interface PhotoDraft {
   existingUrl?: string | null;
 }
 
-interface InteractiveStoryDraft {
-  id: string;
-  file: File | null;
-  preview: string;
-  title: string;
-  description: string;
-  year: string;
-  existingUrl?: string | null;
-}
-
-interface VideoDraft {
-  id: string;
-  file: File | null;
-  url: string;
-  thumbnail: string;
-  title: string;
-  description: string;
-  duration: string;
-  mimeType: string;
-  existingUrl?: string | null;
-  existingThumbnail?: string | null;
-}
-
 interface RevisionContext {
   id: string;
   adminNotes: string | null;
@@ -67,65 +42,6 @@ interface RevisionContext {
 
 function createDraftId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-async function getVideoDuration(file: File): Promise<string> {
-  return new Promise((resolve) => {
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    video.onloadedmetadata = () => {
-      const mins = Math.floor(video.duration / 60);
-      const secs = Math.floor(video.duration % 60);
-      URL.revokeObjectURL(video.src);
-      resolve(`${mins}:${secs.toString().padStart(2, '0')}`);
-    };
-    video.onerror = () => {
-      URL.revokeObjectURL(video.src);
-      resolve('0:00');
-    };
-    video.src = URL.createObjectURL(file);
-  });
-}
-
-async function createVideoThumbnail(file: File) {
-  return new Promise<Blob>((resolve, reject) => {
-    const video = document.createElement('video');
-    const canvas = document.createElement('canvas');
-    video.preload = 'metadata';
-    video.muted = true;
-    video.playsInline = true;
-
-    video.onloadeddata = () => {
-      video.currentTime = Math.min(1, Math.max(video.duration / 3, 0.2));
-    };
-
-    video.onseeked = () => {
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 360;
-      const context = canvas.getContext('2d');
-      if (!context) {
-        reject(new Error('Could not create a thumbnail.'));
-        return;
-      }
-
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(video.src);
-        if (!blob) {
-          reject(new Error('Could not create a thumbnail.'));
-          return;
-        }
-        resolve(blob);
-      }, 'image/png');
-    };
-
-    video.onerror = () => {
-      URL.revokeObjectURL(video.src);
-      reject(new Error('Could not load the selected video.'));
-    };
-
-    video.src = URL.createObjectURL(file);
-  });
 }
 
 function MediaUploadButton({
@@ -177,8 +93,6 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
   const [authorName, setAuthorName] = useState('');
   const [relationship, setRelationship] = useState('');
   const [photoItems, setPhotoItems] = useState<PhotoDraft[]>([]);
-  const [interactiveItems, setInteractiveItems] = useState<InteractiveStoryDraft[]>([]);
-  const [videoItems, setVideoItems] = useState<VideoDraft[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submittedHeading, setSubmittedHeading] = useState('Contribution shared');
@@ -188,8 +102,6 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
   const [revisionContext, setRevisionContext] = useState<RevisionContext | null>(null);
 
   const photoRef = useRef<HTMLInputElement>(null);
-  const interactiveRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLInputElement>(null);
   const [supabase] = useState(() => createClient());
   const revisionContribution = useMemo(
     () => roleData?.myContributions.find((item) => item.id === reviseId) ?? null,
@@ -202,8 +114,6 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
     setAuthorName('');
     setRelationship('');
     setPhotoItems([]);
-    setInteractiveItems([]);
-    setVideoItems([]);
     setError(null);
   };
 
@@ -245,6 +155,12 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
               ? 'gallery_photo'
               : null;
 
+        if (data.type === 'video' || mediaVariant === 'interactive_story') {
+          setError('Only photo contributions can be revised here now.');
+          setExistingContributionLoaded(true);
+          return;
+        }
+
         setType(nextType);
         setTitle(data.content?.title || '');
         setContent(data.content?.content || '');
@@ -259,8 +175,6 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
         });
 
         setPhotoItems([]);
-        setInteractiveItems([]);
-        setVideoItems([]);
 
         if (data.type === 'photo' && mediaVariant === 'gallery_photo') {
           setPhotoItems([
@@ -275,36 +189,6 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
           ]);
         }
 
-        if (data.type === 'photo' && mediaVariant === 'interactive_story') {
-          setInteractiveItems([
-            {
-              id: createDraftId('interactive'),
-              file: null,
-              preview: data.content?.url || '',
-              title: data.content?.title || '',
-              description: data.content?.description || '',
-              year: data.content?.year || '',
-              existingUrl: data.content?.url || null,
-            },
-          ]);
-        }
-
-        if (data.type === 'video') {
-          setVideoItems([
-            {
-              id: createDraftId('video'),
-              file: null,
-              url: data.content?.url || '',
-              thumbnail: data.content?.thumbnail || data.content?.url || '',
-              title: data.content?.title || '',
-              description: data.content?.description || '',
-              duration: data.content?.duration || '',
-              mimeType: data.content?.mimeType || 'video/mp4',
-              existingUrl: data.content?.url || null,
-              existingThumbnail: data.content?.thumbnail || null,
-            },
-          ]);
-        }
       } catch (fetchError: any) {
         setError(fetchError.message || 'Could not load the contribution to revise.');
       } finally {
@@ -327,17 +211,7 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
 
   const requiresReview = roleData.capabilities.contributionsRequireReview;
   const isRevision = Boolean(revisionContext);
-  const totalMediaItems = photoItems.length + interactiveItems.length + videoItems.length;
-  const showImagesSection =
-    !isRevision ||
-    !revisionContext ||
-    (revisionContext.type === 'photo' && revisionContext.mediaVariant === 'gallery_photo');
-  const showInteractiveSection =
-    !isRevision ||
-    (revisionContext?.type === 'photo' && revisionContext.mediaVariant === 'interactive_story');
-  const showVideosSection =
-    !isRevision ||
-    revisionContext?.type === 'video';
+  const totalMediaItems = photoItems.length;
 
   const addPhotoFiles = (files: File[]) => {
     const validFiles = files.filter((file) => {
@@ -363,82 +237,12 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
     setError(null);
   };
 
-  const addInteractiveFiles = (files: File[]) => {
-    const validFiles = files.filter((file) => {
-      if (file.size > 10 * 1024 * 1024) {
-        setError(`"${file.name}" must be under 10MB.`);
-        return false;
-      }
-      return true;
-    });
-
-    if (validFiles.length === 0) return;
-
-    setInteractiveItems((current) => [
-      ...current,
-      ...validFiles.map((file) => ({
-        id: createDraftId('interactive'),
-        file,
-        preview: URL.createObjectURL(file),
-        title: '',
-        description: '',
-        year: '',
-      })),
-    ]);
-    setError(null);
-  };
-
-  const addVideoFiles = async (files: File[]) => {
-    const nextItems: VideoDraft[] = [];
-
-    for (const file of files) {
-      if (file.size > MAX_VIDEO_FILE_SIZE_BYTES) {
-        setError(`"${file.name}" exceeds the ${Math.round(MAX_VIDEO_FILE_SIZE_BYTES / 1024 / 1024)}MB limit.`);
-        continue;
-      }
-
-      const url = URL.createObjectURL(file);
-      const duration = await getVideoDuration(file);
-      nextItems.push({
-        id: createDraftId('video'),
-        file,
-        url,
-        thumbnail: url,
-        title: '',
-        description: '',
-        duration,
-        mimeType: file.type || 'video/mp4',
-      });
-    }
-
-    if (nextItems.length > 0) {
-      setVideoItems((current) => [...current, ...nextItems]);
-      setError(null);
-    }
-  };
-
   const updatePhotoItem = (id: string, field: 'caption' | 'year', value: string) => {
     setPhotoItems((current) => current.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   };
 
-  const updateInteractiveItem = (id: string, field: 'title' | 'description' | 'year', value: string) => {
-    setInteractiveItems((current) => current.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
-  };
-
-  const updateVideoItem = (id: string, field: 'title' | 'description', value: string) => {
-    setVideoItems((current) => current.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
-  };
-
   const removePhotoItem = (id: string) => {
     setPhotoItems((current) => current.filter((item) => item.id !== id));
-  };
-
-  const removeInteractiveItem = (id: string) => {
-    setInteractiveItems((current) => current.filter((item) => item.id !== id));
-  };
-
-  const removeVideoItem = (id: string) => {
-    setVideoItems((current) => current.filter((item) => item.id !== id));
   };
 
   const submitContributionRecord = async (
@@ -507,129 +311,10 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
     };
   };
 
-  const uploadInteractiveContribution = async (item: InteractiveStoryDraft) => {
-    if (!item.file && !item.existingUrl) {
-      throw new Error('Please select an image before submitting the interactive story.');
-    }
-
-    let asset: Awaited<ReturnType<typeof secureUpload>>['asset'] | undefined;
-    let url = item.existingUrl || '';
-
-    if (item.file) {
-      const uploadResult = await secureUpload(item.file, {
-        memorialId,
-        kind: 'interactive_photo',
-        metadata: {
-          title: item.title.trim(),
-          description: item.description.trim(),
-          year: item.year.trim(),
-          relationship: relationship.trim(),
-          mediaVariant: 'interactive_story',
-          contributionUpload: true,
-        },
-      });
-
-      if (!uploadResult.success || !uploadResult.asset) {
-        throw new Error(uploadResult.error || 'Interactive story upload failed.');
-      }
-
-      asset = uploadResult.asset;
-      url = uploadResult.asset.publicUrl;
-    }
-
-    return {
-      title: item.title.trim() || 'Interactive photo story',
-      url,
-      description: item.description.trim(),
-      year: item.year.trim(),
-      relationship: relationship.trim(),
-      mediaVariant: 'interactive_story',
-      assetId: asset?.id || null,
-      bucket: asset?.bucket || null,
-      storagePath: asset?.storagePath || null,
-      sha256_hash: asset?.sha256Hash || null,
-    };
-  };
-
-  const uploadVideoContribution = async (item: VideoDraft) => {
-    if (!item.file && !item.existingUrl) {
-      throw new Error('Please select a video before submitting.');
-    }
-
-    let asset: Awaited<ReturnType<typeof secureUpload>>['asset'] | undefined;
-    let thumbnailAsset: Awaited<ReturnType<typeof secureUpload>>['asset'] | undefined;
-    let url = item.existingUrl || item.url;
-    let thumbnail = item.existingThumbnail || item.thumbnail || item.url;
-    let mimeType = item.mimeType || 'video/mp4';
-
-    if (item.file) {
-      const uploadResult = await secureUpload(item.file, {
-        memorialId,
-        kind: 'video',
-        metadata: {
-          title: item.title.trim(),
-          description: item.description.trim(),
-          duration: item.duration || '',
-          relationship: relationship.trim(),
-          contributionUpload: true,
-        },
-      });
-
-      if (!uploadResult.success || !uploadResult.asset) {
-        throw new Error(uploadResult.error || 'Video upload failed.');
-      }
-
-      asset = uploadResult.asset;
-      url = uploadResult.asset.publicUrl;
-      mimeType = uploadResult.asset.mimeType || mimeType;
-
-      try {
-        const thumbnailBlob = await createVideoThumbnail(item.file);
-        const thumbnailFile = new File([thumbnailBlob], `${item.id}.png`, { type: 'image/png' });
-        const thumbResult = await secureUpload(thumbnailFile, {
-          memorialId,
-          kind: 'video_thumbnail',
-          metadata: {
-            videoAssetId: uploadResult.asset.id,
-            contributionUpload: true,
-          },
-        });
-
-        if (thumbResult.success && thumbResult.asset) {
-          thumbnailAsset = thumbResult.asset;
-          thumbnail = thumbResult.asset.publicUrl;
-        } else {
-          thumbnail = uploadResult.asset.publicUrl;
-        }
-      } catch {
-        thumbnail = uploadResult.asset.publicUrl;
-      }
-    }
-
-    return {
-      title: item.title.trim() || 'Video',
-      description: item.description.trim(),
-      duration: item.duration || '',
-      relationship: relationship.trim(),
-      url,
-      thumbnail,
-      mimeType,
-      assetId: asset?.id || null,
-      bucket: asset?.bucket || null,
-      storagePath: asset?.storagePath || null,
-      sha256_hash: asset?.sha256Hash || null,
-      thumbnailAssetId: thumbnailAsset?.id || null,
-      thumbnailBucket: thumbnailAsset?.bucket || null,
-      thumbnailStoragePath: thumbnailAsset?.storagePath || null,
-    };
-  };
-
-  const buildMediaSummary = (counts: { photos: number; stories: number; videos: number; memories: number }) => {
+  const buildMediaSummary = (counts: { photos: number; memories: number }) => {
     const parts: string[] = [];
     if (counts.memories > 0) parts.push(`${counts.memories} memor${counts.memories > 1 ? 'ies' : 'y'}`);
     if (counts.photos > 0) parts.push(`${counts.photos} image${counts.photos > 1 ? 's' : ''}`);
-    if (counts.stories > 0) parts.push(`${counts.stories} interactive stor${counts.stories > 1 ? 'ies' : 'y'}`);
-    if (counts.videos > 0) parts.push(`${counts.videos} video${counts.videos > 1 ? 's' : ''}`);
     return parts.join(', ');
   };
 
@@ -645,12 +330,7 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
       }
     } else {
       if (totalMediaItems === 0) {
-        setError('Please add at least one image, interactive story, or video.');
-        return;
-      }
-
-      if (interactiveItems.some((item) => !item.description.trim())) {
-        setError('Each interactive photo story needs a short story to reveal.');
+        setError('Please add at least one photo.');
         return;
       }
     }
@@ -664,7 +344,7 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
       } = await supabase.auth.getUser();
 
       const contributorName = authorName.trim() || user?.email || 'Contributor';
-      const counts = { photos: 0, stories: 0, videos: 0, memories: 0 };
+      const counts = { photos: 0, memories: 0 };
 
       if (type === 'memory') {
         await submitContributionRecord(
@@ -682,24 +362,14 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
         setSubmittedHeading(isRevision ? 'Memory updated' : 'Memory shared');
         setSubmittedSummary(buildMediaSummary(counts));
       } else if (isRevision && revisionContext) {
-        if (revisionContext.type === 'video') {
-          const nextVideo = videoItems[0];
-          const contributionContent = await uploadVideoContribution(nextVideo);
-          await submitContributionRecord('video', contributionContent, contributorName, revisionContext.id);
-          counts.videos += 1;
-          setSubmittedHeading('Video updated');
-        } else if (revisionContext.type === 'photo' && revisionContext.mediaVariant === 'interactive_story') {
-          const nextStory = interactiveItems[0];
-          const contributionContent = await uploadInteractiveContribution(nextStory);
-          await submitContributionRecord('photo', contributionContent, contributorName, revisionContext.id);
-          counts.stories += 1;
-          setSubmittedHeading('Interactive story updated');
-        } else {
+        if (revisionContext.type === 'photo' && revisionContext.mediaVariant === 'gallery_photo') {
           const nextPhoto = photoItems[0];
           const contributionContent = await uploadPhotoContribution(nextPhoto, 'gallery_photo');
           await submitContributionRecord('photo', contributionContent, contributorName, revisionContext.id);
           counts.photos += 1;
           setSubmittedHeading('Photo updated');
+        } else {
+          throw new Error('Only photo contributions can be revised here now.');
         }
 
         setSubmittedSummary(buildMediaSummary(counts));
@@ -708,18 +378,6 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
           const contributionContent = await uploadPhotoContribution(item, 'gallery_photo');
           await submitContributionRecord('photo', contributionContent, contributorName);
           counts.photos += 1;
-        }
-
-        for (const item of interactiveItems) {
-          const contributionContent = await uploadInteractiveContribution(item);
-          await submitContributionRecord('photo', contributionContent, contributorName);
-          counts.stories += 1;
-        }
-
-        for (const item of videoItems) {
-          const contributionContent = await uploadVideoContribution(item);
-          await submitContributionRecord('video', contributionContent, contributorName);
-          counts.videos += 1;
         }
 
         setSubmittedHeading(totalMediaItems > 1 ? 'Contributions shared' : 'Contribution shared');
@@ -856,12 +514,11 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
 
           {type === 'photo' && (
             <div className="space-y-6">
-              {showImagesSection && (
               <div className="rounded-xl border border-warm-border/20 bg-white p-5">
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
-                    <h2 className="font-serif text-2xl text-warm-dark">Images</h2>
-                    <p className="text-sm text-warm-dark/45 font-sans">Add one or several images in a single pass.</p>
+                    <h2 className="font-serif text-2xl text-warm-dark">Photos</h2>
+                    <p className="text-sm text-warm-dark/45 font-sans">Add one or several photos in a single pass.</p>
                   </div>
                   <button
                     type="button"
@@ -876,7 +533,7 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
                 {photoItems.length === 0 ? (
                   <MediaUploadButton
                     icon={<ImageIcon size={26} />}
-                    title="Select images"
+                    title="Select photos"
                     hint="JPG or PNG, up to 10MB each. You can choose several files at once."
                     onClick={() => photoRef.current?.click()}
                   />
@@ -913,144 +570,6 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
                   </div>
                 )}
               </div>
-              )}
-
-              {showInteractiveSection && (
-              <div className="rounded-xl border border-warm-border/20 bg-white p-5">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                  <div>
-                    <h2 className="font-serif text-2xl text-warm-dark">Interactive photo stories</h2>
-                    <p className="text-sm text-warm-dark/45 font-sans">Pair each image with the story it should reveal.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => interactiveRef.current?.click()}
-                    className="inline-flex items-center gap-2 rounded-xl border border-warm-border/30 px-3 py-2 text-sm text-warm-dark/70 hover:bg-warm-border/10"
-                  >
-                    <Plus size={16} />
-                    Add stories
-                  </button>
-                </div>
-
-                {interactiveItems.length === 0 ? (
-                  <MediaUploadButton
-                    icon={<ImageIcon size={26} />}
-                    title="Select images for interactive stories"
-                    hint="Choose one or several images. Each story needs its own short reveal text."
-                    onClick={() => interactiveRef.current?.click()}
-                  />
-                ) : (
-                  <div className="grid gap-4">
-                    {interactiveItems.map((item) => (
-                      <div key={item.id} className="rounded-xl border border-warm-border/25 p-4 space-y-3">
-                        <div className="relative">
-                          <img src={item.preview} alt={item.title || 'Interactive story preview'} className="w-full h-48 object-cover rounded-xl border border-warm-border/20" />
-                          <button
-                            type="button"
-                            onClick={() => removeInteractiveItem(item.id)}
-                            className="absolute top-3 right-3 p-2 bg-warm-dark/80 rounded-full hover:bg-warm-dark transition-all"
-                          >
-                            <X size={14} className="text-surface-low" />
-                          </button>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
-                          <input
-                            type="text"
-                            value={item.title}
-                            onChange={(event) => updateInteractiveItem(item.id, 'title', event.target.value)}
-                            placeholder="Title (optional)"
-                            className="glass-input"
-                          />
-                          <input
-                            type="text"
-                            value={item.year}
-                            onChange={(event) => updateInteractiveItem(item.id, 'year', event.target.value)}
-                            placeholder="Approximate year"
-                            className="glass-input"
-                          />
-                        </div>
-                        <textarea
-                          value={item.description}
-                          onChange={(event) => updateInteractiveItem(item.id, 'description', event.target.value)}
-                          placeholder="What story should this image reveal?"
-                          rows={4}
-                          className="w-full px-4 py-3 border border-warm-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-olive/20 focus:border-olive transition-all resize-none text-sm font-sans leading-relaxed"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              )}
-
-              {showVideosSection && (
-              <div className="rounded-xl border border-warm-border/20 bg-white p-5">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                  <div>
-                    <h2 className="font-serif text-2xl text-warm-dark">Videos</h2>
-                    <p className="text-sm text-warm-dark/45 font-sans">Share one or several clips. Each video can have its own title and note.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => videoRef.current?.click()}
-                    className="inline-flex items-center gap-2 rounded-xl border border-warm-border/30 px-3 py-2 text-sm text-warm-dark/70 hover:bg-warm-border/10"
-                  >
-                    <Plus size={16} />
-                    Add videos
-                  </button>
-                </div>
-
-                {videoItems.length === 0 ? (
-                  <MediaUploadButton
-                    icon={<Clapperboard size={26} />}
-                    title="Select videos"
-                    hint={`MP4, MOV, and similar files up to ${Math.round(MAX_VIDEO_FILE_SIZE_BYTES / 1024 / 1024)}MB each. Multiple selection is supported.`}
-                    onClick={() => videoRef.current?.click()}
-                  />
-                ) : (
-                  <div className="grid gap-4">
-                    {videoItems.map((item) => (
-                      <div key={item.id} className="rounded-xl border border-warm-border/25 p-4 space-y-3">
-                        <div className="relative">
-                          <video controls preload="metadata" className="w-full max-h-80 rounded-xl border border-warm-border/20 bg-black" poster={item.thumbnail || undefined}>
-                            <source src={item.url} type={item.mimeType || 'video/mp4'} />
-                          </video>
-                          <button
-                            type="button"
-                            onClick={() => removeVideoItem(item.id)}
-                            className="absolute top-3 right-3 p-2 bg-warm-dark/80 rounded-full hover:bg-warm-dark transition-all"
-                          >
-                            <X size={14} className="text-surface-low" />
-                          </button>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-[1fr_160px]">
-                          <input
-                            type="text"
-                            value={item.title}
-                            onChange={(event) => updateVideoItem(item.id, 'title', event.target.value)}
-                            placeholder="Title (optional)"
-                            className="glass-input"
-                          />
-                          <input
-                            type="text"
-                            value={item.duration}
-                            readOnly
-                            className="glass-input bg-warm-border/10 text-warm-dark/45"
-                          />
-                        </div>
-                        <textarea
-                          value={item.description}
-                          onChange={(event) => updateVideoItem(item.id, 'description', event.target.value)}
-                          placeholder="Description (optional)"
-                          rows={3}
-                          className="w-full px-4 py-3 border border-warm-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-olive/20 focus:border-olive transition-all resize-none text-sm font-sans leading-relaxed"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              )}
 
               <input
                 ref={photoRef}
@@ -1061,32 +580,6 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
                 onChange={(event) => {
                   const files = Array.from(event.target.files || []);
                   if (files.length > 0) addPhotoFiles(files);
-                  event.currentTarget.value = '';
-                }}
-              />
-              <input
-                ref={interactiveRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  const files = Array.from(event.target.files || []);
-                  if (files.length > 0) addInteractiveFiles(files);
-                  event.currentTarget.value = '';
-                }}
-              />
-              <input
-                ref={videoRef}
-                type="file"
-                accept="video/*"
-                multiple
-                className="hidden"
-                onChange={(event) => {
-                  const files = Array.from(event.target.files || []);
-                  if (files.length > 0) {
-                    void addVideoFiles(files);
-                  }
                   event.currentTarget.value = '';
                 }}
               />

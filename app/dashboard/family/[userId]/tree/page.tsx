@@ -28,6 +28,8 @@ import {
 } from 'lucide-react';
 import { isFamilyPlan, useAuth } from '@/components/providers/AuthProvider';
 import DashboardShell from '@/components/dashboard/DashboardShell';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
+import toast from 'react-hot-toast';
 
 // ============================================================================
 // 1. CUSTOM NODE COMPONENT (4 Handles, visible only on hover)
@@ -118,6 +120,7 @@ function FamilyTreeGraph({ userId }: { userId: string }) {
     const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
     const [selectedNodeData, setSelectedNodeData] = useState<any | null>(null);
     const [selectedEdgeData, setSelectedEdgeData] = useState<Edge | null>(null);
+    const [showDeleteEdgeConfirm, setShowDeleteEdgeConfirm] = useState(false);
 
     // ─── INIT & DATA FETCHING ──────────────────────────────────────────────────
     const loadGraph = useCallback(async (forceAutoLayout = false) => {
@@ -280,7 +283,7 @@ function FamilyTreeGraph({ userId }: { userId: string }) {
 
         } catch (err) {
             console.error(err);
-            alert("Failed to save connection. Please check your database permissions.");
+            toast.error('Failed to save connection. Please check your database permissions.');
         } finally {
             setSaving(false);
         }
@@ -308,7 +311,7 @@ function FamilyTreeGraph({ userId }: { userId: string }) {
             await loadGraph();
             setSelectedEdgeData(null);
         } catch (err: any) {
-            alert(err.message || "Failed to update connection.");
+            toast.error(err.message || 'Failed to update connection.');
         } finally {
             setSaving(false);
         }
@@ -316,7 +319,6 @@ function FamilyTreeGraph({ userId }: { userId: string }) {
 
     const deleteEdge = async () => {
         if (!selectedEdgeData) return;
-        if (!confirm("Remove this connection?")) return;
         setSaving(true);
         try {
             const response = await fetch('/api/family/link', {
@@ -336,7 +338,7 @@ function FamilyTreeGraph({ userId }: { userId: string }) {
             await loadGraph();
             setSelectedEdgeData(null);
         } catch (err: any) {
-            alert(err.message || "Failed to delete connection.");
+            toast.error(err.message || 'Failed to delete connection.');
         } finally {
             setSaving(false);
         }
@@ -488,7 +490,7 @@ function FamilyTreeGraph({ userId }: { userId: string }) {
                                 <button type="submit" disabled={saving} className="glass-btn-dark flex-1 py-3 bg-warm-dark text-surface-low rounded-lg font-medium hover:bg-warm-dark/90 transition-all flex items-center justify-center gap-2">
                                     <Save size={16} /> Save
                                 </button>
-                                <button type="button" onClick={deleteEdge} disabled={saving} className="px-4 py-3 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition-all flex items-center justify-center">
+                                <button type="button" onClick={() => setShowDeleteEdgeConfirm(true)} disabled={saving} className="px-4 py-3 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition-all flex items-center justify-center">
                                     <Trash2 size={16} />
                                 </button>
                             </div>
@@ -496,6 +498,18 @@ function FamilyTreeGraph({ userId }: { userId: string }) {
                     </div>
                 </div>
             )}
+            <ConfirmDialog
+                open={showDeleteEdgeConfirm}
+                title="Remove this connection?"
+                description="This family relationship link will be removed from the tree."
+                confirmLabel="Remove connection"
+                variant="danger"
+                onConfirm={() => {
+                    setShowDeleteEdgeConfirm(false);
+                    void deleteEdge();
+                }}
+                onCancel={() => setShowDeleteEdgeConfirm(false)}
+            />
         </div>
     );
 }

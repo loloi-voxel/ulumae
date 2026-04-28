@@ -15,6 +15,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
 import { useNotifications } from '@/hooks/useNotifications';
 import { permanentlyDeleteMemorial, updateMemorialTrashState } from '@/lib/memorialClientActions';
+import toast from 'react-hot-toast';
 
 type FamilySortOption = 'birth' | 'created_asc' | 'created_desc';
 
@@ -148,7 +149,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
     const softDeleteMemorial = async (id: string) => {
         const target = memorials.find(m => m.id === id);
         if (target && (target as any).preservation_state === 'preserved') {
-            alert('This archive has been permanently preserved on the blockchain and cannot be removed.');
+            toast.error('This archive has been permanently preserved on the blockchain and cannot be removed.');
             return;
         }
         const { count } = await supabase
@@ -165,7 +166,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
             await updateMemorialTrashState(id, 'restore');
             loadMemorials();
         } catch (error) {
-            alert('Error restoring memorial');
+            toast.error('Error restoring memorial');
             console.error(error);
         }
     };
@@ -219,7 +220,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                 await updateMemorialTrashState(id, 'delete');
                 loadMemorials();
             } catch (error) {
-                alert('Error deleting memorial');
+                toast.error('Error deleting memorial');
                 console.error(error);
             }
             return;
@@ -235,7 +236,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                 await permanentlyDeleteMemorial(id);
                 loadMemorials();
             } catch {
-                alert('Error permanently deleting memorial. Please try again.');
+                toast.error('Error permanently deleting memorial. Please try again.');
             }
         }
     };

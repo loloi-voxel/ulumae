@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Home, Users, GraduationCap, Heart, Sparkles, Upload, X, Plus } from 'lucide-react';
 import { deleteMediaAssets, secureUpload } from '@/lib/uploadService';
 import { ChildhoodInfo, ChildhoodPhotoReference } from '@/types/memorial';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 
 interface Step2Props {
     data: ChildhoodInfo;
@@ -36,6 +37,7 @@ export default function Step2Childhood({
     const photoInputRef = useRef<HTMLInputElement>(null);
     const dataRef = useRef(data);
     const [photoError, setPhotoError] = useState<string | null>(null);
+    const [pendingRemoveIndex, setPendingRemoveIndex] = useState<number | null>(null);
 
     useEffect(() => {
         dataRef.current = data;
@@ -168,10 +170,6 @@ export default function Step2Childhood({
     const removePhoto = async (index: number) => {
         const photo = dataRef.current.childhoodPhotos[index];
         if (!photo) return;
-
-        if (!window.confirm('Remove this childhood photo? This change will be saved to the memorial.')) {
-            return;
-        }
 
         if (memorialId && photo.assetId) {
             try {
@@ -448,7 +446,7 @@ export default function Step2Childhood({
                                         </div>
                                         {!readOnly && (
                                             <button
-                                                onClick={() => removePhoto(idx)}
+                                                onClick={() => setPendingRemoveIndex(idx)}
                                                 className="absolute top-2 right-2 p-2 bg-warm-dark/80 hover:bg-warm-dark rounded-full transition-all opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                                             >
                                                 <X size={14} className="text-surface-low" />
@@ -525,6 +523,20 @@ export default function Step2Childhood({
                     I'll return to this →
                 </button>
             </div>
+            <ConfirmDialog
+                open={pendingRemoveIndex !== null}
+                title="Remove this childhood photo?"
+                description="This change will be saved to the memorial immediately."
+                confirmLabel="Remove photo"
+                variant="danger"
+                onConfirm={() => {
+                    if (pendingRemoveIndex === null) return;
+                    const index = pendingRemoveIndex;
+                    setPendingRemoveIndex(null);
+                    void removePhoto(index);
+                }}
+                onCancel={() => setPendingRemoveIndex(null)}
+            />
         </div>
     );
 }

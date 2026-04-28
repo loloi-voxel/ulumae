@@ -11,6 +11,7 @@ import DashboardShell from '@/components/dashboard/DashboardShell';
 import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 import { permanentlyDeleteMemorial, updateMemorialTrashState } from '@/lib/memorialClientActions';
 import { SOFT_DELETE_RETENTION_DAYS, PLAN_PRICES_USD } from '@/lib/constants';
+import toast from 'react-hot-toast';
 
 type PendingConfirm =
     | { kind: 'soft-delete'; id: string }
@@ -101,7 +102,7 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
             await updateMemorialTrashState(id, 'restore');
             loadMemorials();
         } catch (error) {
-            alert('Error restoring archive');
+            toast.error('Error restoring archive.');
             console.error(error);
         }
     };
@@ -119,7 +120,7 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
                 await updateMemorialTrashState(id, 'delete');
                 loadMemorials();
             } catch (error) {
-                alert('Error deleting archive');
+                toast.error('Error deleting archive.');
                 console.error(error);
             }
             return;
@@ -135,7 +136,7 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
                 await permanentlyDeleteMemorial(id);
                 loadMemorials();
             } catch {
-                alert('Error permanently deleting archive. Please try again.');
+                toast.error('Error permanently deleting archive. Please try again.');
             }
         }
     };

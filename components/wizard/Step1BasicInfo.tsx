@@ -4,6 +4,8 @@ import { useState, useRef } from 'react';
 import { Upload, X, Calendar, MapPin, Quote, User, AlertTriangle, Users, Eye, ArrowRight, Loader2, Lock } from 'lucide-react';
 import { BasicInfo } from '@/types/memorial';
 import { deleteMediaAssets, secureUpload } from '@/lib/uploadService';
+import toast from 'react-hot-toast';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 
 interface Step1Props {
     data: BasicInfo;
@@ -18,6 +20,7 @@ export default function Step1BasicInfo({ data, onUpdate, onNext, readOnly, memor
     const [potentialDuplicates, setPotentialDuplicates] = useState<any[]>([]);
     const [checkingDuplicates, setCheckingDuplicates] = useState(false);
     const [photoError, setPhotoError] = useState<string | null>(null);
+    const [showRemovePhotoConfirm, setShowRemovePhotoConfirm] = useState(false);
 
 
     const handleChange = (field: keyof BasicInfo, value: any) => {
@@ -81,9 +84,6 @@ export default function Step1BasicInfo({ data, onUpdate, onNext, readOnly, memor
     };
 
     const removePhoto = async () => {
-        if (!window.confirm('Remove the profile photo? This change will be saved to the memorial.')) {
-            return;
-        }
         if (memorialId && data.profilePhotoAssetId) {
             try {
                 await deleteMediaAssets(memorialId, [data.profilePhotoAssetId], 'soft');
@@ -185,11 +185,10 @@ export default function Step1BasicInfo({ data, onUpdate, onNext, readOnly, memor
             });
 
             if (res.ok) {
-                alert("Collaboration request sent to the owner of that archive!");
-                // Redirect to dashboard or stay here
+                toast.success('Collaboration request sent to the owner of that archive.');
             }
         } catch (err) {
-            alert("Failed to send request.");
+            toast.error('Failed to send request.');
         }
     };
 
@@ -432,7 +431,7 @@ export default function Step1BasicInfo({ data, onUpdate, onNext, readOnly, memor
                                     />
                                 </div>
                                 <button
-                                    onClick={removePhoto}
+                                    onClick={() => setShowRemovePhotoConfirm(true)}
                                     disabled={readOnly}
                                     className={`absolute top-2 right-2 p-2 bg-warm-dark/80 hover:bg-warm-dark rounded-full transition-colors ${readOnly ? 'hidden' : ''}`}
                                 >
@@ -575,6 +574,18 @@ export default function Step1BasicInfo({ data, onUpdate, onNext, readOnly, memor
                     </button>
                 </div>
             </div>
+            <ConfirmDialog
+                open={showRemovePhotoConfirm}
+                title="Remove the profile photo?"
+                description="This change will be saved to the memorial immediately."
+                confirmLabel="Remove photo"
+                variant="danger"
+                onConfirm={() => {
+                    setShowRemovePhotoConfirm(false);
+                    void removePhoto();
+                }}
+                onCancel={() => setShowRemovePhotoConfirm(false)}
+            />
         </form>
     );
 }
