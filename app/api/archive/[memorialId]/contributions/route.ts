@@ -4,6 +4,39 @@ import { safeLogMemorialActivity } from '@/lib/activityLog';
 
 type ContributionType = 'memory' | 'photo' | 'video';
 
+function collectContributionAssetIds(content: Record<string, any>) {
+  return Array.from(
+    new Set(
+      [content?.assetId, content?.thumbnailAssetId].filter(
+        (value): value is string => typeof value === 'string' && value.trim().length > 0
+      )
+    )
+  );
+}
+
+async function attachContributionAssets(
+  admin: any,
+  memorialId: string,
+  contributionId: string,
+  content: Record<string, any>
+) {
+  const assetIds = collectContributionAssetIds(content);
+  if (assetIds.length === 0) return;
+
+  const { error } = await admin
+    .from('memorial_media_assets')
+    .update({
+      contribution_id: contributionId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('memorial_id', memorialId)
+    .in('id', assetIds);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ memorialId: string }> }
@@ -71,6 +104,8 @@ export async function POST(
 
       if (updateError) throw updateError;
 
+      await attachContributionAssets(admin, memorialId, body.revisionId, content);
+
       await safeLogMemorialActivity(admin, {
         memorialId,
         action: 'contribution_submitted',
@@ -107,6 +142,8 @@ export async function POST(
       .single();
 
     if (insertError) throw insertError;
+
+    await attachContributionAssets(admin, memorialId, createdContribution.id, content);
 
     await safeLogMemorialActivity(admin, {
       memorialId,

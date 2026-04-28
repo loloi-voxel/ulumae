@@ -8,7 +8,7 @@
 
 'use client';
 
-import { type ReactNode, useCallback, useState } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useState } from 'react';
 import {
     Calendar, MapPin, Heart, Briefcase, GraduationCap, Quote, Star, Home,
     Sparkles, MessageCircle, Users, BookOpen, Lightbulb, Award,
@@ -37,20 +37,12 @@ function getInteractiveStoryText(item: any, index: number) {
         || `Interactive photo story ${index + 1}`;
 }
 
-function getRevealMaskStyle(isActive: boolean, x: number, y: number) {
-    if (!isActive) {
-        return {
-            maskImage: 'none',
-            WebkitMaskImage: 'none',
-        };
-    }
-
-    const mask = `radial-gradient(circle 120px at ${x}px ${y}px, transparent 0%, transparent 42%, rgba(0,0,0,0.3) 72%, black 100%)`;
-    return {
-        maskImage: mask,
-        WebkitMaskImage: mask,
-    };
-}
+const BIOGRAPHY_COPY_STYLE: CSSProperties = {
+    fontFamily: 'Georgia, serif',
+    fontVariant: 'normal',
+    fontVariantCaps: 'normal',
+    textTransform: 'none',
+};
 
 function MediaSectionFrame({
     title,
@@ -92,8 +84,6 @@ export default function MemorialRenderer({
     compact = false,
     className = '',
 }: MemorialRendererProps) {
-    const [hoveredInteractive, setHoveredInteractive] = useState<string | null>(null);
-    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
     const [lightboxState, setLightboxState] = useState<{
         items: MediaLightboxItem[];
         initialIndex: number;
@@ -107,12 +97,6 @@ export default function MemorialRenderer({
         const end = data.step1.isStillLiving ? new Date() :
             data.step1.deathDate ? new Date(data.step1.deathDate) : new Date();
         return end.getFullYear() - birth.getFullYear();
-    };
-
-    const handleInteractiveMouseMove = (e: React.MouseEvent<HTMLElement>, imageId: string) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-        setHoveredInteractive(imageId);
     };
 
     // Scale classes for compact (mirror) vs full mode
@@ -372,12 +356,7 @@ export default function MemorialRenderer({
                             <div className="prose prose-lg max-w-none">
                                 <div
                                     className={`text-warm-dark/80 leading-relaxed normal-case ${s.bodyText}`}
-                                    style={{
-                                        fontFamily: 'Georgia, serif',
-                                        fontVariant: 'normal',
-                                        fontVariantCaps: 'normal',
-                                        textTransform: 'none',
-                                    }}
+                                    style={BIOGRAPHY_COPY_STYLE}
                                 >
                                     <BioWithLinks
                                         text={compact
@@ -780,7 +759,12 @@ export default function MemorialRenderer({
                                 {data.step7.sharedMemories?.map((memory: any) => (
                                     <div key={memory.id} className={`bg-white rounded-xl ${compact ? 'p-4' : 'p-8'} shadow-sm border border-warm-border/30`}>
                                         <h4 className={`font-semibold ${compact ? 'text-sm' : 'text-xl'} text-warm-dark mb-2`}>{memory.title}</h4>
-                                        <p className={`text-warm-muted leading-relaxed mb-3 ${compact ? 'text-xs' : ''}`}>{memory.content}</p>
+                                        <div
+                                            className={`mb-3 text-warm-dark/80 leading-relaxed normal-case ${compact ? 'text-sm' : 'text-base md:text-lg'}`}
+                                            style={BIOGRAPHY_COPY_STYLE}
+                                        >
+                                            <BioWithLinks text={memory.content} relations={relations} className="m-0" />
+                                        </div>
                                         <p className={`text-warm-muted ${compact ? 'text-[10px]' : 'text-sm'}`}>— <span className="font-medium text-warm-dark">{memory.author}</span></p>
                                     </div>
                                 ))}
@@ -811,28 +795,33 @@ export default function MemorialRenderer({
                                                 type="button"
                                                 onClick={() => openLightbox(interactiveLightboxItems, absoluteIndex)}
                                                 className="group relative block aspect-video w-full overflow-hidden bg-warm-border/10 text-left"
-                                                onMouseMove={(e) => handleInteractiveMouseMove(e, item.id)}
-                                                onMouseLeave={() => setHoveredInteractive(null)}
-                                                style={{ cursor: 'pointer' }}
                                             >
-                                                <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
-                                                    <div className="max-w-[84%] rounded-[24px] bg-surface-low/92 px-5 py-4 shadow-xl backdrop-blur-md">
-                                                        <p className={`font-serif text-center font-medium leading-relaxed text-warm-dark drop-shadow-sm ${compact ? 'text-base' : 'text-2xl md:text-3xl'}`}>
+                                                <div className="absolute inset-0 z-10 flex items-center justify-center bg-gradient-to-br from-surface-low via-[#f7f0e9] to-[#efe4d8] p-4">
+                                                    <div className="max-w-[84%] text-center">
+                                                        {item.title ? (
+                                                            <p className="mb-3 text-[11px] uppercase tracking-[0.24em] text-warm-dark/35">
+                                                                {item.title}
+                                                            </p>
+                                                        ) : null}
+                                                        <p className={`font-serif font-medium leading-relaxed text-warm-dark ${compact ? 'text-base' : 'text-2xl md:text-3xl'}`}>
                                                             {storyText}
                                                         </p>
+                                                        {item.year ? (
+                                                            <p className="mt-4 text-[11px] uppercase tracking-[0.22em] text-warm-dark/30">
+                                                                {item.year}
+                                                            </p>
+                                                        ) : null}
                                                     </div>
                                                 </div>
 
-                                                <div
-                                                    className="absolute inset-0 z-20"
-                                                    style={getRevealMaskStyle(hoveredInteractive === item.id, mousePos.x, mousePos.y)}
-                                                >
+                                                <div className="absolute inset-0 z-20 transition-opacity duration-300 ease-out group-hover:opacity-[0.14] group-focus-visible:opacity-[0.14]">
                                                     <img
                                                         src={item.preview}
                                                         alt={storyText}
                                                         className="h-full w-full object-cover object-center"
                                                         draggable={false}
                                                     />
+                                                    <div className="absolute inset-0 bg-warm-dark/10 transition-opacity duration-300 ease-out group-hover:opacity-0 group-focus-visible:opacity-0" />
                                                 </div>
 
                                                 <IntegrityBadge hash={item.sha256_hash} />

@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     const access = await requireMemorialAccess({
       memorialId,
-      action: getMediaPermissionForKind(kind),
+      action: getMediaPermissionForKind(kind, metadata),
     });
     if (!access.ok) return access.response;
 

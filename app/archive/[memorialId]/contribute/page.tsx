@@ -156,6 +156,13 @@ function MediaUploadButton({
   );
 }
 
+const BIOGRAPHY_TEXTAREA_STYLE = {
+  fontFamily: 'Georgia, serif',
+  fontVariant: 'normal' as const,
+  fontVariantCaps: 'normal' as const,
+  textTransform: 'none' as const,
+};
+
 function ContributeContent({ memorialId }: { memorialId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -474,6 +481,7 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
           year: item.year.trim(),
           relationship: relationship.trim(),
           mediaVariant: variant,
+          contributionUpload: variant === 'interactive_story',
         },
       });
 
@@ -517,6 +525,7 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
           year: item.year.trim(),
           relationship: relationship.trim(),
           mediaVariant: 'interactive_story',
+          contributionUpload: true,
         },
       });
 
@@ -562,6 +571,7 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
           description: item.description.trim(),
           duration: item.duration || '',
           relationship: relationship.trim(),
+          contributionUpload: true,
         },
       });
 
@@ -581,6 +591,7 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
           kind: 'video_thumbnail',
           metadata: {
             videoAssetId: uploadResult.asset.id,
+            contributionUpload: true,
           },
         });
 
@@ -835,7 +846,8 @@ function ContributeContent({ memorialId }: { memorialId: string }) {
                   onChange={(event) => setContent(event.target.value)}
                   placeholder="Write your memory here. There is no right or wrong way - just tell it as you remember it."
                   rows={7}
-                  className="w-full px-4 py-3 border border-warm-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-olive/20 focus:border-olive transition-all resize-none text-sm font-serif leading-relaxed"
+                  className="w-full px-6 py-4 border border-warm-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-olive/30 focus:border-olive transition-all resize-none normal-case text-base leading-relaxed"
+                  style={BIOGRAPHY_TEXTAREA_STYLE}
                 />
                 <p className="text-xs text-warm-dark/30 mt-1.5 font-sans text-right">{content.length} characters</p>
               </div>

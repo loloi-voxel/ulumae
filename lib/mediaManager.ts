@@ -1415,7 +1415,17 @@ export async function normalizeMemorialMediaData({
   return normalized;
 }
 
-export function getMediaPermissionForKind(kind: MediaKind) {
+export function getMediaPermissionForKind(
+  kind: MediaKind,
+  metadata?: Record<string, unknown>
+) {
+  if (
+    metadata?.contributionUpload === true &&
+    (kind === 'interactive_photo' || kind === 'video' || kind === 'video_thumbnail')
+  ) {
+    return 'contribute_content';
+  }
+
   return getKindConfig(kind).permission;
 }
 

@@ -29,25 +29,8 @@ function getInteractiveStoryCopy(item: MediaLightboxItem) {
     item.description ||
     item.caption ||
     item.title ||
-    'Move your cursor to reveal the photo.'
+    'Hover to reveal the story.'
   );
-}
-
-function getRevealMaskStyle(isActive: boolean, x: number, y: number, radius = 120) {
-  if (!isActive) {
-    return {
-      maskImage: 'none',
-      WebkitMaskImage: 'none',
-    };
-  }
-
-  const transparentEdge = Math.round(radius * 0.42);
-  const featherEdge = Math.round(radius * 0.72);
-  const mask = `radial-gradient(circle ${radius}px at ${x}px ${y}px, transparent 0%, transparent ${transparentEdge}px, rgba(0,0,0,0.3) ${featherEdge}px, black 100%)`;
-  return {
-    maskImage: mask,
-    WebkitMaskImage: mask,
-  };
 }
 
 export default function MediaLightbox({
@@ -56,8 +39,6 @@ export default function MediaLightbox({
   onClose,
 }: MediaLightboxProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [interactivePointer, setInteractivePointer] = useState({ x: 50, y: 50 });
-  const [isInteractiveHovering, setIsInteractiveHovering] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const wheelLockRef = useRef<number | null>(null);
@@ -71,10 +52,6 @@ export default function MediaLightbox({
       setCurrentIndex(Math.max(items.length - 1, 0));
     }
   }, [currentIndex, items.length]);
-
-  useEffect(() => {
-    setIsInteractiveHovering(false);
-  }, [currentIndex]);
 
   const goToPrevious = useCallback(() => {
     setCurrentIndex((previous) => (previous > 0 ? previous - 1 : items.length - 1));
@@ -154,15 +131,6 @@ export default function MediaLightbox({
     maxHeight: '82vh',
   };
 
-  const handleInteractiveMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    setInteractivePointer({
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    });
-    setIsInteractiveHovering(true);
-  };
-
   const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
     if (!isInteractiveStory || items.length <= 1 || Math.abs(event.deltaY) < 16) {
       return;
@@ -222,30 +190,36 @@ export default function MediaLightbox({
         {isInteractiveStory ? (
           <div className="mx-auto flex w-full max-w-6xl items-center justify-center">
             <div
-              className="relative w-full overflow-hidden rounded-[30px] bg-warm-border/10 shadow-2xl"
+              className="group relative w-full overflow-hidden rounded-[30px] bg-warm-border/10 shadow-2xl"
               style={interactiveStoryStyle}
-              onMouseMove={handleInteractiveMouseMove}
-              onMouseLeave={() => setIsInteractiveHovering(false)}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
-                <div className="max-w-[84%] rounded-[24px] bg-surface-low/80 px-5 py-4 shadow-xl backdrop-blur-md">
-                  <p className="font-serif text-center font-medium leading-relaxed text-warm-dark drop-shadow-sm text-2xl md:text-3xl">
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-gradient-to-br from-surface-low via-[#f7f0e9] to-[#efe4d8] p-4">
+                <div className="max-w-[84%] text-center">
+                  {displayTitle ? (
+                    <p className="mb-3 text-xs uppercase tracking-[0.24em] text-warm-dark/35">
+                      {displayTitle}
+                    </p>
+                  ) : null}
+                  <p className="font-serif text-center font-medium leading-relaxed text-warm-dark text-2xl md:text-3xl">
                     {interactiveStoryCopy}
                   </p>
+                  {displayYear ? (
+                    <p className="mt-4 text-xs uppercase tracking-[0.22em] text-warm-dark/30">
+                      {displayYear}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
-              <div
-                className="absolute inset-0 z-20"
-                style={getRevealMaskStyle(isInteractiveHovering, interactivePointer.x, interactivePointer.y, 220)}
-              >
+              <div className="absolute inset-0 z-20 transition-opacity duration-300 ease-out group-hover:opacity-[0.14] group-focus-within:opacity-[0.14]">
                 <img
                   src={currentItem.src}
                   alt={currentItem.alt || currentItem.title || 'Interactive story'}
                   className="h-full w-full object-cover object-center"
                   draggable={false}
                 />
+                <div className="absolute inset-0 bg-warm-dark/10 transition-opacity duration-300 ease-out group-hover:opacity-0 group-focus-within:opacity-0" />
               </div>
             </div>
           </div>

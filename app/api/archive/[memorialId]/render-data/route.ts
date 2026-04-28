@@ -100,6 +100,7 @@ export async function GET(
         caption: contribution.content?.caption || '',
         year: contribution.content?.year || '',
         type: 'photo',
+        sha256_hash: contribution.content?.sha256_hash || null,
       }));
 
     const interactivePhotoContributions = (approvedContributions || [])
@@ -115,6 +116,7 @@ export async function GET(
         title: contribution.content?.title || '',
         description: contribution.content?.description || '',
         year: contribution.content?.year || '',
+        sha256_hash: contribution.content?.sha256_hash || null,
       }));
 
     const videoContributions = (approvedContributions || [])
@@ -125,6 +127,8 @@ export async function GET(
         thumbnail: contribution.content?.thumbnail || '',
         title: contribution.content?.title || '',
         description: contribution.content?.description || '',
+        mimeType: contribution.content?.mimeType || null,
+        sha256_hash: contribution.content?.sha256_hash || null,
       }));
 
     const memorialData = {
