@@ -76,7 +76,7 @@ function PaymentForm({ memorialId, amount, fullName, plan, isPopup }: {
                 );
             }
         } catch (err: any) {
-            setPaymentError('An unexpected error occurred. Your draft is saved, and you can return at any time.');
+            setPaymentError('An unexpected error occurred. Your private preview is saved, and you can return at any time.');
             setIsProcessing(false);
         }
     };
@@ -116,7 +116,7 @@ function PaymentForm({ memorialId, amount, fullName, plan, isPopup }: {
                         {paymentError}
                     </p>
                     <p className="text-xs text-warm-dark/30">
-                        Your draft is saved, and you can return at any time.
+                        Your private preview is saved, and you can return at any time.
                         Need help? Contact us at <a href="mailto:support@ulumae.com" className="underline hover:text-warm-dark/50">support@ulumae.com</a>
                     </p>
                 </div>

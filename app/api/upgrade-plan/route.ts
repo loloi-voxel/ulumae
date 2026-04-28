@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
                         currency: 'usd',
                         product_data: {
                             name: 'ULUMAE — Family → Concierge Upgrade (30% deposit)',
-                            description: `Upgrade deposit. Remaining payments: 40% at draft delivery, 30% at final validation.`,
+                            description: `Upgrade deposit. Remaining payments: 40% at private preview delivery, 30% at final validation.`,
                         },
                         unit_amount: firstPayment * 100,
                     },
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
                 targetPrice,
                 differentialAmount,
                 firstPayment,
-                paymentStructure: '30% now / 40% at draft delivery / 30% at final validation',
+                paymentStructure: '30% now / 40% at private preview delivery / 30% at final validation',
             });
         }
 

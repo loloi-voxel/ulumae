@@ -79,7 +79,8 @@ export async function GET(
         const hasBiography =
             (memorial.step6?.biography || '').length > 100;
         const photoCount =
-            (memorial.step8?.gallery || []).length;
+            (memorial.step8?.gallery || []).length +
+            (memorial.step8?.interactiveGallery || []).length;
         const memoryCount =
             (memorial.step7?.sharedMemories || []).length +
             (memorial.step7?.impactStories || []).length;

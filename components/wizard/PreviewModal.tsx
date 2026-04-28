@@ -24,7 +24,7 @@ export default function PreviewModal({ data, plan = 'draft', onClose }: PreviewM
                     <div className="flex items-center justify-between mb-6 px-4">
                         <div>
                             <h2 className="text-2xl font-semibold text-surface-low mb-1">
-                                {isDraftPreview ? 'Archive Preview' : 'Mobile Render'}
+                                {isDraftPreview ? 'Private Preview' : 'Mobile Render'}
                             </h2>
                             {isDraftPreview && (
                                 <p className="text-surface-low/50 text-sm">

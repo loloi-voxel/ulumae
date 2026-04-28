@@ -5,22 +5,24 @@ import { FileEdit, User, Users, Sparkles, Check, ArrowLeft, ChevronDown } from '
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getPlanDashboardPath, useAuth } from '@/components/providers/AuthProvider';
-import { PLAN_PRICES_USD } from '@/lib/constants';
+import { DRAFT_MEDIA_LIMIT, DRAFT_VIDEO_LIMIT, PLAN_PRICES_USD } from '@/lib/constants';
 
 const features = [
-    { label: 'Number of archives', draft: '—', personal: '1', family: 'Unlimited', concierge: 'Unlimited' },
-    { label: 'Structured biography', draft: '—', personal: '✓', family: '✓', concierge: '✓' },
-    { label: 'Photo & video gallery', draft: '—', personal: '✓', family: '✓', concierge: '✓' },
-    { label: 'Witness invitations', draft: '—', personal: '✓', family: '✓', concierge: '✓' },
-    { label: 'Quarterly Ark export', draft: '—', personal: '✓', family: '✓', concierge: '✓' },
-    { label: 'Successor designation', draft: '—', personal: '✓', family: '✓', concierge: '✓' },
-    { label: 'Archive linking', draft: '—', personal: '—', family: '✓', concierge: '✓' },
-    { label: 'Visual family tree', draft: '—', personal: '—', family: '✓', concierge: '✓' },
-    { label: 'Family steward', draft: '—', personal: '—', family: '✓', concierge: '✓' },
-    { label: 'Professional interview', draft: '—', personal: '—', family: '—', concierge: '✓' },
-    { label: 'Document digitization', draft: '—', personal: '—', family: '—', concierge: '✓' },
-    { label: 'Biographical writing', draft: '—', personal: '—', family: '—', concierge: '✓' },
-    { label: 'Physical certificate', draft: '—', personal: 'Optional', family: 'Optional', concierge: 'Included' },
+    { label: 'Archive builder', draft: 'Included', personal: 'Included', family: 'Included', concierge: 'Included' },
+    { label: 'Permanent preservation', draft: '--', personal: 'Included', family: 'Included', concierge: 'Included' },
+    { label: 'Preserved archives', draft: '--', personal: '1', family: 'Unlimited', concierge: 'Custom' },
+    { label: 'Photo gallery', draft: `Up to ${DRAFT_MEDIA_LIMIT}`, personal: 'Included', family: 'Included', concierge: 'Handled for you' },
+    { label: 'Interactive photo stories', draft: `Up to ${DRAFT_MEDIA_LIMIT}`, personal: 'Included', family: 'Included', concierge: 'Handled for you' },
+    { label: 'Video memories', draft: `Up to ${DRAFT_VIDEO_LIMIT}`, personal: 'Included', family: 'Included', concierge: 'Handled for you' },
+    { label: 'Witness invitations', draft: '--', personal: 'Included', family: 'Included', concierge: 'Included' },
+    { label: 'Reader access', draft: '--', personal: 'Included', family: 'Included', concierge: 'Included' },
+    { label: 'Preservation dashboard', draft: '--', personal: 'Included', family: 'Included', concierge: 'Included' },
+    { label: 'Archive export', draft: '--', personal: 'Included', family: 'Included', concierge: 'Included' },
+    { label: 'Successor designation', draft: '--', personal: 'Included', family: 'Included', concierge: 'Included' },
+    { label: 'Linked family archives', draft: '--', personal: '--', family: 'Included', concierge: 'Included' },
+    { label: 'Family tree', draft: '--', personal: '--', family: 'Included', concierge: 'Included' },
+    { label: 'Co-guardian steward role', draft: '--', personal: '--', family: 'Included', concierge: 'Included' },
+    { label: 'Concierge intake', draft: '--', personal: '--', family: '--', concierge: 'Request access' },
 ];
 
 const faqs = [
@@ -120,7 +122,6 @@ export default function ChoicePricingPage() {
 
     return (
         <main className="pt-16 pb-24 px-8 max-w-7xl mx-auto">
-            {/* Header */}
             <header className="mb-16">
                 <Link
                     href="/"
@@ -145,7 +146,6 @@ export default function ChoicePricingPage() {
                         </p>
                     </div>
 
-                    {/* Active Plan Banner */}
                     {hasPaidPlan && auth.plan !== 'none' && (
                         <div className="bg-surface-high p-6 flex items-start gap-4 border-l-4 border-warm-brown max-w-sm">
                             <div>
@@ -172,9 +172,7 @@ export default function ChoicePricingPage() {
                 </div>
             </header>
 
-            {/* Pricing Cards Grid */}
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 mb-32 gap-8">
-                {/* Preview Archive */}
                 <button
                     onClick={handleDraftStart}
                     disabled={!ready}
@@ -184,9 +182,9 @@ export default function ChoicePricingPage() {
                         <div className="w-14 h-14 bg-gradient-to-br from-warm-dark/80 to-warm-dark/60 flex items-center justify-center mb-4">
                             <FileEdit size={28} className="text-warm-bg" />
                         </div>
-                        <h3 className="font-serif text-3xl text-warm-dark mb-1">Preview Archive</h3>
+                        <h3 className="font-serif text-3xl text-warm-dark mb-1">Private Preview</h3>
                         <p className="text-xs uppercase tracking-widest text-warm-outline">
-                            Free Start
+                            Exclusive Start
                         </p>
                     </div>
                     <div className="mb-12">
@@ -196,7 +194,7 @@ export default function ChoicePricingPage() {
                     <ul className="space-y-4 mb-16 flex-grow text-sm text-warm-muted">
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-olive mt-0.5 flex-shrink-0" />
-                            Full memorial builder access
+                            Full archive builder access
                         </li>
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-olive mt-0.5 flex-shrink-0" />
@@ -204,11 +202,11 @@ export default function ChoicePricingPage() {
                         </li>
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-olive mt-0.5 flex-shrink-0" />
-                            Preview with watermark
+                            Private live preview with watermark
                         </li>
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-olive mt-0.5 flex-shrink-0" />
-                            Secure as Personal anytime
+                            Preserve as Personal whenever you are ready
                         </li>
                     </ul>
                     <div className="w-full py-4 glass-btn border border-warm-border/30 text-warm-dark text-xs uppercase tracking-widest text-center hover-grow">
@@ -216,7 +214,6 @@ export default function ChoicePricingPage() {
                     </div>
                 </button>
 
-                {/* Personal */}
                 <button
                     onClick={() => handleModeSelection('personal')}
                     disabled={!ready}
@@ -241,19 +238,19 @@ export default function ChoicePricingPage() {
                     <ul className="space-y-4 mb-16 flex-grow text-sm text-warm-muted">
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-olive mt-0.5 flex-shrink-0" />
-                            One complete archive
+                            One complete preserved archive
                         </li>
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-olive mt-0.5 flex-shrink-0" />
-                            Structured biography & gallery
+                            Structured biography, images, stories, and video memories
                         </li>
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-olive mt-0.5 flex-shrink-0" />
-                            Witness invitations
+                            Witness invitations and reader access
                         </li>
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-olive mt-0.5 flex-shrink-0" />
-                            Quarterly Ark export
+                            Preservation dashboard and archive export
                         </li>
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-olive mt-0.5 flex-shrink-0" />
@@ -265,7 +262,6 @@ export default function ChoicePricingPage() {
                     </div>
                 </button>
 
-                {/* Family */}
                 <button
                     onClick={() => handleModeSelection('family')}
                     disabled={!ready}
@@ -287,7 +283,7 @@ export default function ChoicePricingPage() {
                     <ul className="space-y-4 mb-16 flex-grow text-sm text-warm-muted">
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-warm-brown mt-0.5 flex-shrink-0" />
-                            Unlimited archives
+                            Unlimited preserved archives
                         </li>
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-warm-brown mt-0.5 flex-shrink-0" />
@@ -295,11 +291,11 @@ export default function ChoicePricingPage() {
                         </li>
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-warm-brown mt-0.5 flex-shrink-0" />
-                            Archive linking & family tree
+                            Linked archives and family tree
                         </li>
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-warm-brown mt-0.5 flex-shrink-0" />
-                            Family steward designation
+                            Co-guardian stewardship across the family space
                         </li>
                     </ul>
                     <div className="w-full py-4 glass-btn-dark text-xs uppercase tracking-widest text-center hover-grow">
@@ -307,7 +303,6 @@ export default function ChoicePricingPage() {
                     </div>
                 </button>
 
-                {/* Concierge */}
                 <button
                     onClick={handleConciergeSelection}
                     className="bg-surface-highest p-8 flex flex-col border border-warm-border/30 hover:bg-surface-high transition-colors text-left relative group"
@@ -330,7 +325,7 @@ export default function ChoicePricingPage() {
                     </div>
                     <div className="mb-16 flex-grow text-sm text-warm-muted">
                         <p className="mb-4 italic leading-relaxed">
-                            Full curation by our team. We interview, digitize, write, and structure. Delivery within 60 days.
+                            A human-led preservation service. The current intake is handled by request while we refine the offering.
                         </p>
                         <ul className="space-y-4">
                             <li className="flex items-start gap-2">
@@ -339,15 +334,15 @@ export default function ChoicePricingPage() {
                             </li>
                             <li className="flex items-start gap-2">
                                 <Check size={16} className="text-olive mt-0.5 flex-shrink-0" />
-                                Phone/video interview
+                                White-glove onboarding
                             </li>
                             <li className="flex items-start gap-2">
                                 <Check size={16} className="text-olive mt-0.5 flex-shrink-0" />
-                                Professional biographical writing
+                                Human curation and preservation support
                             </li>
                             <li className="flex items-start gap-2">
                                 <Check size={16} className="text-olive mt-0.5 flex-shrink-0" />
-                                2 revision cycles included
+                                Request-based intake
                             </li>
                         </ul>
                     </div>
@@ -357,7 +352,6 @@ export default function ChoicePricingPage() {
                 </button>
             </section>
 
-            {/* Comparison Table */}
             <section className="mb-32">
                 <h2 className="font-serif text-4xl text-warm-dark mb-12 text-center">
                     Compare Plans
@@ -367,7 +361,7 @@ export default function ChoicePricingPage() {
                         <thead>
                             <tr className="uppercase tracking-widest text-[10px] text-warm-outline border-b border-warm-border/20">
                                 <th className="py-6 px-4">Feature</th>
-                                <th className="py-6 px-4">Preview</th>
+                                <th className="py-6 px-4">Private Preview</th>
                                 <th className="py-6 px-4">Personal</th>
                                 <th className="py-6 px-4">Family</th>
                                 <th className="py-6 px-4">Concierge</th>
@@ -391,7 +385,6 @@ export default function ChoicePricingPage() {
                 </div>
             </section>
 
-            {/* Satisfaction & FAQ */}
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-20">
                 <div>
                     <h3 className="font-serif text-3xl text-warm-dark mb-8">Our Guarantee</h3>
@@ -400,7 +393,7 @@ export default function ChoicePricingPage() {
                             &ldquo;Independent archive export + 30-day satisfaction guarantee.
                             If you are not satisfied, contact us within 30 days of payment
                             for a full refund, as long as the archive has not been published.
-                            Your preview archive remains accessible.&rdquo;
+                            Your private preview remains accessible.&rdquo;
                         </p>
                         <div className="flex items-center gap-4">
                             <div className="w-12 h-12 bg-warm-outline flex items-center justify-center">
@@ -432,11 +425,10 @@ export default function ChoicePricingPage() {
                 </div>
             </section>
 
-            {/* Bottom note */}
             <div className="mt-16 text-center">
                 <p className="text-sm text-warm-outline">
-                    Not sure which to choose? <strong>Preview Archive</strong> is free to start — you can upgrade to Personal at any time.
-                    Personal and Family are self-service tools. Concierge is a fully managed, human-led service.
+                    Not sure which to choose? <strong>Private Preview</strong> is free to start and can move into Personal at any time.
+                    Personal and Family are self-service tools. Concierge currently opens through a request-led intake.
                 </p>
             </div>
         </main>

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireMemorialAccess } from '@/lib/apiAuth';
 import { safeLogMemorialActivity } from '@/lib/activityLog';
 
-type ContributionType = 'memory' | 'photo';
+type ContributionType = 'memory' | 'photo' | 'video';
 
 export async function POST(
   req: NextRequest,
@@ -25,7 +25,7 @@ export async function POST(
       revisionId?: string | null;
     };
 
-    if (body.type !== 'memory' && body.type !== 'photo') {
+    if (body.type !== 'memory' && body.type !== 'photo' && body.type !== 'video') {
       return NextResponse.json({ error: 'Invalid contribution type' }, { status: 400 });
     }
 

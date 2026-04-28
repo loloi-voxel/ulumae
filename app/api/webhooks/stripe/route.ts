@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
         changeSummary: isUpgrade
           ? `Plan upgraded from ${currentMemorial.mode} to ${targetPlan}.`
           : currentMemorial.mode === 'draft'
-            ? 'Archive activated and moved from Draft to Personal.'
+      ? 'Archive activated and moved from Private Preview to Personal.'
             : `Archive payment was confirmed for the ${targetPlan} plan.`,
         changeReason: 'stripe_payment_success',
       });

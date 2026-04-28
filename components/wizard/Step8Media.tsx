@@ -260,7 +260,7 @@ export default function Step8Media({
 
   const ensureMemorial = () => {
     if (!memorialId) {
-      setErrorMessage('Please wait until the memorial draft is ready before adding media.');
+      setErrorMessage('Please wait until the private preview is ready before adding media.');
       return false;
     }
     return true;
@@ -323,14 +323,14 @@ export default function Step8Media({
       setErrorMessage(
         isPaid
           ? 'The gallery is currently at its limit.'
-          : `Draft archives can hold up to ${DRAFT_MEDIA_LIMIT} gallery items.`
+          : `Private previews can hold up to ${DRAFT_MEDIA_LIMIT} gallery items.`
       );
       return;
     }
 
     const accepted = isPaid ? files : files.slice(0, remaining);
     if (!isPaid && accepted.length < files.length) {
-      setErrorMessage(`Only ${remaining} gallery item(s) fit in this draft archive right now.`);
+      setErrorMessage(`Only ${remaining} gallery item(s) fit in this private preview right now.`);
     }
 
     for (const file of accepted) {
@@ -400,7 +400,7 @@ export default function Step8Media({
     if (!ensureMemorial()) return;
     const accepted = isPaid ? files : files.slice(0, Math.max(0, maxAllowed - dataRef.current.interactiveGallery.length));
     if (!isPaid && accepted.length < files.length) {
-      setErrorMessage(`Only ${accepted.length} interactive item(s) fit in this draft archive.`);
+      setErrorMessage(`Only ${accepted.length} interactive item(s) fit in this private preview.`);
     }
 
     for (const file of accepted) {
@@ -470,7 +470,7 @@ export default function Step8Media({
     if (!ensureMemorial()) return;
     const accepted = isPaid ? files : files.slice(0, Math.max(0, maxAllowed - dataRef.current.voiceRecordings.length));
     if (!isPaid && accepted.length < files.length) {
-      setErrorMessage(`Only ${accepted.length} recording(s) fit in this draft archive.`);
+      setErrorMessage(`Only ${accepted.length} recording(s) fit in this private preview.`);
     }
 
     for (const file of accepted) {
@@ -1127,7 +1127,7 @@ export default function Step8Media({
             </div>
             <h3 className="font-serif text-3xl text-warm-dark">Unlock the full presence</h3>
             <p className="mt-4 text-sm leading-relaxed text-warm-dark/60">
-              Draft archives keep media intentionally small. Publish the memorial to unlock unlimited photos,
+              Private previews keep media intentionally small. Publish the memorial to unlock unlimited photos,
               interactive stories, and voice recordings.
             </p>
             <div className="mt-8 space-y-3">
@@ -1135,7 +1135,7 @@ export default function Step8Media({
                 Become a Permanent Guardian (${PLAN_PRICES_USD.personal.toLocaleString()})
               </button>
               <button onClick={() => setShowPaywall(false)} className="w-full rounded-xl px-4 py-3 text-sm text-warm-dark/45 hover:bg-warm-border/10">
-                Keep working in draft mode
+                Keep working in private preview
               </button>
             </div>
           </div>

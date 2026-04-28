@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
         createdByName: 'Owner',
         changeSummary:
           currentMemorial.mode === 'draft'
-            ? 'Archive activated and moved from Draft to Personal.'
+      ? 'Archive activated and moved from Private Preview to Personal.'
             : 'Archive payment was confirmed and access was activated.',
         changeReason: 'stripe_payment_success',
       });
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
       action: 'plan_upgraded',
       summary:
         currentMemorial.mode === 'draft'
-          ? 'Archive activated and upgraded from Draft to Personal.'
+      ? 'Archive activated and upgraded from Private Preview to Personal.'
           : `Archive payment was confirmed for the ${verifiedPlan} plan.`,
       actorUserId: user.id,
       actorEmail: user.email ?? null,

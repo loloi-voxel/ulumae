@@ -88,13 +88,33 @@ export async function GET(
       }));
 
     const photoContributions = (approvedContributions || [])
-      .filter((contribution) => contribution.type === 'photo' && contribution.content?.url)
+      .filter(
+        (contribution) =>
+          contribution.type === 'photo' &&
+          contribution.content?.url &&
+          contribution.content?.mediaVariant !== 'interactive_story'
+      )
       .map((contribution: any) => ({
         id: contribution.id,
         preview: contribution.content.url,
         caption: contribution.content?.caption || '',
         year: contribution.content?.year || '',
         type: 'photo',
+      }));
+
+    const interactivePhotoContributions = (approvedContributions || [])
+      .filter(
+        (contribution) =>
+          contribution.type === 'photo' &&
+          contribution.content?.url &&
+          contribution.content?.mediaVariant === 'interactive_story'
+      )
+      .map((contribution: any) => ({
+        id: contribution.id,
+        preview: contribution.content.url,
+        title: contribution.content?.title || '',
+        description: contribution.content?.description || '',
+        year: contribution.content?.year || '',
       }));
 
     const videoContributions = (approvedContributions || [])
@@ -116,6 +136,10 @@ export async function GET(
       step8: {
         ...(normalizedData.step8 || {}),
         gallery: [...(normalizedData.step8?.gallery || []), ...photoContributions],
+        interactiveGallery: [
+          ...(normalizedData.step8?.interactiveGallery || []),
+          ...interactivePhotoContributions,
+        ],
       },
       step9: {
         ...(normalizedData.step9 || { videos: [] }),

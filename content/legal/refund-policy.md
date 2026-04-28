@@ -36,7 +36,7 @@ We recognize that memorialization can trigger family conflicts. We provide a **F
 
 ## 3. Personal Plan Refunds ($1,470)
 
-### 3.1 Before Publication (Draft Status)
+### 3.1 Before Publication (Private Preview Status)
 - **Full refund** available within 30 days of purchase if memorial has not been published
 - **Cancellation**: You may cancel anytime before publication for full refund
 - **Processing time**: 5-7 business days to original payment method
@@ -74,7 +74,7 @@ If you request significant customization beyond standard templates before public
 If you selected installment payments:
 - **Cancellation before completion**: Cease future payments, no refund of prior payments if work has begun
 - **Cancellation before work starts**: Full refund of payments made
-- **Default**: If you stop paying installments, memorial remains in draft status until paid in full or cancelled per 4.1
+- **Default**: If you stop paying installments, the memorial remains in private preview status until paid in full or cancelled per 4.1
 
 ---
 
@@ -123,7 +123,7 @@ Email **refunds@ulumae.com** with:
 ### 6.3 What Happens After Cancellation
 - **Before publication**: All data deleted, URL released, no trace remains
 - **After publication**: Not applicable (no cancellations accepted)
-- **Family Plan mid-work**: Draft content deleted, curation stops
+- **Family Plan mid-work**: Private preview content deleted, curation stops
 
 ### 6.4 Reactivation
 Cancelled memorials can be reactivated within 30 days by repurchasing at original price. After 30 days, data is permanently purged and cannot be recovered.

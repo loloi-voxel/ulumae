@@ -204,7 +204,7 @@ export default function Step9Videos({
 
   const ensureMemorial = () => {
     if (!memorialId) {
-      setErrorMessage('Please wait for the memorial draft to finish initializing before adding videos.');
+      setErrorMessage('Please wait for the private preview to finish initializing before adding videos.');
       return false;
     }
     return true;

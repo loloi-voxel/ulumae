@@ -186,7 +186,7 @@ function PreservationGateContent() {
                         Continue editing without preserving
                     </button>
                     <p className="text-xs text-warm-muted/60 font-sans mt-2">
-                        Your draft will remain saved on our servers for 30 days.
+                        Your private preview will remain saved on our servers for 30 days.
                     </p>
                 </div>
             </div>

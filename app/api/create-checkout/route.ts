@@ -92,13 +92,13 @@ export async function POST(request: NextRequest) {
                 plan === 'family'
                   ? 'ULUMAE - Family Plan'
                   : isDraftUpgrade
-                    ? 'ULUMAE - Draft to Personal Upgrade'
+                    ? 'ULUMAE - Private Preview to Personal Upgrade'
                     : 'ULUMAE - Personal Plan',
               description:
                 plan === 'family'
                   ? 'Permanent family archive activation'
                   : isDraftUpgrade
-                    ? 'Activate your draft memorial with permanent access'
+                    ? 'Activate your private preview with permanent access'
                     : 'Permanent archival for your memorial',
             },
             unit_amount: PLAN_PRICES_USD[plan] * 100,

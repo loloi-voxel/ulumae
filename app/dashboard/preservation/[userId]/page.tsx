@@ -83,7 +83,7 @@ export default function DashboardPreservationPage({ params }: { params: Promise<
                                 <div className="flex-1">
                                     <h2 className="font-serif text-2xl text-warm-dark">Preservation is not active on this workspace yet</h2>
                                     <p className="mt-2 text-sm text-warm-muted">
-                                        You can review the package rules now, but permanent preservation activates only after moving from Draft into a paid Personal or Family plan.
+                                        You can review the package rules now, but permanent preservation activates only after moving from Private Preview into a paid Personal or Family plan.
                                     </p>
                                     <div className="mt-4">
                                         <Link href="/choice-pricing" className="glass-btn-primary inline-flex rounded-none px-4 py-2 text-sm font-medium text-white">

@@ -298,7 +298,7 @@ function CreateMemorialPageContent() {
           : effectiveMode === 'family'
             ? 'Family Archive'
             : effectiveMode === 'draft'
-              ? 'Preview Archive'
+              ? 'Private Preview'
               : 'Personal Archive'}
       </span>
     </div>
@@ -311,7 +311,7 @@ function CreateMemorialPageContent() {
       <div className="bg-warm-border/15 border border-warm-border/25 rounded-xl px-5 py-3 flex items-start gap-3 max-w-2xl mx-auto mb-6">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-warm-outline mt-0.5 flex-shrink-0"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
         <p className="text-xs text-warm-outline leading-relaxed">
-          This is a draft. The archive will remain private and incomplete until you choose to finalize it. Take all the time you need.
+          This is your private preview. The archive will remain private until you choose permanent preservation. Take all the time you need.
         </p>
       </div>
     );
@@ -1263,13 +1263,18 @@ function CreateMemorialPageContent() {
               <div className="mt-6">
                 <button
                   onClick={() => {
+                    if (effectiveMode === 'personal' && authUserId) {
+                      router.push(`/dashboard/preservation/${authUserId}`);
+                      return;
+                    }
+
                     setMemorialData(prev => ({ ...prev, currentStep: 10 }));
                     setActivePath(null);
                     setViewMode('path');
                   }}
                   className="text-sm text-warm-muted hover:text-warm-dark transition-colors underline underline-offset-4"
                 >
-                  Review the archive
+                  {effectiveMode === 'personal' ? 'Preserve it forever' : 'Review the archive'}
                 </button>
               </div>
             </div>

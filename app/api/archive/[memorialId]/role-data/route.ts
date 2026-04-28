@@ -87,7 +87,14 @@ export async function GET(
         id: c.id,
         type: c.type,
         status: c.status,
-        title: c.content?.title || 'Untitled',
+        title:
+          c.content?.title ||
+          c.content?.caption ||
+          (c.type === 'video'
+            ? 'Untitled video'
+            : c.content?.mediaVariant === 'interactive_story'
+              ? 'Untitled interactive story'
+              : 'Untitled photo'),
         createdAt: c.created_at,
         adminNotes: c.admin_notes || null,
         revisionCount: c.revision_count || 0,

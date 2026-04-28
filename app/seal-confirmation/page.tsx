@@ -177,7 +177,7 @@ function SealConfirmationContent() {
                             Choose one archive to make permanent
                         </h1>
                         <p className="font-serif italic text-lg text-warm-muted max-w-2xl mx-auto">
-                            You have several drafts. Only the one you pick will be sealed and preserved &mdash; the others stay as private drafts you can edit or preserve later.
+                            You have several private previews. Only the one you pick will be sealed and preserved &mdash; the others stay as private previews you can edit or preserve later.
                         </p>
                     </div>
 
@@ -243,7 +243,7 @@ function SealConfirmationContent() {
                         className="inline-flex items-center gap-2 text-warm-dark/40 hover:text-warm-dark transition-colors text-sm"
                     >
                         <ArrowLeft size={16} />
-                        Return to draft
+                        Return to private preview
                     </button>
                 </div>
             </div>
@@ -343,7 +343,7 @@ function SealConfirmationContent() {
                         </li>
                         <li className="flex items-start gap-3">
                             <div className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-none bg-warm-dark/20" />
-                            The draft watermark will be lifted. What remains is the pure archive, exactly as you shaped it.
+                            The private preview watermark will be lifted. What remains is the pure archive, exactly as you shaped it.
                         </li>
                         <li className="flex items-start gap-3">
                             <div className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-none bg-warm-dark/20" />

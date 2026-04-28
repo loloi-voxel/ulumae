@@ -120,7 +120,7 @@ When you delete your account:
 
 ### 5.3 Concierge Project Retention
 For completed Concierge projects:
-- **Working Files**: Temporary high-res copies and draft materials deleted 30 days after memorial publication
+- **Working Files**: Temporary high-res copies and private preview materials deleted 30 days after memorial publication
 - **Final Deliverables**: Preserved indefinitely per your durability plan unless you delete your account
 - **Communication Records**: Email threads and consultation notes retained for 2 years for quality assurance
 
@@ -288,7 +288,7 @@ Given the intimate nature of our $6,500 Concierge tier, we provide additional pr
 
 ### 13.3 Post-Project Cleanup
 After your Concierge memorial is finalized:
-- Draft materials and working copies deleted within 30 days
+- Private preview materials and working copies deleted within 30 days
 - Only final, approved content retained in your permanent archive
 - All temporary access tokens revoked
 

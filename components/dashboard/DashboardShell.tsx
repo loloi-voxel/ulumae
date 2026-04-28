@@ -53,7 +53,7 @@ function planLabel(plan: string) {
         case 'personal':
             return 'Personal Plan';
         case 'draft':
-            return 'Draft Workspace';
+            return 'Private Preview';
         default:
             return 'Workspace';
     }

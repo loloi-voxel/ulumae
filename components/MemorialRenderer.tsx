@@ -216,7 +216,7 @@ export default function MemorialRenderer({
                     {/* Step 1.2.2: Small fixed badge, bottom-right, semi-transparent */}
                     <div className="fixed bottom-4 right-4 z-30 px-3 py-1.5 bg-warm-dark/40 backdrop-blur-sm rounded-lg pointer-events-none">
                         <p className="text-surface-low/70 text-[10px] tracking-wide">
-                            Preview — Draft
+                            Private Preview
                         </p>
                     </div>
 

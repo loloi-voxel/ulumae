@@ -80,7 +80,7 @@ export default function Step2Childhood({
 
     const ensureMemorial = () => {
         if (!memorialId) {
-            setPhotoError('Please wait for the memorial draft to finish initializing before adding childhood photos.');
+            setPhotoError('Please wait for the private preview to finish initializing before adding childhood photos.');
             return false;
         }
 

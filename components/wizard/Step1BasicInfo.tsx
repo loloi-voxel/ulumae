@@ -28,7 +28,7 @@ export default function Step1BasicInfo({ data, onUpdate, onNext, readOnly, memor
         const file = e.target.files?.[0];
         if (!file) return;
         if (!memorialId) {
-            setPhotoError('Please wait for the memorial draft to finish initializing before adding a profile photo.');
+            setPhotoError('Please wait for the private preview to finish initializing before adding a profile photo.');
             return;
         }
 
@@ -571,7 +571,7 @@ export default function Step1BasicInfo({ data, onUpdate, onNext, readOnly, memor
 
                 <div className="mt-4 text-center">
                     <button className="text-sm text-warm-muted hover:text-warm-dark transition-colors">
-                        Preserve Draft & Exit
+                        Save Private Preview & Exit
                     </button>
                 </div>
             </div>

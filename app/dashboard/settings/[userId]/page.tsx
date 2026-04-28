@@ -43,7 +43,7 @@ export default function DashboardSettingsPage({ params }: { params: Promise<{ us
             : auth.plan === 'personal'
                 ? 'Personal'
                 : auth.plan === 'draft'
-                    ? 'Draft'
+                    ? 'Private Preview'
                     : auth.plan === 'concierge'
                         ? 'Concierge'
                         : 'No active plan';

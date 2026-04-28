@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, use, type ReactNode } from '
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
     Shield, Check, X, MessageCircle,
-    ImageIcon, ArrowLeft, Loader2,
+    ImageIcon, ArrowLeft, Loader2, Clapperboard,
     AlertTriangle, Clock, Lock,
     Mail, RefreshCw
 } from 'lucide-react';
@@ -23,8 +23,11 @@ interface PendingContribution {
         content?: string;
         caption?: string;
         url?: string;
+        thumbnail?: string;
+        description?: string;
         relationship?: string;
         year?: string;
+        mediaVariant?: 'gallery_photo' | 'interactive_story';
     };
     created_at: string;
     is_anonymous: boolean;
@@ -439,6 +442,14 @@ function ContributionCard({
 }) {
     const [mode, setMode] = useState<'actions' | 'reject' | 'changes'>('actions');
     const [notes, setNotes] = useState('');
+    const mediaLabel =
+        c.type === 'memory'
+            ? 'memory'
+            : c.type === 'video'
+                ? 'video'
+                : c.content.mediaVariant === 'interactive_story'
+                    ? 'interactive photo story'
+                    : 'image';
 
     const timeAgo = (() => {
         const diff = Date.now() - new Date(c.created_at).getTime();
@@ -458,14 +469,16 @@ function ContributionCard({
                         <div className="flex items-center gap-2 mb-1">
                             {c.type === 'memory'
                                 ? <MessageCircle size={14} className="text-warm-dark/40" />
-                                : <ImageIcon size={14} className="text-warm-dark/40" />
+                                : c.type === 'video'
+                                    ? <Clapperboard size={14} className="text-warm-dark/40" />
+                                    : <ImageIcon size={14} className="text-warm-dark/40" />
                             }
                             <span className="text-xs text-warm-dark/40 uppercase tracking-wider font-sans">
-                                {c.type}
+                                {mediaLabel}
                             </span>
                         </div>
                         <h3 className="font-serif text-lg text-warm-dark">
-                            {c.content.title || 'Untitled'}
+                            {c.content.title || c.content.caption || c.content.description || 'Untitled'}
                         </h3>
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-warm-dark/30 flex-shrink-0 font-sans">
@@ -506,10 +519,23 @@ function ContributionCard({
                     <div className="space-y-3">
                         <img
                             src={c.content.url}
-                            alt={c.content.caption || 'Photo'}
+                            alt={c.content.title || c.content.caption || 'Image'}
                             className="w-full max-h-64 object-cover rounded-xl border border-warm-border/30"
                         />
-                        {c.content.caption && (
+                        {c.content.mediaVariant === 'interactive_story' ? (
+                            <div className="space-y-1">
+                                {c.content.description ? (
+                                    <p className="text-sm text-warm-dark/60 font-sans italic">
+                                        "{c.content.description}"
+                                    </p>
+                                ) : null}
+                                {c.content.year ? (
+                                    <p className="text-xs uppercase tracking-wider text-warm-dark/30 font-sans">
+                                        {c.content.year}
+                                    </p>
+                                ) : null}
+                            </div>
+                        ) : c.content.caption ? (
                             <p className="text-sm text-warm-dark/60 font-sans italic">
                                 "{c.content.caption}"
                                 {c.content.year && (
@@ -518,7 +544,25 @@ function ContributionCard({
                                     </span>
                                 )}
                             </p>
-                        )}
+                        ) : null}
+                    </div>
+                )}
+
+                {c.type === 'video' && c.content.url && (
+                    <div className="space-y-3">
+                        <video
+                            controls
+                            preload="metadata"
+                            poster={c.content.thumbnail || undefined}
+                            className="w-full max-h-72 rounded-xl border border-warm-border/30 bg-black"
+                        >
+                            <source src={c.content.url} />
+                        </video>
+                        {c.content.description ? (
+                            <p className="text-sm text-warm-dark/60 font-sans italic">
+                                "{c.content.description}"
+                            </p>
+                        ) : null}
                     </div>
                 )}
             </div>

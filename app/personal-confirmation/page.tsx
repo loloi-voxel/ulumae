@@ -200,7 +200,7 @@ function PersonalConfirmationContent() {
                 className="experience-button experience-button-secondary mb-10 w-fit text-[11px] tracking-[0.22em]"
             >
                 <ArrowLeft size={14} />
-                {isDraftUpgrade ? 'Back to my drafts' : 'Back to plans'}
+                {isDraftUpgrade ? 'Back to my private previews' : 'Back to plans'}
             </Link>
 
             <div className="grid gap-8 lg:grid-cols-[0.92fr_0.78fr] lg:items-start">
@@ -211,7 +211,7 @@ function PersonalConfirmationContent() {
                                 {isDraftUpgrade ? (
                                     <>
                                         <ArrowUpCircle size={14} />
-                                        Draft to Personal
+                                        Private Preview to Personal
                                     </>
                                 ) : (
                                     'Personal Preservation'
@@ -227,7 +227,7 @@ function PersonalConfirmationContent() {
                         }
                         subtitle={
                             isDraftUpgrade
-                                ? `Your draft is ready. $${PLAN_PRICES_USD.personal.toLocaleString()} secures permanent preservation with no subscription or renewal cycle.`
+                                ? `Your private preview is ready. $${PLAN_PRICES_USD.personal.toLocaleString()} secures permanent preservation with no subscription or renewal cycle.`
                                 : `$${PLAN_PRICES_USD.personal.toLocaleString()} is a one-time payment for a permanent archive. No monthly fees, renewals, or hidden steps.`
                         }
                     />

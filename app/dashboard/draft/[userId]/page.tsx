@@ -251,7 +251,7 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
                                             <img src={memorial.profile_photo_url} alt="" className="w-full h-full object-cover opacity-60" />
                                             <div className="absolute inset-0 flex items-center justify-center">
                                                 <span className="text-warm-dark/40 font-bold text-xl tracking-widest rotate-[-20deg] select-none pointer-events-none">
-                                                    PREVIEW
+                                                    PRIVATE PREVIEW
                                                 </span>
                                             </div>
                                         </>

@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
         plan === 'family'
           ? `ULUMAE - Family Plan for ${memorial.full_name || 'Memorial Archive'}`
           : isDraft
-            ? `ULUMAE - Draft to Personal Upgrade for ${memorial.full_name || 'Memorial Archive'}`
+            ? `ULUMAE - Private Preview to Personal Upgrade for ${memorial.full_name || 'Memorial Archive'}`
             : `ULUMAE - Permanent Archive for ${memorial.full_name || 'Memorial Archive'}`,
       metadata: {
         memorialId,
