@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Image as ImageIcon,
   Loader2,
-  Network,
   Shield,
   User,
   MessageCircle,
@@ -34,7 +33,6 @@ interface WelcomeData {
     videoCount: number;
     hasBiography: boolean;
   };
-  linkedCount: number;
   joinedAt: string;
 }
 
@@ -81,7 +79,7 @@ function WelcomeContent({ memorialId }: { memorialId: string }) {
     );
   }
 
-  const { memorial, userRole, roleLabel, plan, capabilities, archiveRichness, stats, linkedCount } = data;
+  const { memorial, userRole, roleLabel, plan, capabilities, archiveRichness, stats } = data;
   const role = roleFromUrl || userRole;
   const birthYear = memorial.birthDate ? new Date(memorial.birthDate).getFullYear() : null;
   const deathYear = memorial.deathDate ? new Date(memorial.deathDate).getFullYear() : null;
@@ -149,24 +147,6 @@ function WelcomeContent({ memorialId }: { memorialId: string }) {
               ctaLabel="Add a memory"
               onClick={() => router.push(`/archive/${memorial.id}/contribute`)}
               primary={archiveRichness === 'empty'}
-            />
-          )}
-
-          {plan === 'family' && (
-            <ActionCard
-              icon={Network}
-              iconColor="text-warm-dark/50"
-              iconBg="bg-warm-border/20"
-              title="See the family map"
-              description={
-                linkedCount > 0
-                  ? `${linkedCount} linked archive${linkedCount !== 1 ? 's' : ''} in this family vault.`
-                  : 'The owner is still connecting family archives.'
-              }
-              ctaLabel="View family map"
-              ctaDisabled={linkedCount === 0}
-              disabledNote="No links yet"
-              onClick={() => router.push(`/archive/${memorial.id}/family`)}
             />
           )}
 

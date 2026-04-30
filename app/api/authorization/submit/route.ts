@@ -44,6 +44,27 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
 
+        const normalizedAuthorizationType = authorizationType === 'account' ? 'account' : 'individual';
+
+        const { data: existingAuthorization } = await supabaseAdmin
+            .from('memorial_authorizations')
+            .select('id, status')
+            .eq('memorial_id', memorialId)
+            .eq('user_id', user.id)
+            .eq('authorization_type', normalizedAuthorizationType)
+            .in('status', ['pending', 'approved'])
+            .maybeSingle();
+
+        if (existingAuthorization) {
+            return NextResponse.json(
+                {
+                    error: 'This authorization has already been recorded and cannot be submitted again.',
+                    code: 'ALREADY_AUTHORIZED',
+                },
+                { status: 409 }
+            );
+        }
+
         // 1. Fetch Deceased Info (Legacy Logic)
         const { data: memorial } = await supabaseAdmin
             .from('memorials')
@@ -105,7 +126,7 @@ export async function POST(request: NextRequest) {
             .insert([{
                 memorial_id: memorialId,
                 user_id: user.id,
-                authorization_type: authorizationType || 'individual',
+                authorization_type: normalizedAuthorizationType,
                 creator_full_name: identity.fullName,
                 creator_email: identity.email,
                 relationship_to_deceased: identity.relationship || 'Account Holder',
@@ -139,7 +160,7 @@ export async function POST(request: NextRequest) {
             actorEmail: user.email ?? null,
             details: {
                 authorizationId: authRecord.id,
-                authorizationType: authorizationType || 'individual',
+                authorizationType: normalizedAuthorizationType,
                 hasVideoEvidence: !!videoHash,
             },
         });

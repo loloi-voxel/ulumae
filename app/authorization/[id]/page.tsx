@@ -23,6 +23,7 @@ export default function AuthorizationPage({ params }: { params: Promise<{ id: st
     
     // Check if this is a Master Account authorization or a Specific Individual one
     const isAccountLevel = searchParams.get('type') === 'account';
+    const expectedAuthorizationType = isAccountLevel ? 'account' : 'individual';
     // Opened in a popup window from the confirmation page
     const isPopup = searchParams.get('popup') === 'true';
 
@@ -34,6 +35,7 @@ export default function AuthorizationPage({ params }: { params: Promise<{ id: st
     const [videoBlob, setVideoBlob] = useState<Blob | null>(null); // To store the recorded video
 
     const [isSuccess, setIsSuccess] = useState(false);
+    const [authorizationLocked, setAuthorizationLocked] = useState(false);
     
     const [identity, setIdentity] = useState({
         fullName: '',
@@ -58,17 +60,37 @@ export default function AuthorizationPage({ params }: { params: Promise<{ id: st
 
     useEffect(() => {
         loadData();
-    }, [memorialId]);
+    }, [memorialId, expectedAuthorizationType]);
 
     const loadData = async () => {
         try {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (user) {
+                const { data: existingAuthorization } = await supabase
+                    .from('memorial_authorizations')
+                    .select('id')
+                    .eq('memorial_id', memorialId)
+                    .eq('user_id', user.id)
+                    .eq('authorization_type', expectedAuthorizationType)
+                    .in('status', ['pending', 'approved'])
+                    .maybeSingle();
+
+                if (existingAuthorization) {
+                    setAuthorizationLocked(true);
+                    setIsSuccess(true);
+                    localStorage.setItem(`lv-auth-${memorialId}`, 'done');
+                }
+            }
+
             if (isAccountLevel) {
                 setMemorialName("Family Plan Account");
                 setLoading(false);
                 return;
             }
 
-            const { data, error } = await createClient()
+            const { data, error } = await supabase
                 .from('memorials')
                 .select('step1, mode') // Added mode
                 .eq('id', memorialId)
@@ -140,6 +162,10 @@ export default function AuthorizationPage({ params }: { params: Promise<{ id: st
 
     const handleAuthorize = async () => {
         if (!memorialId) return;
+        if (authorizationLocked) {
+            toast.error('This authorization has already been recorded.');
+            return;
+        }
         setIsSubmitting(true);
 
         try {
@@ -168,12 +194,15 @@ export default function AuthorizationPage({ params }: { params: Promise<{ id: st
                     agreements,
                     signature: { type: signatureType, content: signatureValue },
                     fingerprint,
-                    authorizationType: isAccountLevel ? 'account' : 'individual',
+                    authorizationType: expectedAuthorizationType,
                     videoContent: videoData // <--- ADDED THE VIDEO DATA HERE
                 })
             });
 
             const data = await response.json();
+            if (data.code === 'ALREADY_AUTHORIZED') {
+                setAuthorizationLocked(true);
+            }
             if (data.error) throw new Error(data.error);
 
             setIsSuccess(true);
@@ -208,6 +237,13 @@ export default function AuthorizationPage({ params }: { params: Promise<{ id: st
             }
 
         } catch (err: any) {
+            if (err?.message?.includes('already been recorded')) {
+                setAuthorizationLocked(true);
+                setIsSuccess(true);
+                localStorage.setItem(`lv-auth-${memorialId}`, 'done');
+                setIsSubmitting(false);
+                return;
+            }
             console.error("Authorization failed:", err);
             toast.error(`Authorization failed: ${err.message}`);
             setIsSubmitting(false);
@@ -511,9 +547,13 @@ export default function AuthorizationPage({ params }: { params: Promise<{ id: st
                             <div className="w-16 h-16 bg-warm-dark rounded-full flex items-center justify-center mx-auto mb-6">
                                 <Check className="text-warm-bg" size={28} strokeWidth={2.5} />
                             </div>
-                            <h2 className="font-serif text-3xl text-warm-dark mb-4">Authorization Recorded</h2>
+                            <h2 className="font-serif text-3xl text-warm-dark mb-4">
+                                {authorizationLocked ? 'Authorization Already Recorded' : 'Authorization Recorded'}
+                            </h2>
                             <p className="text-warm-outline mb-8 leading-relaxed">
-                                Your authorization has been recorded. You may now proceed to payment.
+                                {authorizationLocked
+                                    ? 'This authorization was already completed for this archive and cannot be submitted again.'
+                                    : 'Your authorization has been recorded. You may now proceed to payment.'}
                             </p>
 
                             {isPopup ? (

@@ -48,10 +48,12 @@ export async function POST(request: NextRequest) {
       .from('memorial_authorizations')
       .select('id, authorization_type')
       .eq('memorial_id', memorialId)
+      .eq('user_id', user.id)
+      .eq('authorization_type', expectedAuthType)
       .in('status', ['pending', 'approved'])
       .maybeSingle();
 
-    if (!authorization || authorization.authorization_type !== expectedAuthType) {
+    if (!authorization) {
       return NextResponse.json(
         {
           error: 'Authorization required before payment',

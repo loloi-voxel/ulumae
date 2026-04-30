@@ -31,6 +31,7 @@ function PersonalConfirmationContent() {
     const upgradeMemorialId = searchParams.get('memorialId');
     const isPopup = searchParams.get('popup') === 'true';
     const isDraftUpgrade = !!upgradeMemorialId;
+    const expectedAuthorizationType = 'individual';
 
     useEffect(() => {
         if (auth.loading) return;
@@ -78,6 +79,8 @@ function PersonalConfirmationContent() {
                 .from('memorial_authorizations')
                 .select('id')
                 .eq('memorial_id', currentMemorialId)
+                .eq('user_id', auth.user?.id || '')
+                .eq('authorization_type', expectedAuthorizationType)
                 .in('status', ['pending', 'approved'])
                 .maybeSingle();
             if (data) setAuthorizationCompleted(true);
@@ -87,7 +90,7 @@ function PersonalConfirmationContent() {
             window.removeEventListener('message', handleMessage);
             if (pollRef.current) clearInterval(pollRef.current);
         };
-    }, [currentMemorialId, authorizationCompleted]);
+    }, [auth.user?.id, authorizationCompleted, currentMemorialId, expectedAuthorizationType]);
 
     useEffect(() => {
         if (authorizationCompleted && pollRef.current) {

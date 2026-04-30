@@ -65,10 +65,12 @@ export async function POST(request: NextRequest) {
       .from('memorial_authorizations')
       .select('id, authorization_type')
       .eq('memorial_id', memorialId)
+      .eq('user_id', user.id)
+      .eq('authorization_type', expectedType)
       .in('status', ['pending', 'approved'])
       .maybeSingle();
 
-    if (authError || !authorization || authorization.authorization_type !== expectedType) {
+    if (authError || !authorization) {
       return NextResponse.json(
         {
           error: 'Authorization required',

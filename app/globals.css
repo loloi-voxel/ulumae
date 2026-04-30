@@ -133,7 +133,7 @@
   animation: tutorialGlow 2s ease-in-out infinite;
 }
 
-/* ── Family Tree Visualization ── */
+/* Relationship graph styles */
 @keyframes ftNodeIn {
   from {
     opacity: 0;

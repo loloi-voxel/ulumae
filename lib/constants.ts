@@ -5,7 +5,6 @@ export const EXPORT_SIGNED_URL_TTL_SECONDS = 60 * 60;
 export const PAUSE_REMINDER_DELAY_DAYS = 7;
 export const DRAFT_MEDIA_LIMIT = 10;
 export const DRAFT_VIDEO_LIMIT = 3;
-export const PAID_VIDEO_LIMIT = 20;
 export const MAX_VIDEO_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 export const DEFAULT_ACTIVITY_LIMIT = 20;
 export const DEFAULT_VERSION_LIMIT = 50;

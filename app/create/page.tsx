@@ -1261,23 +1261,6 @@ function CreateMemorialPageContent() {
               </div>
 
               {/* Review & Seal — always accessible for paid users to re-review */}
-              <div className="mt-6">
-                <button
-                  onClick={() => {
-                    if (effectiveMode === 'personal' && authUserId) {
-                      router.push(`/dashboard/preservation/${authUserId}`);
-                      return;
-                    }
-
-                    setMemorialData(prev => ({ ...prev, currentStep: 10 }));
-                    setActivePath(null);
-                    setViewMode('path');
-                  }}
-                  className="text-sm text-warm-muted hover:text-warm-dark transition-colors underline underline-offset-4"
-                >
-                  {effectiveMode === 'personal' ? 'Preserve it forever' : 'Review the archive'}
-                </button>
-              </div>
             </div>
           ) : (
             getPathStatus(memorialData, 'facts') === 'completed' && (

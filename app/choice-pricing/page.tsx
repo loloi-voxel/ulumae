@@ -13,14 +13,13 @@ const features = [
     { label: 'Preserved archives', draft: '--', personal: '1', family: 'Unlimited', concierge: 'Custom' },
     { label: 'Photo gallery', draft: `Up to ${DRAFT_MEDIA_LIMIT}`, personal: 'Included', family: 'Included', concierge: 'Handled for you' },
     { label: 'Interactive photo stories', draft: `Up to ${DRAFT_MEDIA_LIMIT}`, personal: 'Included', family: 'Included', concierge: 'Handled for you' },
-    { label: 'Video memories', draft: `Up to ${DRAFT_VIDEO_LIMIT}`, personal: 'Included', family: 'Included', concierge: 'Handled for you' },
+    { label: 'Video memories', draft: `Up to ${DRAFT_VIDEO_LIMIT}`, personal: 'Unlimited', family: 'Unlimited', concierge: 'Handled for you' },
     { label: 'Witness invitations', draft: '--', personal: 'Included', family: 'Included', concierge: 'Included' },
     { label: 'Reader access', draft: '--', personal: 'Included', family: 'Included', concierge: 'Included' },
     { label: 'Preservation dashboard', draft: '--', personal: 'Included', family: 'Included', concierge: 'Included' },
     { label: 'Archive export', draft: '--', personal: 'Included', family: 'Included', concierge: 'Included' },
     { label: 'Successor designation', draft: '--', personal: 'Included', family: 'Included', concierge: 'Included' },
     { label: 'Linked family archives', draft: '--', personal: '--', family: 'Included', concierge: 'Included' },
-    { label: 'Family tree', draft: '--', personal: '--', family: 'Included', concierge: 'Included' },
     { label: 'Co-guardian steward role', draft: '--', personal: '--', family: 'Included', concierge: 'Included' },
     { label: 'Concierge intake', draft: '--', personal: '--', family: '--', concierge: 'Request access' },
 ];
@@ -291,7 +290,7 @@ export default function ChoicePricingPage() {
                         </li>
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-warm-brown mt-0.5 flex-shrink-0" />
-                            Linked archives and family tree
+                            Linked archives across your family space
                         </li>
                         <li className="flex items-start gap-2">
                             <Check size={16} className="text-warm-brown mt-0.5 flex-shrink-0" />

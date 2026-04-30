@@ -12,7 +12,6 @@ import {
   Image as ImageIcon,
   Layers,
   MessageCircle,
-  Network,
   Plus,
   Shield,
   X,
@@ -229,9 +228,6 @@ export default function ArchiveHubClient({ roleData, memorialId, userId }: Archi
             )}
             {capabilities.canContribute && (
               <QuickAction icon={ImageIcon} label="Add a photo" onClick={() => router.push(`/archive/${memorialId}/contribute?type=photo`)} />
-            )}
-            {plan === 'family' && (
-              <QuickAction icon={Network} label="Family map" onClick={() => router.push(`/archive/${memorialId}/family`)} />
             )}
             {capabilities.canReview && (
               <QuickAction

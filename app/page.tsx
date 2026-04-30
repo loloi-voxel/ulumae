@@ -32,7 +32,6 @@ export default function LandingPage() {
     const router = useRouter();
     const auth = useAuth();
 
-    // Redirect authenticated users with Personal or Family plan to dashboard
     useEffect(() => {
         if (auth.loading) return;
         if (auth.authenticated && (auth.plan === 'personal' || auth.plan === 'family')) {
@@ -42,11 +41,10 @@ export default function LandingPage() {
 
     return (
         <div className="min-h-screen bg-surface-low text-warm-dark font-serif">
-            {/* NAV */}
             <nav className="sticky top-0 z-50 bg-surface-low/95 backdrop-blur-sm border-b border-warm-border/30">
                 <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
                     <span className="font-sans font-bold text-lg tracking-[0.08em] text-warm-dark uppercase">
-                        ULUMAE — Every life, an indelible mark
+                        ULUMAE - Every life, an indelible mark
                     </span>
                     <div className="flex items-center gap-3">
                         <Link
@@ -65,7 +63,6 @@ export default function LandingPage() {
                 </div>
             </nav>
 
-            {/* HERO */}
             <section className="py-24 md:py-32 px-6 text-center">
                 <div className="max-w-3xl mx-auto">
                     <div className="inline-flex items-center gap-2 px-4 py-1.5 border border-warm-border/30 rounded-full text-xs font-sans tracking-widest uppercase text-warm-outline mb-8 bg-surface-mid/50">
@@ -77,7 +74,7 @@ export default function LandingPage() {
                         for generations.
                     </h1>
                     <p className="text-lg md:text-xl text-warm-muted max-w-xl mx-auto mb-10 leading-relaxed font-sans font-light">
-                        A private, structured space to preserve the essence of a life —
+                        A private, structured space to preserve the essence of a life -
                         backed by technology designed to last centuries.
                     </p>
                     <p className="text-xs text-warm-outline mt-4 font-sans">
@@ -88,7 +85,6 @@ export default function LandingPage() {
 
             <div className="border-t border-warm-border/30" />
 
-            {/* WHAT IT IS */}
             <section className="py-20 md:py-24 px-6 bg-surface-low">
                 <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-16 items-center">
                     <div>
@@ -99,28 +95,31 @@ export default function LandingPage() {
                             Not a social network.<br />Not a virtual cemetery.
                         </h2>
                         <p className="text-warm-muted leading-relaxed mb-4 font-sans">
-                            ULUMAE is a space for <em className="text-warm-dark not-italic font-medium">clarity</em> — not
+                            ULUMAE is a space for <em className="text-warm-dark not-italic font-medium">clarity</em> - not
                             entertainment. A place to gather what defines a lineage: decisions, values, sacrifices, the things
                             that must not disappear.
                         </p>
                         <p className="text-warm-muted leading-relaxed font-sans">
-                            Every memorial is permanently preserved on <strong className="text-warm-dark">Arweave</strong> —
+                            Every memorial is permanently preserved on <strong className="text-warm-dark">Arweave</strong> -
                             a decentralized storage network with a 200-year endowment.
                             Your data is replicated across 800+ nodes worldwide, accessible through multiple
                             independent gateways. No single point of failure.
                         </p>
                     </div>
-                    <div className="bg-gradient-to-br from-olive/10 via-warm-brown/5 to-plum/10 rounded-xl h-80 flex items-center justify-center border border-warm-border/30">
-                        <div className="text-center px-8">
-                            <p className="text-sm text-warm-outline font-sans tracking-wide uppercase mb-3">Live example</p>
-                            <p className="text-2xl font-light text-warm-muted italic">&ldquo;Eleanor M. Whitfield&rdquo;</p>
-                            <p className="text-sm text-warm-outline font-sans mt-2">1932 — 2019</p>
-                            <Link
-                                href="/example"
-                                className="inline-flex items-center gap-1 text-sm font-sans text-warm-muted mt-4 hover:text-warm-dark transition-colors"
-                            >
-                                View memorial <ArrowRight size={14} />
-                            </Link>
+                    <div className="bg-gradient-to-br from-olive/10 via-warm-brown/5 to-plum/10 rounded-xl h-80 border border-warm-border/30 p-10 flex flex-col justify-between">
+                        <div>
+                            <p className="text-sm text-warm-outline font-sans tracking-wide uppercase mb-3">What families preserve here</p>
+                            <h3 className="text-2xl md:text-3xl font-light text-warm-dark leading-tight">
+                                A life, not just a timeline.
+                            </h3>
+                        </div>
+                        <div className="space-y-4">
+                            <p className="text-sm text-warm-muted font-sans leading-relaxed">
+                                Biographies, turning points, photographs, voice, video, witness memories, and the relationships that give a person their place in a family story.
+                            </p>
+                            <p className="text-sm text-warm-muted font-sans leading-relaxed">
+                                Each archive is built privately first, then preserved when the family is ready. Nothing is pushed into public view before that decision is made.
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -128,7 +127,6 @@ export default function LandingPage() {
 
             <div className="border-t border-warm-border/30" />
 
-            {/* HOW IT WORKS */}
             <section className="py-20 md:py-24 px-6 bg-surface-mid/30">
                 <div className="max-w-4xl mx-auto">
                     <span className="inline-block text-xs font-sans tracking-widest uppercase text-warm-outline border border-warm-border/30 rounded-full px-4 py-1.5 mb-6 bg-surface-mid/50">
@@ -139,7 +137,7 @@ export default function LandingPage() {
                     </h2>
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
                         {[
-                            { step: '01', title: 'Build', desc: 'Use our structured editor to document a life — biography, photos, videos, stories, values.' },
+                            { step: '01', title: 'Build', desc: 'Use our structured editor to document a life - biography, photos, videos, stories, values.' },
                             { step: '02', title: 'Review', desc: 'Preview the complete memorial. Invite family to contribute memories and verify details.' },
                             { step: '03', title: 'Preserve', desc: 'A single payment permanently stores your memorial on Arweave. Encrypted, replicated, immutable.' },
                             { step: '04', title: 'Share', desc: 'Share a private link, anchor to local devices, and designate successors for access continuity.' },
@@ -156,7 +154,6 @@ export default function LandingPage() {
 
             <div className="border-t border-warm-border/30" />
 
-            {/* PRESERVATION TECHNOLOGY */}
             <section className="py-20 md:py-24 px-6 bg-surface-low">
                 <div className="max-w-4xl mx-auto">
                     <span className="inline-block text-xs font-sans tracking-widest uppercase text-warm-outline border border-warm-border/30 rounded-full px-4 py-1.5 mb-6 bg-surface-mid/50">
@@ -166,7 +163,7 @@ export default function LandingPage() {
                         Designed to last centuries.
                     </h2>
                     <p className="text-warm-muted font-sans leading-relaxed mb-12 max-w-2xl">
-                        ULUMAE uses Arweave — a permanent, decentralized storage protocol funded by a 200-year
+                        ULUMAE uses Arweave - a permanent, decentralized storage protocol funded by a 200-year
                         endowment model. Your memorial is not stored on a server you rent. It is preserved in a network
                         you cannot outlive.
                     </p>
@@ -175,7 +172,7 @@ export default function LandingPage() {
                             { icon: Globe, title: '800+ Nodes', desc: 'Replicated across independent nodes on every continent' },
                             { icon: Shield, title: 'AES-256 Encryption', desc: 'Client-side encryption before data leaves your browser' },
                             { icon: Clock, title: '200-Year Endowment', desc: 'Single payment funds storage for two centuries minimum' },
-                            { icon: Lock, title: 'Multi-Gateway', desc: 'Accessible via 3+ independent gateways — no single point of failure' },
+                            { icon: Lock, title: 'Multi-Gateway', desc: 'Accessible via 3+ independent gateways - no single point of failure' },
                         ].map(item => (
                             <div key={item.title} className="text-center">
                                 <div className="w-12 h-12 mx-auto mb-4 bg-surface-mid rounded-xl flex items-center justify-center">
@@ -191,7 +188,6 @@ export default function LandingPage() {
 
             <div className="border-t border-warm-border/30" />
 
-            {/* TRUST SIGNALS */}
             <section className="py-20 md:py-24 px-6 bg-surface-mid/30">
                 <div className="max-w-3xl mx-auto text-center">
                     <h2 className="text-3xl md:text-4xl font-light mb-12">
@@ -222,7 +218,6 @@ export default function LandingPage() {
 
             <div className="border-t border-warm-border/30" />
 
-            {/* FAQ */}
             <section className="py-20 md:py-24 px-6 bg-surface-low">
                 <div className="max-w-2xl mx-auto">
                     <h2 className="text-3xl font-light mb-10 text-center">Common Questions</h2>
@@ -255,7 +250,6 @@ export default function LandingPage() {
 
             <div className="border-t border-warm-border/30" />
 
-            {/* CTA */}
             <section className="py-24 md:py-32 px-6 text-center bg-surface-mid/30">
                 <div className="max-w-2xl mx-auto">
                     <h2 className="text-3xl md:text-4xl font-light mb-5">

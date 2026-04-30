@@ -5,7 +5,7 @@ import {
     Plus, Eye, Edit, Trash2, User, Loader2, RefreshCcw,
     AlertTriangle, CheckCircle,
     Clock, Shield,
-    Archive, Download, Copy, Mail, QrCode,
+    Archive, Copy, Mail, QrCode,
     ChevronRight
 } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -13,6 +13,7 @@ import { supabase, Memorial } from '@/lib/supabase';
 import { isPersonalPlan, useAuth } from '@/components/providers/AuthProvider';
 import PreservationStatus from '@/components/PreservationStatus';
 import DashboardShell from '@/components/dashboard/DashboardShell';
+import ArchiveExportAction from '@/components/dashboard/ArchiveExportAction';
 import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
 import toast from 'react-hot-toast';
@@ -431,8 +432,6 @@ function ActiveArchiveView({
 }) {
     const stats = computeStats(archive);
     const [linkCopied, setLinkCopied] = useState(false);
-    const [isExporting, setIsExporting] = useState(false);
-
     const birthYear = archive.birth_date ? new Date(archive.birth_date).getFullYear() : null;
     const deathYear = archive.death_date ? new Date(archive.death_date).getFullYear() : null;
     const dates = birthYear
@@ -463,39 +462,6 @@ function ActiveArchiveView({
     const handlePrintQR = () => {
         const url = `${window.location.origin}/person/${archive.id}`;
         window.open(`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}`, '_blank');
-    };
-
-    const [showExportConfirm, setShowExportConfirm] = useState(false);
-
-    const handleExportArchive = () => {
-        setShowExportConfirm(true);
-    };
-
-    const runExport = async () => {
-        setShowExportConfirm(false);
-        try {
-            setIsExporting(true);
-
-            const res = await fetch('/api/arche/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ memorialId: archive.id }),
-            });
-
-            const result = await res.json();
-
-            if (result.success && result.downloadUrl) {
-                window.location.href = result.downloadUrl;
-                return;
-            }
-
-            toast.error(`Export failed: ${result.error || 'Unknown error'}`);
-        } catch (error) {
-            console.error('Error generating export:', error);
-            toast.error('Error generating portable archive.');
-        } finally {
-            setIsExporting(false);
-        }
     };
 
     const totalContent = stats.photos + stats.videos + stats.memories + stats.chapters;
@@ -628,28 +594,7 @@ function ActiveArchiveView({
                             </div>
                         </div>
 
-                        <div className="border border-warm-border/25 bg-white p-6 rounded-none">
-                            <h4 className="font-serif text-base text-warm-dark mb-4">Export this archive</h4>
-                            <p className="text-xs text-warm-muted mb-4 leading-relaxed">
-                                Download a complete offline copy. Useful for backups and sharing with people who do not have an account.
-                            </p>
-                            <button
-                                onClick={handleExportArchive}
-                                disabled={isExporting}
-                                className="w-full flex items-center justify-between gap-3 border border-warm-border/20 px-4 py-3 text-left text-sm text-warm-dark transition-colors hover:bg-surface-mid/50 disabled:opacity-60 disabled:cursor-wait rounded-none"
-                            >
-                                <div className="flex items-start gap-3">
-                                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center bg-surface-mid rounded-none">
-                                        {isExporting ? <Loader2 size={14} className="text-warm-muted animate-spin" /> : <Download size={14} className="text-warm-muted" />}
-                                    </div>
-                                    <div>
-                                        <p className="font-serif">{isExporting ? 'Generating portable archive...' : 'Portable archive export'}</p>
-                                        <p className="text-xs text-warm-outline">Full offline ZIP copy of this memorial</p>
-                                    </div>
-                                </div>
-                                <ChevronRight size={15} className="text-warm-outline flex-shrink-0" />
-                            </button>
-                        </div>
+                        <ArchiveExportAction memorialId={archive.id} />
                     </div>
 
                     <PreservationStatus
@@ -696,14 +641,6 @@ function ActiveArchiveView({
                 </div>
             </div>
         </div>
-        <ConfirmDialog
-            open={showExportConfirm}
-            title="Generate the portable archive export?"
-            description="This can take a minute to package your text, metadata, and included media into a downloadable archive."
-            confirmLabel="Generate export"
-            onConfirm={runExport}
-            onCancel={() => setShowExportConfirm(false)}
-        />
         </>
     );
 }

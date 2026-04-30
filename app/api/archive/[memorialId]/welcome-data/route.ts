@@ -100,17 +100,7 @@ export async function GET(
                     ? 'partial'
                     : 'rich';
 
-        // 5. Family plan: fetch linked memorials count
-        let linkedCount = 0;
-        if (plan === 'family') {
-            const { count } = await supabaseAdmin
-                .from('memorial_relations')
-                .select('*', { count: 'exact', head: true })
-                .eq('from_memorial_id', memorialId);
-            linkedCount = count || 0;
-        }
-
-        // 6. Update last_visited_at
+        // 5. Update last_visited_at
         await supabaseAdmin
             .from('user_memorial_roles')
             .update({
@@ -138,7 +128,6 @@ export async function GET(
                 videoCount,
                 hasBiography
             },
-            linkedCount,
             joinedAt: permission.context.isOwner ? null : null
         });
 

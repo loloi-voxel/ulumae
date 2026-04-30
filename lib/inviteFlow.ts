@@ -9,7 +9,8 @@ export function getInvitePath(token: string) {
 }
 
 export function getInviteWelcomePath(memorialId: string, role: string) {
-  return `/archive/${memorialId}/welcome?role=${encodeURIComponent(role)}`;
+  void role;
+  return `/archive/${memorialId}`;
 }
 
 export function normalizeRelativePath(value: string | null | undefined) {

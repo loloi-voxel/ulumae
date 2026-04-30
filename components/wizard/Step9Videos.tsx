@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 import TutorialPopup from '@/components/TutorialPopup';
-import { DRAFT_VIDEO_LIMIT, MAX_VIDEO_FILE_SIZE_BYTES, PAID_VIDEO_LIMIT } from '@/lib/constants';
+import { DRAFT_VIDEO_LIMIT, MAX_VIDEO_FILE_SIZE_BYTES } from '@/lib/constants';
 import { deleteMediaAssets, secureUpload, updateMediaAssetMetadata } from '@/lib/uploadService';
 import type { VideoContent, VideoReference } from '@/types/memorial';
 import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
@@ -171,7 +171,7 @@ export default function Step9Videos({
     [data.videos, selectedDetailId]
   );
 
-  const maxVideos = isPaid ? PAID_VIDEO_LIMIT : DRAFT_VIDEO_LIMIT;
+  const draftVideoLimit = DRAFT_VIDEO_LIMIT;
 
   const syncVideoMetadata = async (id: string) => {
     const currentVideo = dataRef.current.videos.find((item) => item.id === id);
@@ -338,15 +338,20 @@ export default function Step9Videos({
 
   const uploadVideoFiles = async (files: File[]) => {
     if (!ensureMemorial()) return;
-    const remaining = maxVideos - dataRef.current.videos.length;
-    if (remaining <= 0) {
-      setErrorMessage(`This memorial can hold up to ${maxVideos} video item(s).`);
-      return;
-    }
+    const accepted = isPaid
+      ? files
+      : files.slice(0, Math.max(draftVideoLimit - dataRef.current.videos.length, 0));
 
-    const accepted = files.slice(0, remaining);
-    if (accepted.length < files.length) {
-      setErrorMessage(`Only ${remaining} video slot(s) remain right now.`);
+    if (!isPaid) {
+      const remaining = draftVideoLimit - dataRef.current.videos.length;
+      if (remaining <= 0) {
+        setErrorMessage(`This memorial can hold up to ${draftVideoLimit} video item(s) while it is still a private preview.`);
+        return;
+      }
+
+      if (accepted.length < files.length) {
+        setErrorMessage(`Only ${remaining} video slot(s) remain right now.`);
+      }
     }
 
     for (const file of accepted) {
@@ -490,7 +495,9 @@ export default function Step9Videos({
             <div>
               <h3 className="text-lg font-semibold text-warm-dark">Video gallery</h3>
               <p className="text-sm text-warm-dark/50">
-                {data.videos.length} of {maxVideos} video slot(s) used.
+                {isPaid
+                  ? 'Add as many video memories as you want.'
+                  : `${data.videos.length} of ${draftVideoLimit} video slot(s) used.`}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

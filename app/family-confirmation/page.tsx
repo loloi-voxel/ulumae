@@ -24,6 +24,7 @@ export default function FamilyConfirmationPage() {
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const router = useRouter();
     const auth = useAuth();
+    const expectedAuthorizationType = 'account';
 
     useEffect(() => {
         if (auth.loading) return;
@@ -71,6 +72,8 @@ export default function FamilyConfirmationPage() {
                 .from('memorial_authorizations')
                 .select('id')
                 .eq('memorial_id', currentMemorialId)
+                .eq('user_id', auth.user?.id || '')
+                .eq('authorization_type', expectedAuthorizationType)
                 .in('status', ['pending', 'approved'])
                 .maybeSingle();
             if (data) setAuthorizationCompleted(true);
@@ -80,7 +83,7 @@ export default function FamilyConfirmationPage() {
             window.removeEventListener('message', handleMessage);
             if (pollRef.current) clearInterval(pollRef.current);
         };
-    }, [currentMemorialId, authorizationCompleted]);
+    }, [auth.user?.id, authorizationCompleted, currentMemorialId, expectedAuthorizationType]);
 
     useEffect(() => {
         if (authorizationCompleted && pollRef.current) clearInterval(pollRef.current);

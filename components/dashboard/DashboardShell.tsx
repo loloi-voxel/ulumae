@@ -17,7 +17,6 @@ import {
     Shield,
     UserCheck,
     Users,
-    Workflow,
     X,
 } from 'lucide-react';
 import {
@@ -151,14 +150,6 @@ function buildItems(options: {
                 href: `/dashboard/family/${userId}/activity`,
                 icon: History,
                 active: pathname.startsWith(`/dashboard/family/${userId}/activity`),
-            },
-            {
-                key: 'relations',
-                label: 'Family Tree',
-                description: 'Relations and linked memorials',
-                href: `/dashboard/family/${userId}/tree`,
-                icon: Workflow,
-                active: pathname.startsWith(`/dashboard/family/${userId}/tree`),
             },
             {
                 key: 'succession',

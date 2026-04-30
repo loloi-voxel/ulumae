@@ -568,11 +568,6 @@ export default function Step1BasicInfo({ data, onUpdate, onNext, readOnly, memor
                     </button>
                 </div>
 
-                <div className="mt-4 text-center">
-                    <button className="text-sm text-warm-muted hover:text-warm-dark transition-colors">
-                        Save Private Preview & Exit
-                    </button>
-                </div>
             </div>
             <ConfirmDialog
                 open={showRemovePhotoConfirm}
