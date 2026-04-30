@@ -41,7 +41,7 @@ export async function GET(
     const { data: memorial, error } = await admin
       .from('memorials')
       .select(
-        'id, user_id, mode, paid, updated_at, completed_steps, step1, step2, step3, step4, step5, step6, step7, step8, step9'
+        'id, user_id, mode, paid, updated_at, completed_steps, preservation_state, preservation_date, sealed_at, seal_status, arweave_tx_id, seal_job_id, seal_selected_asset_ids, step1, step2, step3, step4, step5, step6, step7, step8, step9'
       )
       .eq('id', memorialId)
       .single();
@@ -66,6 +66,15 @@ export async function GET(
         paid: memorial.paid ?? false,
         updatedAt: memorial.updated_at,
         completedSteps: memorial.completed_steps || [],
+        preservationState: memorial.preservation_state || null,
+        preservationDate: memorial.preservation_date || null,
+        sealedAt: memorial.sealed_at || null,
+        sealStatus: memorial.seal_status || null,
+        arweaveTxId: memorial.arweave_tx_id || null,
+        sealJobId: memorial.seal_job_id || null,
+        sealSelectedAssetIds: Array.isArray(memorial.seal_selected_asset_ids)
+          ? memorial.seal_selected_asset_ids
+          : [],
       },
       memorialData,
     });

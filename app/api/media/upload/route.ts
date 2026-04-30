@@ -5,6 +5,7 @@ import {
   getMediaPermissionForKind,
   uploadMemorialMediaAsset,
 } from '@/lib/mediaManager';
+import { assertMemorialWritable } from '@/lib/sealService';
 import type { MediaKind, MediaUploadResponse } from '@/types/media';
 
 function buildErrorResponse(
@@ -62,6 +63,16 @@ export async function POST(request: NextRequest) {
     if (!access.ok) return access.response;
 
     const { admin, user } = access;
+    try {
+      await assertMemorialWritable(admin, memorialId);
+    } catch (error: any) {
+      return buildErrorResponse(
+        409,
+        'memorial_locked',
+        error?.message || 'This memorial cannot be modified.'
+      );
+    }
+
     const asset = await uploadMemorialMediaAsset({
       admin,
       memorialId,

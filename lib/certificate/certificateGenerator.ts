@@ -1,119 +1,354 @@
-// lib/certificate/certificateGenerator.ts
-// Client-side Certificate of Permanence PDF generator
-
 export interface CertificateData {
   fullName: string;
   birthDate: string;
   deathDate: string | null;
   preservationDate: string;
   transactionId: string;
-  nodeCount: number;
-  endowmentYears: number;
   gatewayUrls: string[];
+  gatewayUrl?: string | null;
   memorialId: string;
   planType: string;
+  password: string;
+  warning: string;
+  nodeCount?: number;
+  endowmentYears?: number;
 }
 
-export function generateCertificateCanvas(data: CertificateData): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
-  canvas.width = 2480;  // A4 at 300 DPI
-  canvas.height = 3508;
-  const ctx = canvas.getContext('2d')!;
+function formatLongDate(value: string | null | undefined) {
+  if (!value) {
+    return 'Unknown date';
+  }
 
-  // Background
-  ctx.fillStyle = '#111318';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
 
-  // Border
-  ctx.strokeStyle = '#c9a84c';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(80, 80, canvas.width - 160, canvas.height - 160);
+  return parsed.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
 
-  // Inner border
-  ctx.strokeStyle = '#2a2d35';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(120, 120, canvas.width - 240, canvas.height - 240);
+function buildDateRange(data: CertificateData) {
+  if (data.birthDate && data.deathDate) {
+    return `${data.birthDate} - ${data.deathDate}`;
+  }
 
-  // Title
-  ctx.fillStyle = '#c9a84c';
-  ctx.font = '700 72px Georgia, serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('CERTIFICATE OF PERMANENCE', canvas.width / 2, 350);
+  if (data.birthDate) {
+    return `Born ${data.birthDate}`;
+  }
 
-  // Divider
-  ctx.strokeStyle = '#c9a84c';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(canvas.width / 2 - 300, 420);
-  ctx.lineTo(canvas.width / 2 + 300, 420);
-  ctx.stroke();
+  return 'Dates unavailable';
+}
 
-  // "This certifies that..."
-  ctx.fillStyle = '#c8ccd4';
-  ctx.font = '300 36px Georgia, serif';
-  ctx.fillText('This certifies that the memorial of', canvas.width / 2, 560);
+function buildCertificateFilename(data: CertificateData) {
+  const slug = (data.fullName || data.memorialId || 'memorial')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
 
-  // Name
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '600 64px Georgia, serif';
-  ctx.fillText(data.fullName, canvas.width / 2, 680);
+  return `ulumae-seal-certificate-${slug || 'memorial'}.pdf`;
+}
 
-  // Dates
-  const dateRange = data.deathDate
-    ? `${data.birthDate} — ${data.deathDate}`
-    : `Born ${data.birthDate}`;
-  ctx.fillStyle = '#6b7280';
-  ctx.font = '400 32px Georgia, serif';
-  ctx.fillText(dateRange, canvas.width / 2, 760);
+function splitParagraph(
+  text: string,
+  maxWidth: number,
+  font: {
+    widthOfTextAtSize: (value: string, size: number) => number;
+  },
+  size: number
+) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let currentLine = '';
 
-  // Preservation info
-  ctx.fillStyle = '#c8ccd4';
-  ctx.font = '300 32px Georgia, serif';
-  ctx.fillText('has been permanently preserved on the Arweave network', canvas.width / 2, 920);
-  ctx.fillText(`on ${new Date(data.preservationDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, canvas.width / 2, 980);
+  for (const word of words) {
+    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+    if (font.widthOfTextAtSize(nextLine, size) <= maxWidth || !currentLine) {
+      currentLine = nextLine;
+      continue;
+    }
 
-  // Transaction ID
-  ctx.fillStyle = '#c9a84c';
-  ctx.font = '400 28px monospace';
-  ctx.fillText(`Transaction ID: ${data.transactionId}`, canvas.width / 2, 1120);
+    lines.push(currentLine);
+    currentLine = word;
+  }
 
-  // Stats
-  const stats = [
-    `Replicated across ${data.nodeCount} nodes worldwide`,
-    `Endowment period: ${data.endowmentYears}+ years`,
-    `Accessible via ${data.gatewayUrls.length} independent gateways`,
-  ];
-  ctx.fillStyle = '#6b7280';
-  ctx.font = '300 28px Georgia, serif';
-  stats.forEach((stat, i) => {
-    ctx.fillText(stat, canvas.width / 2, 1280 + i * 60);
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
+}
+
+function drawParagraph(args: {
+  page: {
+    drawText: (value: string, options: Record<string, unknown>) => void;
+  };
+  text: string;
+  x: number;
+  y: number;
+  maxWidth: number;
+  lineHeight: number;
+  size: number;
+  font: {
+    widthOfTextAtSize: (value: string, size: number) => number;
+  };
+  color: unknown;
+}) {
+  const lines = splitParagraph(args.text, args.maxWidth, args.font, args.size);
+  let cursorY = args.y;
+
+  for (const line of lines) {
+    args.page.drawText(line, {
+      x: args.x,
+      y: cursorY,
+      size: args.size,
+      font: args.font,
+      color: args.color,
+    });
+    cursorY -= args.lineHeight;
+  }
+
+  return cursorY;
+}
+
+export async function createCertificatePdf(
+  data: CertificateData
+): Promise<Uint8Array> {
+  const pdfLib = (await import('pdf-lib')) as any;
+  const pdfDoc = await pdfLib.PDFDocument.create();
+  const page = pdfDoc.addPage([612, 792]);
+  const { rgb } = pdfLib;
+
+  const titleFont = await pdfDoc.embedFont(pdfLib.StandardFonts.TimesRomanBold);
+  const headingFont = await pdfDoc.embedFont(pdfLib.StandardFonts.HelveticaBold);
+  const bodyFont = await pdfDoc.embedFont(pdfLib.StandardFonts.Helvetica);
+  const monoFont = await pdfDoc.embedFont(pdfLib.StandardFonts.Courier);
+
+  const gold = rgb(0.77, 0.64, 0.29);
+  const cream = rgb(0.96, 0.94, 0.89);
+  const warm = rgb(0.75, 0.73, 0.69);
+  const ink = rgb(0.12, 0.12, 0.14);
+  const slate = rgb(0.19, 0.2, 0.24);
+  const warningBg = rgb(0.98, 0.92, 0.88);
+  const warningBorder = rgb(0.72, 0.44, 0.35);
+
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width: 612,
+    height: 792,
+    color: ink,
   });
 
-  // Verification section
-  ctx.fillStyle = '#2a2d35';
-  ctx.fillRect(300, 1580, canvas.width - 600, 200);
-  ctx.fillStyle = '#c8ccd4';
-  ctx.font = '300 24px Georgia, serif';
-  ctx.fillText('Verify this certificate:', canvas.width / 2, 1650);
-  ctx.fillStyle = '#c9a84c';
-  ctx.font = '400 22px monospace';
-  ctx.fillText(`https://viewblock.io/arweave/tx/${data.transactionId}`, canvas.width / 2, 1720);
+  page.drawRectangle({
+    x: 24,
+    y: 24,
+    width: 564,
+    height: 744,
+    borderColor: gold,
+    borderWidth: 2,
+  });
 
-  // Footer
-  ctx.fillStyle = '#3a3d45';
-  ctx.font = '300 22px Georgia, serif';
-  ctx.fillText('ULUMAE — Permanent Digital Preservation', canvas.width / 2, canvas.height - 250);
-  ctx.font = '300 18px Georgia, serif';
-  ctx.fillStyle = '#4a4d55';
-  ctx.fillText(`Memorial ID: ${data.memorialId}`, canvas.width / 2, canvas.height - 200);
+  page.drawText('ULUMAE', {
+    x: 269,
+    y: 735,
+    size: 12,
+    font: headingFont,
+    color: gold,
+  });
 
-  return canvas;
+  page.drawText('CERTIFICATE OF PERMANENT SEALING', {
+    x: 110,
+    y: 686,
+    size: 24,
+    font: titleFont,
+    color: cream,
+  });
+
+  page.drawLine({
+    start: { x: 150, y: 674 },
+    end: { x: 462, y: 674 },
+    color: gold,
+    thickness: 1.25,
+  });
+
+  page.drawText('This certifies that the memorial of', {
+    x: 184,
+    y: 630,
+    size: 12,
+    font: bodyFont,
+    color: warm,
+  });
+
+  const nameWidth = titleFont.widthOfTextAtSize(data.fullName, 28);
+  page.drawText(data.fullName, {
+    x: Math.max(60, (612 - nameWidth) / 2),
+    y: 592,
+    size: 28,
+    font: titleFont,
+    color: cream,
+  });
+
+  const range = buildDateRange(data);
+  const rangeWidth = bodyFont.widthOfTextAtSize(range, 12);
+  page.drawText(range, {
+    x: Math.max(60, (612 - rangeWidth) / 2),
+    y: 566,
+    size: 12,
+    font: bodyFont,
+    color: warm,
+  });
+
+  const preservationLine = `was permanently sealed on ${formatLongDate(
+    data.preservationDate
+  )}.`;
+  const preservationWidth = bodyFont.widthOfTextAtSize(preservationLine, 12);
+  page.drawText(preservationLine, {
+    x: Math.max(60, (612 - preservationWidth) / 2),
+    y: 526,
+    size: 12,
+    font: bodyFont,
+    color: cream,
+  });
+
+  page.drawText('Arweave Transaction ID', {
+    x: 72,
+    y: 470,
+    size: 11,
+    font: headingFont,
+    color: gold,
+  });
+
+  drawParagraph({
+    page,
+    text: data.transactionId,
+    x: 72,
+    y: 448,
+    maxWidth: 468,
+    lineHeight: 16,
+    size: 10,
+    font: monoFont,
+    color: cream,
+  });
+
+  const primaryGateway = data.gatewayUrl || data.gatewayUrls[0] || '';
+  page.drawText('Verification Link', {
+    x: 72,
+    y: 394,
+    size: 11,
+    font: headingFont,
+    color: gold,
+  });
+
+  drawParagraph({
+    page,
+    text: primaryGateway,
+    x: 72,
+    y: 372,
+    maxWidth: 468,
+    lineHeight: 15,
+    size: 10,
+    font: monoFont,
+    color: cream,
+  });
+
+  page.drawText('Decryption Password', {
+    x: 72,
+    y: 317,
+    size: 11,
+    font: headingFont,
+    color: gold,
+  });
+
+  drawParagraph({
+    page,
+    text: data.password,
+    x: 72,
+    y: 295,
+    maxWidth: 468,
+    lineHeight: 15,
+    size: 10,
+    font: monoFont,
+    color: cream,
+  });
+
+  page.drawRectangle({
+    x: 60,
+    y: 170,
+    width: 492,
+    height: 90,
+    color: warningBg,
+    borderColor: warningBorder,
+    borderWidth: 1,
+  });
+
+  page.drawText('Important', {
+    x: 76,
+    y: 234,
+    size: 11,
+    font: headingFont,
+    color: warningBorder,
+  });
+
+  drawParagraph({
+    page,
+    text: data.warning,
+    x: 76,
+    y: 212,
+    maxWidth: 460,
+    lineHeight: 15,
+    size: 10,
+    font: bodyFont,
+    color: slate,
+  });
+
+  page.drawText(`Memorial ID: ${data.memorialId}`, {
+    x: 72,
+    y: 122,
+    size: 9,
+    font: bodyFont,
+    color: warm,
+  });
+
+  page.drawText(`Plan: ${data.planType}`, {
+    x: 72,
+    y: 106,
+    size: 9,
+    font: bodyFont,
+    color: warm,
+  });
+
+  const footer = 'The seal password is not stored by ULUMAE and cannot be recovered.';
+  const footerWidth = bodyFont.widthOfTextAtSize(footer, 9);
+  page.drawText(footer, {
+    x: Math.max(60, (612 - footerWidth) / 2),
+    y: 60,
+    size: 9,
+    font: bodyFont,
+    color: warm,
+  });
+
+  return pdfDoc.save();
 }
 
-export function downloadCertificate(data: CertificateData): void {
-  const canvas = generateCertificateCanvas(data);
+export async function downloadCertificate(
+  data: CertificateData,
+  fileName?: string
+) {
+  if (typeof window === 'undefined') {
+    throw new Error('Certificate downloads can only be triggered in the browser.');
+  }
+
+  const bytes = await createCertificatePdf(data);
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const url = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.download = `certificate-of-permanence-${data.fullName.toLowerCase().replace(/\s+/g, '-')}.png`;
-  link.href = canvas.toDataURL('image/png');
+  link.href = url;
+  link.download = fileName || buildCertificateFilename(data);
   link.click();
+  window.URL.revokeObjectURL(url);
 }

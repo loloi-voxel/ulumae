@@ -2,6 +2,44 @@
 
 import type { MediaBucket, MediaReferenceFields } from '@/types/media';
 
+export type MemorialSealStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | null;
+
+export interface SealableMemorialAsset {
+  id: string;
+  kind: 'photo' | 'video';
+  label: string;
+  detail: string;
+  fileSize: number;
+  mimeType: string;
+  publicUrl: string;
+  previewUrl: string;
+  bucket: MediaBucket;
+  storagePath: string;
+  originalFileName: string | null;
+  uploadedAt: string | null;
+  arweaveUrl: string | null;
+  sealedAt: string | null;
+}
+
+export interface MemorialSealState {
+  status: MemorialSealStatus;
+  sealedAt: string | null;
+  arweaveTxId: string | null;
+  sealJobId: string | null;
+  selectedAssetIds: string[];
+  isLocked: boolean;
+}
+
+export const MEMORIAL_SEAL_LOCKED_STATUSES = ['pending', 'in_progress', 'completed'] as const;
+
+export function isMemorialSealLocked(status?: MemorialSealStatus | string | null) {
+  return status === 'pending' || status === 'in_progress' || status === 'completed';
+}
+
+export function isMemorialSealed(status?: MemorialSealStatus | string | null) {
+  return status === 'completed';
+}
+
 export interface MediaImageReference extends MediaReferenceFields {
   id: string;
   file?: File | null;
@@ -74,6 +112,8 @@ export interface BasicInfo {
   profilePhotoUploadStatus?: MediaReferenceFields['uploadStatus'];
   profilePhotoUploadError?: string | null;
   profilePhotoHash?: string; // NEW: Store hash for profile photo
+  profilePhotoArweaveUrl?: string | null;
+  profilePhotoSealedAt?: string | null;
   epitaph: string;
 }
 
@@ -205,6 +245,8 @@ export interface MediaLegacy {
   coverPhotoUploadStatus?: MediaReferenceFields['uploadStatus'];
   coverPhotoUploadError?: string | null;
   coverPhotoHash?: string; // NEW: Store hash for cover photo
+  coverPhotoArweaveUrl?: string | null;
+  coverPhotoSealedAt?: string | null;
   gallery: MediaImageReference[];
   interactiveGallery: InteractiveMediaReference[];
   voiceRecordings: VoiceRecordingReference[];

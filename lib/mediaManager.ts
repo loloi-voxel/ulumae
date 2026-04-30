@@ -2,6 +2,12 @@ import crypto from 'crypto';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import {
+  buildManagedR2MediaUrl,
+  deleteR2Object,
+  shouldUseR2Storage,
+  uploadBufferToR2,
+} from '@/lib/r2Storage';
 import type {
   ChildhoodPhotoReference,
   InteractiveMediaReference,
@@ -101,6 +107,8 @@ type MediaAssetRow = {
   file_size: number;
   sha256_hash: string;
   metadata: Record<string, unknown> | null;
+  arweave_url: string | null;
+  sealed_at: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -144,10 +152,18 @@ interface ResolvedMediaAsset {
 }
 
 const MEDIA_SELECT =
-  'id, memorial_id, contribution_id, kind, bucket, storage_path, public_url, original_file_name, mime_type, file_size, sha256_hash, metadata, created_by, created_at, updated_at, deleted_at, deleted_by';
+  'id, memorial_id, contribution_id, kind, bucket, storage_path, public_url, original_file_name, mime_type, file_size, sha256_hash, metadata, arweave_url, sealed_at, created_by, created_at, updated_at, deleted_at, deleted_by';
 
 function getKindConfig(kind: MediaKind) {
   return MEDIA_KIND_CONFIG[kind];
+}
+
+function getMediaPublicUrl(row: Pick<MediaAssetRow, 'id' | 'bucket' | 'public_url'>) {
+  if (row.bucket === 'r2') {
+    return buildManagedR2MediaUrl(row.id);
+  }
+
+  return row.public_url;
 }
 
 function serializeMediaAsset(row: MediaAssetRow): StoredMediaAsset {
@@ -158,12 +174,14 @@ function serializeMediaAsset(row: MediaAssetRow): StoredMediaAsset {
     kind: row.kind,
     bucket: row.bucket,
     storagePath: row.storage_path,
-    publicUrl: row.public_url,
+    publicUrl: getMediaPublicUrl(row),
     originalFileName: row.original_file_name,
     mimeType: row.mime_type,
     fileSize: row.file_size,
     sha256Hash: row.sha256_hash,
     metadata: row.metadata || {},
+    arweaveUrl: row.arweave_url,
+    sealedAt: row.sealed_at,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -190,25 +208,58 @@ function extensionFromMimeType(mimeType: string) {
 
 function buildStoragePath(
   memorialId: string,
-  kind: MediaKind,
+  folder: string,
   originalFileName: string
 ) {
-  const config = getKindConfig(kind);
   const safeName = sanitizeFileName(originalFileName);
   const ext =
     safeName.includes('.') && safeName.split('.').pop()
       ? safeName.split('.').pop()!
       : extensionFromMimeType('application/octet-stream');
 
-  return `${memorialId}/${config.folder}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  return `${memorialId}/${folder}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+}
+
+async function getMemorialMode(
+  admin: SupabaseClient,
+  memorialId: string
+) {
+  const { data, error } = await admin
+    .from('memorials')
+    .select('mode')
+    .eq('id', memorialId)
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || 'Could not determine the memorial plan.');
+  }
+
+  return typeof data.mode === 'string' ? data.mode : null;
+}
+
+async function resolveStorageConfig(
+  admin: SupabaseClient,
+  memorialId: string,
+  kind: MediaKind
+) {
+  const config = getKindConfig(kind);
+
+  if (!shouldUseR2Storage(kind, await getMemorialMode(admin, memorialId))) {
+    return config;
+  }
+
+  return {
+    ...config,
+    bucket: 'r2' as MediaBucket,
+  };
 }
 
 function ensureMimeAndSize(
   kind: MediaKind,
+  config: ReturnType<typeof getKindConfig>,
   mimeType: string,
   byteLength: number
 ) {
-  const config = getKindConfig(kind);
   const matchesMime = config.mimePrefixes.some((prefix) =>
     mimeType.toLowerCase().startsWith(prefix)
   );
@@ -237,41 +288,58 @@ async function uploadBufferAsMediaAsset({
   metadata = {},
   contributionId = null,
 }: UploadBufferInput): Promise<StoredMediaAsset> {
-  ensureMimeAndSize(kind, mimeType, buffer.byteLength);
+  const config = await resolveStorageConfig(admin, memorialId, kind);
+  ensureMimeAndSize(kind, config, mimeType, buffer.byteLength);
 
-  const config = getKindConfig(kind);
-  const storagePath = buildStoragePath(memorialId, kind, originalFileName);
+  const assetId = crypto.randomUUID();
+  const storagePath = buildStoragePath(memorialId, config.folder, originalFileName);
   const sha256Hash = crypto.createHash('sha256').update(buffer).digest('hex');
+  const now = new Date().toISOString();
 
-  const { error: uploadError } = await admin.storage
-    .from(config.bucket)
-    .upload(storagePath, buffer, {
+  if (config.bucket === 'r2') {
+    await uploadBufferToR2({
+      key: storagePath,
+      body: buffer,
       contentType: mimeType,
-      upsert: false,
+      metadata: {
+        'asset-id': assetId,
+        'memorial-id': memorialId,
+        kind,
+      },
     });
+  } else {
+    const { error: uploadError } = await admin.storage
+      .from(config.bucket)
+      .upload(storagePath, buffer, {
+        contentType: mimeType,
+        upsert: false,
+      });
 
-  if (uploadError) {
-    throw new Error(uploadError.message || 'Upload failed.');
+    if (uploadError) {
+      throw new Error(uploadError.message || 'Upload failed.');
+    }
   }
 
-  const { data: publicUrlData } = admin.storage
-    .from(config.bucket)
-    .getPublicUrl(storagePath);
+  const publicUrl =
+    config.bucket === 'r2'
+      ? buildManagedR2MediaUrl(assetId)
+      : admin.storage.from(config.bucket).getPublicUrl(storagePath).data.publicUrl;
 
   const insertPayload = {
+    id: assetId,
     memorial_id: memorialId,
     contribution_id: contributionId,
     kind,
     bucket: config.bucket,
     storage_path: storagePath,
-    public_url: publicUrlData.publicUrl,
+    public_url: publicUrl,
     original_file_name: originalFileName,
     mime_type: mimeType,
     file_size: buffer.byteLength,
     sha256_hash: sha256Hash,
     metadata,
     created_by: createdBy,
-    updated_at: new Date().toISOString(),
+    updated_at: now,
   };
 
   const { data, error } = await admin
@@ -281,7 +349,11 @@ async function uploadBufferAsMediaAsset({
     .single();
 
   if (error || !data) {
-    await admin.storage.from(config.bucket).remove([storagePath]).catch(() => undefined);
+    if (config.bucket === 'r2') {
+      await deleteR2Object(storagePath).catch(() => undefined);
+    } else {
+      await admin.storage.from(config.bucket).remove([storagePath]).catch(() => undefined);
+    }
     throw new Error(error?.message || 'Could not register uploaded media.');
   }
 
@@ -406,6 +478,11 @@ export async function hardDeleteMemorialMediaAssets(
 
   const removals = new Map<MediaBucket, string[]>();
   for (const asset of assets) {
+    if (asset.bucket === 'r2') {
+      await deleteR2Object(asset.storagePath);
+      continue;
+    }
+
     const list = removals.get(asset.bucket) || [];
     list.push(asset.storagePath);
     removals.set(asset.bucket, list);
@@ -464,7 +541,7 @@ export function collectMemorialMediaAssetIds(data: MemorialData) {
   return ids;
 }
 
-async function getActiveMemorialMediaAssets(
+export async function getActiveMemorialMediaAssets(
   admin: SupabaseClient,
   memorialId: string
 ) {
@@ -514,6 +591,13 @@ function stripExtension(fileName?: string | null) {
   return fileName.replace(/\.[^/.]+$/, '');
 }
 
+function buildSealReferenceFields(asset: StoredMediaAsset) {
+  return {
+    arweaveUrl: asset.arweaveUrl,
+    sealedAt: asset.sealedAt,
+  };
+}
+
 function buildChildhoodPhotoReference(
   asset: StoredMediaAsset
 ): ChildhoodPhotoReference {
@@ -532,6 +616,7 @@ function buildChildhoodPhotoReference(
     uploadStatus: 'ready',
     uploadError: null,
     sha256_hash: asset.sha256Hash,
+    ...buildSealReferenceFields(asset),
   };
 }
 
@@ -554,6 +639,7 @@ function buildGalleryPhotoReference(
     uploadStatus: 'ready',
     uploadError: null,
     sha256_hash: asset.sha256Hash,
+    ...buildSealReferenceFields(asset),
   };
 }
 
@@ -574,6 +660,7 @@ function buildInteractiveMediaReference(
     uploadStatus: 'ready',
     uploadError: null,
     sha256_hash: asset.sha256Hash,
+    ...buildSealReferenceFields(asset),
   };
 }
 
@@ -594,6 +681,7 @@ function buildVoiceRecordingReference(
     uploadStatus: 'ready',
     uploadError: null,
     sha256_hash: asset.sha256Hash,
+    ...buildSealReferenceFields(asset),
   };
 }
 
@@ -618,6 +706,7 @@ function buildVideoReference(
     uploadStatus: 'ready',
     uploadError: null,
     sha256_hash: asset.sha256Hash,
+    ...buildSealReferenceFields(asset),
     thumbnailAssetId: thumbnailAsset?.id || null,
     thumbnailBucket: thumbnailAsset?.bucket || null,
     thumbnailStoragePath: thumbnailAsset?.storagePath || null,
@@ -963,6 +1052,8 @@ export async function normalizeMemorialMediaData({
       profilePhotoUploadStatus: 'ready',
       profilePhotoUploadError: null,
       profilePhotoHash: profileAsset.asset.sha256Hash,
+      profilePhotoArweaveUrl: profileAsset.asset.arweaveUrl,
+      profilePhotoSealedAt: profileAsset.asset.sealedAt,
     };
   } else if (!step1.profilePhotoPreview) {
     normalized.step1 = {
@@ -978,6 +1069,8 @@ export async function normalizeMemorialMediaData({
       profilePhotoUploadStatus: 'idle',
       profilePhotoUploadError: null,
       profilePhotoHash: undefined,
+      profilePhotoArweaveUrl: null,
+      profilePhotoSealedAt: null,
     };
   }
 
@@ -1002,6 +1095,8 @@ export async function normalizeMemorialMediaData({
     normalized.step8.coverPhotoUploadStatus = 'ready';
     normalized.step8.coverPhotoUploadError = null;
     normalized.step8.coverPhotoHash = coverAsset.asset.sha256Hash;
+    normalized.step8.coverPhotoArweaveUrl = coverAsset.asset.arweaveUrl;
+    normalized.step8.coverPhotoSealedAt = coverAsset.asset.sealedAt;
   } else if (!step8.coverPhotoPreview) {
     normalized.step8.coverPhoto = null;
     normalized.step8.coverPhotoPreview = null;
@@ -1014,6 +1109,8 @@ export async function normalizeMemorialMediaData({
     normalized.step8.coverPhotoUploadStatus = 'idle';
     normalized.step8.coverPhotoUploadError = null;
     normalized.step8.coverPhotoHash = undefined;
+    normalized.step8.coverPhotoArweaveUrl = null;
+    normalized.step8.coverPhotoSealedAt = null;
   }
 
   for (const [index, item] of (step2.childhoodPhotos || []).entries()) {
@@ -1068,6 +1165,7 @@ export async function normalizeMemorialMediaData({
       uploadStatus: 'ready',
       uploadError: null,
       sha256_hash: resolved.asset.sha256Hash,
+      ...buildSealReferenceFields(resolved.asset),
     });
   }
 
@@ -1120,6 +1218,7 @@ export async function normalizeMemorialMediaData({
       uploadStatus: 'ready',
       uploadError: null,
       sha256_hash: resolved.asset.sha256Hash,
+      ...buildSealReferenceFields(resolved.asset),
     });
   }
 
@@ -1166,6 +1265,7 @@ export async function normalizeMemorialMediaData({
       uploadStatus: 'ready',
       uploadError: null,
       sha256_hash: resolved.asset.sha256Hash,
+      ...buildSealReferenceFields(resolved.asset),
     });
   }
 
@@ -1212,6 +1312,7 @@ export async function normalizeMemorialMediaData({
       uploadError: null,
       url: resolved.asset.publicUrl,
       sha256_hash: resolved.asset.sha256Hash,
+      ...buildSealReferenceFields(resolved.asset),
     });
   }
 
@@ -1285,6 +1386,7 @@ export async function normalizeMemorialMediaData({
       uploadStatus: 'ready',
       uploadError: null,
       sha256_hash: videoAsset.asset.sha256Hash,
+      ...buildSealReferenceFields(videoAsset.asset),
       thumbnailAssetId: thumbnailAsset.asset?.id || null,
       thumbnailBucket: thumbnailAsset.asset?.bucket || null,
       thumbnailStoragePath: thumbnailAsset.asset?.storagePath || null,
@@ -1323,6 +1425,8 @@ export async function normalizeMemorialMediaData({
         profilePhotoUploadStatus: 'ready',
         profilePhotoUploadError: null,
         profilePhotoHash: latestProfile.sha256Hash,
+        profilePhotoArweaveUrl: latestProfile.arweaveUrl,
+        profilePhotoSealedAt: latestProfile.sealedAt,
       };
       referencedAssetIds.add(latestProfile.id);
     }
@@ -1342,6 +1446,8 @@ export async function normalizeMemorialMediaData({
       normalized.step8.coverPhotoUploadStatus = 'ready';
       normalized.step8.coverPhotoUploadError = null;
       normalized.step8.coverPhotoHash = latestCover.sha256Hash;
+      normalized.step8.coverPhotoArweaveUrl = latestCover.arweaveUrl;
+      normalized.step8.coverPhotoSealedAt = latestCover.sealedAt;
       referencedAssetIds.add(latestCover.id);
     }
   }

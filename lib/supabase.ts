@@ -41,6 +41,13 @@ export interface Memorial {
     deleted_at?: string | null;
     paid?: boolean;
     payment_confirmed_at?: string | null;
+    arweave_tx_id?: string | null;
+    preservation_state?: string | null;
+    preservation_date?: string | null;
+    sealed_at?: string | null;
+    seal_status?: 'pending' | 'in_progress' | 'completed' | 'failed' | null;
+    seal_job_id?: string | null;
+    seal_selected_asset_ids?: string[] | null;
 }
 
 

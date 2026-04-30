@@ -3,6 +3,7 @@ import { createAuthenticatedClient } from '@/utils/supabase/api';
 import { hasPermission, resolveArchivePermissionContext } from '@/lib/archivePermissions';
 import { safeLogMemorialActivity } from '@/lib/activityLog';
 import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { isMemorialSealLocked } from '@/types/memorial';
 
 // DELETE /api/memorials/[memorialId]/permanent-delete
 export async function DELETE(
@@ -39,12 +40,22 @@ export async function DELETE(
 
         const { data: memorial, error: fetchError } = await supabaseAdmin
             .from('memorials')
-            .select('deleted, paid, mode')
+            .select('deleted, paid, mode, preservation_state, seal_status')
             .eq('id', memorialId)
             .single();
 
         if (fetchError || !memorial) {
             return NextResponse.json({ error: 'Memorial not found' }, { status: 404 });
+        }
+
+        if (
+            memorial.preservation_state === 'preserved' ||
+            isMemorialSealLocked(memorial.seal_status)
+        ) {
+            return NextResponse.json(
+                { error: 'Sealed memorials cannot be permanently deleted.' },
+                { status: 403 }
+            );
         }
 
         if (!memorial.deleted) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireMemorialAccess } from '@/lib/apiAuth';
 import { mergeMemorialMediaAssetMetadata } from '@/lib/mediaManager';
+import { assertMemorialWritable } from '@/lib/sealService';
 import type { MediaMetadataUpdateResponse } from '@/types/media';
 
 function buildErrorResponse(
@@ -56,6 +57,16 @@ export async function POST(request: NextRequest) {
     if (!access.ok) return access.response;
 
     const { admin } = access;
+    try {
+      await assertMemorialWritable(admin, memorialId);
+    } catch (error: any) {
+      return buildErrorResponse(
+        409,
+        'memorial_locked',
+        error?.message || 'This memorial cannot be modified.'
+      );
+    }
+
     const asset = await mergeMemorialMediaAssetMetadata(
       admin,
       memorialId,

@@ -3,6 +3,7 @@ import { createAuthenticatedClient } from '@/utils/supabase/api';
 import { hasPermission, resolveArchivePermissionContext } from '@/lib/archivePermissions';
 import { safeLogMemorialActivity } from '@/lib/activityLog';
 import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { isMemorialSealLocked } from '@/types/memorial';
 
 // PATCH /api/memorials/[memorialId]/soft-delete
 export async function PATCH(
@@ -43,7 +44,7 @@ export async function PATCH(
 
         const { data: memorial, error: fetchError } = await supabaseAdmin
             .from('memorials')
-            .select('preservation_state')
+            .select('preservation_state, seal_status')
             .eq('id', memorialId)
             .single();
 
@@ -51,7 +52,10 @@ export async function PATCH(
             return NextResponse.json({ error: 'Memorial not found' }, { status: 404 });
         }
 
-        if (action === 'delete' && memorial.preservation_state === 'preserved') {
+        if (
+            action === 'delete' &&
+            (memorial.preservation_state === 'preserved' || isMemorialSealLocked(memorial.seal_status))
+        ) {
             return NextResponse.json(
                 { error: 'This archive has been permanently preserved on the blockchain and cannot be deleted.' },
                 { status: 403 }
