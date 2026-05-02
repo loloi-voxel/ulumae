@@ -14,6 +14,12 @@ import {
 } from '@/lib/anchor/shared';
 import { getAnchorJob, putAnchorJob } from '@/lib/anchor/db';
 
+declare global {
+  interface Window {
+    __ulumaeAnchorBusy?: boolean;
+  }
+}
+
 export type {
   AnchorDeviceStatus,
   AnchorRuntimeFileState,
@@ -286,7 +292,7 @@ async function requestDirectoryHandle(memorialId: string) {
   }
 
   return picker({
-    id: `ulumae-anchor-${memorialId}`,
+    id: `ua-${memorialId.slice(0, 28)}`, // "ua-" (3) + 28 = 31 chars, always safe
     mode: 'readwrite',
   });
 }
@@ -470,12 +476,12 @@ class AnchorController {
   private syncTimer: number | null = null;
   private syncIdentity:
     | {
-        memorialId: string;
-        deviceId: string;
-        deviceName: string;
-        browser: string;
-        os: string;
-      }
+      memorialId: string;
+      deviceId: string;
+      deviceName: string;
+      browser: string;
+      os: string;
+    }
     | null = null;
 
   subscribe(listener: () => void) {
@@ -495,6 +501,10 @@ class AnchorController {
 
   private setSnapshot(next: AnchorSessionSnapshot) {
     this.snapshot = next;
+    // Tell AuthProvider whether anchor is busy so it skips refetches
+    if (typeof window !== 'undefined') {
+      window.__ulumaeAnchorBusy = ['preparing', 'syncing', 'finalizing'].includes(next.phase);
+    }
     this.emit();
   }
 
@@ -724,9 +734,9 @@ class AnchorController {
         os: deviceInfo.os,
         syncProgressBytes: existingJob
           ? Object.values(existingJob.fileStates).reduce(
-              (sum, file) => sum + file.bytesTransferred,
-              0
-            )
+            (sum, file) => sum + file.bytesTransferred,
+            0
+          )
           : 0,
         totalBytes: manifest.summary.totalBytes,
         status: 'syncing',

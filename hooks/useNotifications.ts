@@ -33,17 +33,34 @@ const EMPTY_STATE: NotificationsState = {
   recentActivity: [],
 };
 
-const REFRESH_INTERVAL_MS = 30_000;
+// Poll every 2 minutes instead of 30s — the API is too heavy for frequent polls
+const REFRESH_INTERVAL_MS = 120_000;
 
 export function useNotifications() {
   const [data, setData] = useState<NotificationsState>(EMPTY_STATE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Guard: prevent overlapping requests
+  const isFetchingRef = useRef(false);
 
   const refresh = useCallback(async () => {
+    // Skip if a request is already in flight
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
     try {
-      const response = await fetch('/api/notifications', { cache: 'no-store' });
+      const controller = new AbortController();
+      // Abort if it takes more than 15s
+      const timeout = setTimeout(() => controller.abort(), 15_000);
+
+      const response = await fetch('/api/notifications', {
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
       if (response.status === 401) {
         setData(EMPTY_STATE);
         setError(null);
@@ -66,10 +83,12 @@ export function useNotifications() {
       });
       setError(null);
     } catch (err: any) {
+      if (err.name === 'AbortError') return; // Timed out — silently skip
       console.error('[useNotifications] refresh failed', err);
       setError(err.message || 'Could not load notifications.');
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   }, []);
 
@@ -93,7 +112,6 @@ export function useNotifications() {
           ? { ...item, unread: unread ? true : item.requiresAction ? true : false }
           : item
       );
-
       return {
         ...current,
         notifications,
@@ -125,7 +143,6 @@ export function useNotifications() {
       const notifications = current.notifications.map((item) =>
         item.requiresAction ? item : { ...item, unread: false }
       );
-
       return {
         ...current,
         notifications,
@@ -141,29 +158,19 @@ export function useNotifications() {
     intervalRef.current = setInterval(refresh, REFRESH_INTERVAL_MS);
 
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        refresh();
-      }
+      if (document.visibilityState === 'visible') refresh();
     };
 
-    const handleFocus = () => refresh();
+    // Don't refresh on every focus — too aggressive
+    // window.addEventListener('focus', handleFocus); ← removed
 
     document.addEventListener('visibilitychange', handleVisibility);
-    window.addEventListener('focus', handleFocus);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('focus', handleFocus);
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [refresh]);
 
-  return {
-    data,
-    loading,
-    error,
-    refresh,
-    markRead,
-    markAllRead,
-  };
+  return { data, loading, error, refresh, markRead, markAllRead };
 }

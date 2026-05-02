@@ -23,17 +23,12 @@ export interface UserArchive {
 export type UserPlan = 'none' | 'draft' | 'personal' | 'family' | 'concierge';
 
 export interface AuthState {
-    // Core auth
     authenticated: boolean;
     loading: boolean;
     user: { id: string; email: string } | null;
-
-    // Plan & archives (server-validated)
     plan: UserPlan;
     hasPaid: boolean;
     archives: UserArchive[];
-
-    // Actions
     revalidate: () => Promise<void>;
 }
 
@@ -46,14 +41,8 @@ export function isPersonalPlan(plan: UserPlan) {
 }
 
 export function getPlanDashboardPath(plan: UserPlan | string, userId: string) {
-    if (plan === 'family' || plan === 'concierge') {
-        return `/dashboard/family/${userId}`;
-    }
-
-    if (plan === 'personal') {
-        return `/dashboard/personal/${userId}`;
-    }
-
+    if (plan === 'family' || plan === 'concierge') return `/dashboard/family/${userId}`;
+    if (plan === 'personal') return `/dashboard/personal/${userId}`;
     return `/dashboard/draft/${userId}`;
 }
 
@@ -64,10 +53,18 @@ const defaultState: AuthState = {
     plan: 'none',
     hasPaid: false,
     archives: [],
-    revalidate: async () => { },
+    revalidate: async () => {},
 };
 
 const AuthContext = createContext<AuthState>(defaultState);
+
+// ─── Anchor awareness ─────────────────────────────────────────────────────────
+// Reads the anchor phase from the in-memory controller without importing it
+// (avoids a circular dep). The worker stores phase in a custom event we fire.
+function isAnchorBusy(): boolean {
+    if (typeof window === 'undefined') return false;
+    return window.__ulumaeAnchorBusy === true;
+}
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -83,30 +80,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const lastFetchRef = useRef<number>(0);
     const isFetchingRef = useRef(false);
     const lastHeartbeatRef = useRef<number>(0);
+    // Track the last pathname that triggered a fetch so we don't re-fetch on
+    // the same path (e.g. repeated renders while on /dashboard/family/...)
+    const lastFetchedPathnameRef = useRef<string>('');
 
     const sendHeartbeat = useCallback(async () => {
         if (!state.authenticated || !state.user) return;
-
         const now = Date.now();
-        if (now - lastHeartbeatRef.current < 5 * 60 * 1000) {
-            return;
-        }
-
+        if (now - lastHeartbeatRef.current < 5 * 60 * 1000) return;
         lastHeartbeatRef.current = now;
         await fetch('/api/user/heartbeat', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
         }).catch(() => undefined);
     }, [state.authenticated, state.user]);
 
     const fetchState = useCallback(async (force = false) => {
-        // Debounce non-forced calls to avoid spam
         const now = Date.now();
+        // Debounce: skip non-forced calls within 2s of the last fetch
         if (!force && now - lastFetchRef.current < 2000) return;
-        // Never block forced calls (back-button, payment completion, etc.)
-        // Only skip if a non-forced call and already fetching
         if (!force && isFetchingRef.current) return;
 
         isFetchingRef.current = true;
@@ -116,28 +108,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 cache: 'no-store',
                 headers: {
                     'Cache-Control': 'no-cache',
-                    ...(fingerprint
-                        ? { [SESSION_FINGERPRINT_HEADER]: fingerprint }
-                        : {}),
+                    ...(fingerprint ? { [SESSION_FINGERPRINT_HEADER]: fingerprint } : {}),
                 },
             });
             const data = await res.json();
 
-            if (
-                res.status === 401 &&
-                (data?.session?.revoked || data?.session?.expired)
-            ) {
+            if (res.status === 401 && (data?.session?.revoked || data?.session?.expired)) {
                 const supabase = createClient();
                 await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
-
-                setState({
-                    authenticated: false,
-                    loading: false,
-                    user: null,
-                    plan: 'none',
-                    hasPaid: false,
-                    archives: [],
-                });
+                setState({ authenticated: false, loading: false, user: null, plan: 'none', hasPaid: false, archives: [] });
                 lastFetchRef.current = Date.now();
                 return;
             }
@@ -155,19 +134,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             lastFetchRef.current = Date.now();
         } catch (err) {
             console.error('[AuthProvider] State fetch error:', err);
-            // Fallback: check Supabase client auth directly so we at least
-            // know if the user is authenticated (prevents false redirects to /login)
             try {
                 const supabase = createClient();
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) {
-                    setState(prev => ({
-                        ...prev,
-                        loading: false,
-                        authenticated: true,
-                        user: { id: user.id, email: user.email || '' },
-                        // Keep existing plan/archives — don't overwrite with empty
-                    }));
+                    setState(prev => ({ ...prev, loading: false, authenticated: true, user: { id: user.id, email: user.email || '' } }));
                 } else {
                     setState(prev => ({ ...prev, loading: false }));
                 }
@@ -184,31 +155,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         fetchState(true);
     }, [fetchState]);
 
-    // Re-fetch when navigating to critical pages
+    // Re-fetch on critical path changes — but only when the path actually changes
+    // and only on truly critical transitions (not every render on /dashboard/...)
     useEffect(() => {
-        const criticalPaths = ['/dashboard', '/payment', '/choice-pricing', '/personal-confirmation', '/family-confirmation', '/payment-success', '/preserve'];
-        const isCritical = criticalPaths.some(p => pathname.startsWith(p));
-        if (isCritical) {
+        const CRITICAL = ['/payment', '/choice-pricing', '/personal-confirmation', '/family-confirmation', '/payment-success', '/preserve'];
+        const isCritical = CRITICAL.some(p => pathname.startsWith(p));
+
+        // For dashboard paths: only fetch when we first arrive, not on every render
+        const isDashboard = pathname.startsWith('/dashboard');
+        const pathnameChanged = pathname !== lastFetchedPathnameRef.current;
+
+        if ((isCritical || (isDashboard && pathnameChanged))) {
+            lastFetchedPathnameRef.current = pathname;
             fetchState(true);
         }
     }, [pathname, fetchState]);
 
+    // Heartbeat on navigation
     useEffect(() => {
         void sendHeartbeat();
     }, [pathname, sendHeartbeat]);
 
-    // Listen for browser back/forward button (popstate event)
-    // This is the KEY fix: when the user hits back, the browser fires popstate
-    // BEFORE React re-renders, so we force a revalidation immediately
+    // Back/forward button
     useEffect(() => {
-        const handlePopState = () => {
-            fetchState(true);
-        };
+        const handlePopState = () => fetchState(true);
         window.addEventListener('popstate', handlePopState);
         return () => window.removeEventListener('popstate', handlePopState);
     }, [fetchState]);
 
-    // Listen for Supabase auth state changes (login/logout)
+    // Supabase auth changes
     useEffect(() => {
         const supabase = createClient();
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -219,13 +194,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return () => subscription.unsubscribe();
     }, [fetchState]);
 
-    // Listen for visibility change — force revalidate when tab becomes visible
+    // Visibility change — skip if anchor is running
     useEffect(() => {
         const handleVisibility = () => {
-            if (document.visibilityState === 'visible') {
-                fetchState(true);
-                void sendHeartbeat();
-            }
+            if (document.visibilityState !== 'visible') return;
+            // Don't interrupt a running anchor sync
+            if (isAnchorBusy()) return;
+            fetchState(true);
+            void sendHeartbeat();
         };
         document.addEventListener('visibilitychange', handleVisibility);
         return () => document.removeEventListener('visibilitychange', handleVisibility);
@@ -237,16 +213,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 fetchState(true);
             }
         };
-
         const handlePageShow = (event: PageTransitionEvent) => {
-            if (event.persisted) {
-                fetchState(true);
-            }
+            if (event.persisted) fetchState(true);
         };
-
         window.addEventListener('storage', handleStorage);
         window.addEventListener('pageshow', handlePageShow);
-
         return () => {
             window.removeEventListener('storage', handleStorage);
             window.removeEventListener('pageshow', handlePageShow);
@@ -258,11 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         revalidate: () => fetchState(true),
     };
 
-    return (
-        <AuthContext.Provider value={contextValue}>
-            {children}
-        </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 }
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
@@ -270,19 +237,12 @@ export function useAuth(): AuthState {
     return useContext(AuthContext);
 }
 
-// ─── Utility: Get the dashboard path for a user based on their real state ────
 export function getDashboardPath(state: AuthState): string {
     if (!state.authenticated || !state.user) return '/login';
-
-    // Prioritize the highest plan level from the server-validated plan field
     if (isFamilyPlan(state.plan) || isPersonalPlan(state.plan)) {
         return getPlanDashboardPath(state.plan, state.user.id);
     }
-
     const draftArchive = state.archives.find(a => !a.paid);
-    if (draftArchive) {
-        return getPlanDashboardPath('draft', state.user.id);
-    }
-
+    if (draftArchive) return getPlanDashboardPath('draft', state.user.id);
     return '/choice-pricing';
 }

@@ -603,12 +603,6 @@ function CreateMemorialPageContent() {
       position: 'bottom' as const,
     },
     {
-      target: '[data-tutorial="preview-button"]',
-      title: 'Preview Your Memorial',
-      description: 'As you add information, you can click "Preview Live Page" at any time to see how your memorial will look to visitors. This helps ensure everything appears exactly as you envision.',
-      position: 'bottom' as const,
-    },
-    {
       target: '[data-tutorial="save-continue"]',
       title: 'Preserve Your Work',
       description: 'Click "Preserve & continue" at the bottom to move to the next step. Your work is automatically preserved.',

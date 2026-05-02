@@ -30,11 +30,13 @@ export async function sendEmail({
       to: [{ email: to }],
       subject,
       htmlContent: html,
-      attachment: attachments.map((attachment) => ({
-        name: attachment.name,
-        content: attachment.content,
-        type: attachment.contentType,
-      })),
+      ...(attachments.length > 0 ? {
+        attachment: attachments.map((attachment) => ({
+          name: attachment.name,
+          content: attachment.content,
+          type: attachment.contentType,
+        })),
+      } : {}),
     }),
   });
 

@@ -365,6 +365,33 @@ export async function startMemorialSealRequest({
   const now = new Date().toISOString();
   const nextSelectedAssetIds = filteredAssetIds;
 
+  // Step through required preservation states before reaching 'preserving'
+  // The DB trigger enforces: draft → building → review → preserving
+  const currentState = memorial.preservation_state || 'draft';
+
+  if (currentState === 'draft') {
+    const { error: e1 } = await admin
+      .from('memorials')
+      .update({ preservation_state: 'building', updated_at: now })
+      .eq('id', memorialId);
+    if (e1) throw new Error(e1.message || 'Could not transition to building state.');
+
+    const { error: e2 } = await admin
+      .from('memorials')
+      .update({ preservation_state: 'review', updated_at: now })
+      .eq('id', memorialId);
+    if (e2) throw new Error(e2.message || 'Could not transition to review state.');
+  }
+
+  if (currentState === 'building') {
+    const { error: e } = await admin
+      .from('memorials')
+      .update({ preservation_state: 'review', updated_at: now })
+      .eq('id', memorialId);
+    if (e) throw new Error(e.message || 'Could not transition to review state.');
+  }
+
+  // Now safe to set preserving + all the seal fields
   const { error: updateError } = await admin
     .from('memorials')
     .update({

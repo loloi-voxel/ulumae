@@ -1,3 +1,6 @@
+//app/api/memorials/[memorialId]/invite/route.ts
+
+
 import { NextRequest, NextResponse } from 'next/server';
 import { requireMemorialAccess } from '@/lib/apiAuth';
 import { sendEmail } from '@/lib/email/sender';

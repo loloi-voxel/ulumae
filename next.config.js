@@ -1,11 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Pas besoin de i18n pour une seule langue
-  experimental: {
-    // This app uses proxy.ts, so multipart uploads are buffered before the route handler.
-    // Raise the cap above the 50MB server-side video limit so uploads reach /api/media/upload intact.
-    proxyClientMaxBodySize: '60mb',
-  },
-}
+  allowedDevOrigins: ['http://10.90.241.124:3000'],
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

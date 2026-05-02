@@ -147,49 +147,49 @@ export async function GET() {
     ] = await Promise.all([
       stewardIds.length > 0
         ? supabaseAdmin
-            .from('memorial_contributions')
-            .select(
-              'id, memorial_id, user_id, contributor_email, witness_name, type, content, created_at'
-            )
-            .in('memorial_id', stewardIds)
-            .eq('status', 'pending_approval')
-            .order('created_at', { ascending: false })
-            .limit(DEFAULT_ACTIVITY_LIMIT)
+          .from('memorial_contributions')
+          .select(
+            'id, memorial_id, user_id, contributor_email, witness_name, type, content, created_at'
+          )
+          .in('memorial_id', stewardIds)
+          .eq('status', 'pending_approval')
+          .order('created_at', { ascending: false })
+          .limit(DEFAULT_ACTIVITY_LIMIT)
         : Promise.resolve({ data: [], error: null }),
       stewardIds.length > 0
         ? supabaseAdmin
-            .from('memorial_access_requests')
-            .select(
-              'id, memorial_id, requester_user_id, requested_role, request_message, created_at'
-            )
-            .in('memorial_id', stewardIds)
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false })
-            .limit(DEFAULT_ACTIVITY_LIMIT)
+          .from('memorial_access_requests')
+          .select(
+            'id, memorial_id, requester_user_id, requested_role, request_message, created_at'
+          )
+          .in('memorial_id', stewardIds)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .limit(DEFAULT_ACTIVITY_LIMIT)
         : Promise.resolve({ data: [], error: null }),
       ownedFamilyMemorialIds.size > 0
         ? supabaseAdmin
-            .from('memorial_creation_requests')
-            .select(
-              'id, source_memorial_id, requester_user_id, proposed_name, request_message, created_at'
-            )
-            .eq('owner_user_id', user.id)
-            .eq('status', 'pending')
-            .order('created_at', { ascending: false })
-            .limit(DEFAULT_ACTIVITY_LIMIT)
+          .from('memorial_creation_requests')
+          .select(
+            'id, source_memorial_id, requester_user_id, proposed_name, request_message, created_at'
+          )
+          .eq('owner_user_id', user.id)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .limit(DEFAULT_ACTIVITY_LIMIT)
         : Promise.resolve({ data: [], error: null }),
       accessibleIds.length > 0
         ? supabaseAdmin
-            .from('memorial_activity_log')
-            .select(
-              'id, memorial_id, action, summary, actor_user_id, actor_email, subject_user_id, subject_email, details, created_at'
-            )
-            .in('memorial_id', accessibleIds)
-            .order('created_at', { ascending: false })
-            .limit(DEFAULT_ACTIVITY_LIMIT * 2)
-            .then((res) =>
-              isMissingNotificationReadsTable(res.error) ? { data: [], error: null } : res
-            )
+          .from('memorial_activity_log')
+          .select(
+            'id, memorial_id, action, summary, actor_user_id, actor_email, subject_user_id, subject_email, details, created_at'
+          )
+          .in('memorial_id', accessibleIds)
+          .order('created_at', { ascending: false })
+          .limit(DEFAULT_ACTIVITY_LIMIT * 2)
+          .then((res) =>
+            isMissingNotificationReadsTable(res.error) ? { data: [], error: null } : res
+          )
         : Promise.resolve({ data: [], error: null }),
     ]);
 
@@ -218,14 +218,14 @@ export async function GET() {
 
     const userEmailMap = new Map<string, string>();
     if (userIdsToResolve.length > 0) {
-      await Promise.all(
-        userIdsToResolve.map(async (resolvedUserId) => {
-          const { data } = await supabaseAdmin.auth.admin.getUserById(resolvedUserId);
-          if (data.user?.email) {
-            userEmailMap.set(resolvedUserId, data.user.email);
-          }
-        })
-      );
+      const { data: userRows } = await supabaseAdmin
+        .from('users')
+        .select('id, email')
+        .in('id', userIdsToResolve);
+
+      for (const row of userRows || []) {
+        if (row.email) userEmailMap.set(row.id, row.email);
+      }
     }
 
     const pendingNotifications: NotificationItem[] = [
@@ -265,8 +265,8 @@ export async function GET() {
         title: 'New access request',
         body: userEmailMap.get(item.requester_user_id)
           ? `${userEmailMap.get(item.requester_user_id)} requested ${formatRole(
-              item.requested_role
-            ).toLowerCase()} access.`
+            item.requested_role
+          ).toLowerCase()} access.`
           : 'A user requested access to this archive.',
         href: getNotificationHref({
           type: 'pending_access_request',

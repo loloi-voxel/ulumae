@@ -1505,3 +1505,36 @@ CREATE POLICY "Anyone can view memorial media"
     USING (bucket_id = 'memorial-media');
 
 -- Done
+
+-- Second
+
+
+BEGIN;
+
+-- Remove duplicate live authorization records before adding the index.
+WITH ranked_authorizations AS (
+    SELECT
+        id,
+        ROW_NUMBER() OVER (
+            PARTITION BY memorial_id, user_id, authorization_type
+            ORDER BY
+                CASE WHEN status = 'approved' THEN 0 ELSE 1 END,
+                created_at ASC,
+                id ASC
+        ) AS row_number
+    FROM memorial_authorizations
+    WHERE status IN ('pending', 'approved')
+)
+DELETE FROM memorial_authorizations ma
+USING ranked_authorizations ra
+WHERE ma.id = ra.id
+  AND ra.row_number > 1;
+
+-- Enforce one live authorization per memorial, per user, per authorization type.
+CREATE UNIQUE INDEX IF NOT EXISTS memorial_authorizations_one_live_record_per_type_idx
+    ON memorial_authorizations (memorial_id, user_id, authorization_type)
+    WHERE status IN ('pending', 'approved');
+
+COMMIT;
+
+-- Done
