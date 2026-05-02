@@ -250,7 +250,7 @@ export async function POST(request: NextRequest) {
 
     const { error: revokeError } = await supabaseAdmin
       .from('anchor_devices')
-      .update({ status: 'revoked' })
+      .update({ status: 'stale' })
       .eq('user_id', user.id)
       .eq('id', targetId);
 

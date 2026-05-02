@@ -1,0 +1,6129 @@
+
+===== FILE: components/AnchorPanel.tsx =====
+'use client';
+
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  AlertCircle,
+  CheckCircle2,
+  ExternalLink,
+  FolderOpen,
+  HardDrive,
+  Monitor,
+  RefreshCw,
+  Share2,
+  ShieldCheck,
+  Smartphone,
+} from 'lucide-react';
+
+import {
+  ANCHOR_ROTATING_PHRASES,
+  detectBrowserCapabilities,
+  formatBytes,
+  getAnchorSessionSnapshot,
+  hydrateAnchorSession,
+  shareAnchorToFiles,
+  startAnchor,
+  subscribeToAnchorSession,
+  type AnchorDevice,
+} from '@/lib/anchor/anchorService';
+import { isFamilyPlan, useAuth } from '@/components/providers/AuthProvider';
+
+interface AnchorPanelProps {
+  memorialId: string;
+  onDeviceCountChange?: (count: number) => void;
+}
+
+async function fetchAnchorDevices(memorialId: string): Promise<AnchorDevice[]> {
+  const response = await fetch(
+    `/api/anchor/sync-status?memorialId=${encodeURIComponent(memorialId)}`,
+    { cache: 'no-store' }
+  );
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Could not load anchored devices.');
+  }
+
+  return (payload.devices || []) as AnchorDevice[];
+}
+
+function deviceIcon(browser: string) {
+  return /safari|iphone|ipad/i.test(browser) ? (
+    <Smartphone size={16} className="text-warm-muted" />
+  ) : (
+    <Monitor size={16} className="text-warm-muted" />
+  );
+}
+
+function statusBadge(status: AnchorDevice['status']) {
+  const variants = {
+    synced: 'bg-emerald-500/10 text-emerald-300',
+    syncing: 'bg-blue-500/10 text-blue-300',
+    error: 'bg-red-500/10 text-red-300',
+    stale: 'bg-amber-500/10 text-amber-300',
+  } as const;
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${variants[status]}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function fileStatusTone(status: AnchorDevice['status'] | 'pending' | 'completed' | 'failed' | 'skipped') {
+  switch (status) {
+    case 'completed':
+    case 'synced':
+      return 'text-emerald-300';
+    case 'failed':
+    case 'error':
+      return 'text-red-300';
+    case 'skipped':
+    case 'stale':
+      return 'text-amber-300';
+    case 'syncing':
+      return 'text-blue-300';
+    default:
+      return 'text-warm-muted';
+  }
+}
+
+export default function AnchorPanel({
+  memorialId,
+  onDeviceCountChange,
+}: AnchorPanelProps) {
+  const auth = useAuth();
+  const snapshot = useSyncExternalStore(
+    subscribeToAnchorSession,
+    getAnchorSessionSnapshot,
+    getAnchorSessionSnapshot
+  );
+  const capabilities = useMemo(() => detectBrowserCapabilities(), []);
+  const [devices, setDevices] = useState<AnchorDevice[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(true);
+  const [devicesError, setDevicesError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [phraseIndex, setPhraseIndex] = useState(0);
+
+  useEffect(() => {
+    if (!isFamilyPlan(auth.plan)) {
+      return;
+    }
+
+    void hydrateAnchorSession(memorialId);
+  }, [auth.plan, memorialId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDevices() {
+      setDevicesLoading(true);
+      setDevicesError(null);
+
+      try {
+        const nextDevices = await fetchAnchorDevices(memorialId);
+        if (cancelled) return;
+        setDevices(nextDevices);
+        onDeviceCountChange?.(nextDevices.length);
+      } catch (error: any) {
+        if (cancelled) return;
+        setDevicesError(error.message || 'Could not load anchored devices.');
+      } finally {
+        if (!cancelled) {
+          setDevicesLoading(false);
+        }
+      }
+    }
+
+    void loadDevices();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [memorialId, onDeviceCountChange]);
+
+  useEffect(() => {
+    if (!['preparing', 'syncing', 'finalizing'].includes(snapshot.phase)) {
+      setPhraseIndex(0);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setPhraseIndex((value) => (value + 1) % ANCHOR_ROTATING_PHRASES.length);
+    }, 4000);
+
+    return () => window.clearInterval(timer);
+  }, [snapshot.phase]);
+
+  useEffect(() => {
+    if (snapshot.phase !== 'complete' && snapshot.phase !== 'needs-attention') {
+      return;
+    }
+
+    void fetchAnchorDevices(memorialId)
+      .then((nextDevices) => {
+        setDevices(nextDevices);
+        onDeviceCountChange?.(nextDevices.length);
+      })
+      .catch(() => undefined);
+  }, [memorialId, onDeviceCountChange, snapshot.phase]);
+
+  if (!isFamilyPlan(auth.plan)) {
+    return null;
+  }
+
+  const summary = snapshot.summary;
+  const progressPercent =
+    snapshot.totalBytes > 0
+      ? Math.min(100, Math.round((snapshot.transferredBytes / snapshot.totalBytes) * 100))
+      : 0;
+  const tierLabel =
+    capabilities.preferredTarget === 'file-system-access'
+      ? 'Legacy Vault folder'
+      : capabilities.preferredTarget === 'opfs'
+        ? 'Hidden browser vault'
+        : 'Portable fallback';
+  const progressLabel =
+    summary &&
+    `Securing ${summary.photoCount} photos and ${summary.videoCount} videos... (${formatBytes(snapshot.transferredBytes)} of ${formatBytes(snapshot.totalBytes)})`;
+  const successSummary =
+    summary &&
+    `${summary.photoCount} photos, ${summary.videoCount} videos, and ${summary.galleryCount} offline gallery saved.`;
+  const mainCta =
+    snapshot.canResume && snapshot.target === 'file-system-access'
+      ? 'Resume syncing to your Legacy Vault folder'
+      : snapshot.canResume
+        ? 'Resume anchoring'
+        : 'Anchor this archive';
+
+  const busy = ['preparing', 'syncing', 'finalizing'].includes(snapshot.phase);
+
+  const handleAnchor = async () => {
+    setActionError(null);
+
+    try {
+      await startAnchor(memorialId, {
+        resume: snapshot.canResume,
+      });
+    } catch (error: any) {
+      setActionError(error.message || 'Could not start anchoring.');
+    }
+  };
+
+  const handleShare = async () => {
+    setActionError(null);
+    setSharing(true);
+
+    try {
+      await shareAnchorToFiles(memorialId);
+    } catch (error: any) {
+      setActionError(error.message || 'Could not hand this vault off to Files.');
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  return (
+    <section className="rounded-[28px] border border-warm-border/60 bg-[linear-gradient(135deg,rgba(255,255,255,0.92),rgba(244,238,229,0.94))] p-6 shadow-[0_24px_60px_rgba(47,34,24,0.08)]">
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-olive/10 text-olive">
+              <HardDrive size={20} />
+            </div>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <h3 className="font-serif text-2xl text-warm-dark">Anchor this archive</h3>
+                <span className="rounded-full bg-surface-high/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-warm-muted">
+                  {tierLabel}
+                </span>
+              </div>
+              <p className="max-w-2xl text-sm leading-7 text-warm-muted">
+                Save this legacy permanently to your device. Access it forever, even without internet.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleAnchor}
+            disabled={busy}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-olive px-5 py-3 text-sm font-semibold text-white transition hover:bg-olive/90 disabled:cursor-wait disabled:opacity-60"
+          >
+            {busy ? <RefreshCw size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
+            {busy ? 'Anchoring in progress...' : mainCta}
+          </button>
+        </div>
+
+        {snapshot.canResume && snapshot.phase !== 'syncing' && snapshot.target === 'file-system-access' && (
+          <div className="rounded-2xl border border-olive/20 bg-olive/5 p-4">
+            <p className="text-sm font-medium text-warm-dark">
+              Resume syncing to your Legacy Vault folder?
+            </p>
+            <p className="mt-1 text-sm text-warm-muted">
+              We found a saved folder handle for {snapshot.folderDisplayPath || 'your last Legacy Vault'}.
+              One click resumes and only new files are secured.
+            </p>
+          </div>
+        )}
+
+        {(busy || snapshot.phase === 'complete' || snapshot.phase === 'needs-attention') && (
+          <div className="rounded-[24px] border border-warm-border/50 bg-white/70 p-5">
+            <div className="flex flex-col gap-4">
+              <div className="space-y-2">
+                {busy && (
+                  <>
+                    <p className="text-sm font-medium text-warm-dark">
+                      {ANCHOR_ROTATING_PHRASES[phraseIndex]}
+                    </p>
+                    <p className="text-sm text-warm-muted">
+                      You can navigate freely. Anchoring continues quietly in the background.
+                    </p>
+                  </>
+                )}
+
+                {!busy && snapshot.phase === 'complete' && (
+                  <>
+                    <p className="text-sm font-medium text-emerald-700">
+                      This archive is now anchored to your device.
+                    </p>
+                    {successSummary && (
+                      <p className="text-sm text-warm-muted">{successSummary}</p>
+                    )}
+                  </>
+                )}
+
+                {!busy && snapshot.phase === 'needs-attention' && (
+                  <>
+                    <p className="text-sm font-medium text-amber-700">
+                      Anchoring finished, but a few files still need attention.
+                    </p>
+                    <p className="text-sm text-warm-muted">
+                      Nothing starts from zero on the next run. We will only retry the files that were not secured yet.
+                    </p>
+                  </>
+                )}
+              </div>
+
+              {summary && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-warm-dark">{progressLabel}</p>
+                    <p className="text-xs uppercase tracking-[0.16em] text-warm-muted">
+                      {progressPercent}%
+                    </p>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-warm-border/50">
+                    <div
+                      className="h-full rounded-full bg-olive transition-[width] duration-500"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {snapshot.folderDisplayPath && (
+                <div className="rounded-2xl bg-surface-mid/70 px-4 py-3 text-sm text-warm-dark">
+                  <span className="font-medium">Legacy Vault:</span>{' '}
+                  <span className="text-warm-muted">{snapshot.folderDisplayPath}</span>
+                </div>
+              )}
+
+              {snapshot.files.length > 0 && (
+                <div className="max-h-[360px] overflow-auto rounded-2xl border border-warm-border/40 bg-surface-low/70">
+                  <div className="divide-y divide-warm-border/30">
+                    {snapshot.files.map((file) => {
+                      const filePercent =
+                        file.totalBytes > 0
+                          ? Math.min(100, Math.round((file.bytesTransferred / file.totalBytes) * 100))
+                          : 0;
+
+                      return (
+                        <div key={`${file.fileId}:${file.signature}`} className="px-4 py-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-warm-dark">
+                                {file.displayName}
+                              </p>
+                              <p className="text-xs text-warm-muted">
+                                {formatBytes(file.bytesTransferred)} of {formatBytes(file.totalBytes)}
+                              </p>
+                            </div>
+                            <div className={`text-xs font-semibold uppercase tracking-[0.16em] ${fileStatusTone(file.status)}`}>
+                              {file.status}
+                            </div>
+                          </div>
+                          <div className="mt-3 flex items-center gap-3">
+                            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-warm-border/40">
+                              <div
+                                className="h-full rounded-full bg-olive transition-[width] duration-500"
+                                style={{ width: `${filePercent}%` }}
+                              />
+                            </div>
+                            <span className="w-12 text-right text-xs text-warm-muted">
+                              {filePercent}%
+                            </span>
+                          </div>
+                          {file.errorMessage && (
+                            <p className="mt-2 text-xs text-red-500">{file.errorMessage}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {snapshot.target === 'opfs' && (snapshot.phase === 'complete' || snapshot.phase === 'needs-attention') && (
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    disabled={sharing}
+                    className="inline-flex items-center gap-2 rounded-full border border-warm-border/60 bg-white px-4 py-2 text-sm font-medium text-warm-dark transition hover:bg-surface-mid disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {sharing ? <RefreshCw size={15} className="animate-spin" /> : <Share2 size={15} />}
+                    Save to Files / Camera Roll
+                  </button>
+
+                  {snapshot.offlineGalleryUrl && (
+                    <a
+                      href={snapshot.offlineGalleryUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-full border border-warm-border/60 bg-white px-4 py-2 text-sm font-medium text-warm-dark transition hover:bg-surface-mid"
+                    >
+                      <ExternalLink size={15} />
+                      View offline gallery
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {(actionError || snapshot.lastError || devicesError) && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="flex items-start gap-2">
+              <AlertCircle size={16} className="mt-0.5" />
+              <p>{actionError || snapshot.lastError || devicesError}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-[24px] border border-warm-border/50 bg-white/80 p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-warm-muted">
+                  Anchored devices
+                </p>
+                <p className="mt-1 text-lg font-semibold text-warm-dark">
+                  {devicesLoading ? 'Loading...' : `${devices.length} device${devices.length === 1 ? '' : 's'}`}
+                </p>
+              </div>
+              <div className="rounded-full bg-surface-mid/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-warm-muted">
+                Family only
+              </div>
+            </div>
+
+            {devicesLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 2 }).map((_, index) => (
+                  <div key={index} className="animate-pulse rounded-2xl border border-warm-border/30 bg-surface-low/70 p-4">
+                    <div className="h-4 w-40 rounded bg-warm-border/40" />
+                    <div className="mt-3 h-2 rounded bg-warm-border/30" />
+                  </div>
+                ))}
+              </div>
+            ) : devices.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-warm-border/50 bg-surface-low/70 p-5 text-sm leading-7 text-warm-muted">
+                No Legacy Vault has been anchored from this memorial yet. When a family member anchors it,
+                their device will appear here with live sync progress.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {devices.map((device) => {
+                  const devicePercent =
+                    device.totalBytes > 0
+                      ? Math.min(
+                          100,
+                          Math.round((device.syncProgressBytes / device.totalBytes) * 100)
+                        )
+                      : 0;
+
+                  return (
+                    <div
+                      key={device.id}
+                      className="rounded-2xl border border-warm-border/40 bg-surface-low/70 p-4"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            {deviceIcon(device.browser)}
+                            <p className="truncate text-sm font-medium text-warm-dark">
+                              {device.deviceName}
+                            </p>
+                          </div>
+                          <p className="mt-1 text-xs text-warm-muted">
+                            {device.location || `${device.browser} • ${device.os}`}
+                          </p>
+                        </div>
+                        {statusBadge(device.status)}
+                      </div>
+
+                      <div className="mt-4 flex items-center gap-3">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-warm-border/40">
+                          <div
+                            className="h-full rounded-full bg-olive transition-[width] duration-500"
+                            style={{ width: `${devicePercent}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-warm-muted">{devicePercent}%</span>
+                      </div>
+
+                      <p className="mt-2 text-xs text-warm-muted">
+                        {formatBytes(device.syncProgressBytes)} of {formatBytes(device.totalBytes)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-[24px] border border-warm-border/50 bg-white/80 p-5">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-olive/10 text-olive">
+                <FolderOpen size={18} />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.16em] text-warm-muted">
+                  What Anchor does
+                </p>
+                <p className="mt-2 text-sm leading-7 text-warm-muted">
+                  Chrome, Edge, and Opera save into a visible Legacy Vault folder you choose once and can resume later.
+                  Apple devices anchor into a hidden local vault, then can hand it off to Files or Photos without
+                  re-downloading anything.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-surface-low/70 p-4 text-sm leading-7 text-warm-muted">
+              Every anchored device holds a complete local copy of this memorial.
+              When new photos or videos are added, the next anchor only secures the files that changed.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+
+===== FILE: components/dashboard/ArchiveExportAction.tsx =====
+'use client';
+
+import { useState } from 'react';
+import { ChevronRight, Download, Loader2 } from 'lucide-react';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
+
+interface ArchiveExportActionProps {
+  memorialId: string;
+  panelClassName?: string;
+  buttonClassName?: string;
+  title?: string;
+  description?: string;
+  summaryLabel?: string;
+  summaryBusyLabel?: string;
+  detailLabel?: string;
+}
+
+export default function ArchiveExportAction({
+  memorialId,
+  panelClassName = 'border border-warm-border/25 bg-white p-6 rounded-none',
+  buttonClassName = 'w-full flex items-center justify-between gap-3 border border-warm-border/20 px-4 py-3 text-left text-sm text-warm-dark transition-colors hover:bg-surface-mid/50 disabled:opacity-60 disabled:cursor-wait rounded-none',
+  title = 'Export this archive',
+  description = 'Download a complete offline copy. Useful for backups and sharing with people who do not have an account.',
+  summaryLabel = 'Portable archive export',
+  summaryBusyLabel = 'Generating portable archive...',
+  detailLabel = 'Full offline ZIP copy of this memorial',
+}: ArchiveExportActionProps) {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const runExport = async () => {
+    setShowConfirm(false);
+    setErrorMessage(null);
+
+    try {
+      setIsExporting(true);
+
+      const response = await fetch('/api/arche/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memorialId }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok || !payload?.success || !payload?.downloadUrl) {
+        throw new Error(payload?.error || 'Could not export this archive right now.');
+      }
+
+      const link = document.createElement('a');
+      link.href = payload.downloadUrl;
+      link.download = payload.filename || 'archive.zip';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error: any) {
+      setErrorMessage(error.message || 'Could not export this archive right now.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <>
+      <div className={panelClassName}>
+        <h4 className="font-serif text-base text-warm-dark mb-4">{title}</h4>
+        <p className="text-xs text-warm-muted mb-4 leading-relaxed">{description}</p>
+        <button
+          type="button"
+          onClick={() => setShowConfirm(true)}
+          disabled={isExporting}
+          className={buttonClassName}
+        >
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-8 w-8 items-center justify-center bg-surface-mid rounded-none">
+              {isExporting ? (
+                <Loader2 size={14} className="text-warm-muted animate-spin" />
+              ) : (
+                <Download size={14} className="text-warm-muted" />
+              )}
+            </div>
+            <div>
+              <p className="font-serif">{isExporting ? summaryBusyLabel : summaryLabel}</p>
+              <p className="text-xs text-warm-outline">{detailLabel}</p>
+            </div>
+          </div>
+          <ChevronRight size={15} className="text-warm-outline flex-shrink-0" />
+        </button>
+        {errorMessage && <p className="mt-3 text-xs text-red-600">{errorMessage}</p>}
+      </div>
+
+      <ConfirmDialog
+        open={showConfirm}
+        title="Generate the portable archive export?"
+        description="This can take a minute to package your text, metadata, and included media into a downloadable archive."
+        confirmLabel="Generate export"
+        onConfirm={runExport}
+        onCancel={() => setShowConfirm(false)}
+      />
+    </>
+  );
+}
+
+
+===== FILE: components/providers/AuthProvider.tsx =====
+'use client';
+
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { usePathname } from 'next/navigation';
+import { createClient } from '@/utils/supabase/client';
+import {
+    getOrCreateSessionFingerprint,
+    SESSION_FINGERPRINT_HEADER,
+} from '@/lib/sessionFingerprint';
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+export interface UserArchive {
+    id: string;
+    mode: 'draft' | 'personal' | 'family' | 'concierge';
+    paid: boolean;
+    status: 'draft' | 'published';
+    fullName: string | null;
+    profilePhotoUrl: string | null;
+    updatedAt: string;
+    paymentConfirmedAt: string | null;
+}
+
+export type UserPlan = 'none' | 'draft' | 'personal' | 'family' | 'concierge';
+
+export interface AuthState {
+    // Core auth
+    authenticated: boolean;
+    loading: boolean;
+    user: { id: string; email: string } | null;
+
+    // Plan & archives (server-validated)
+    plan: UserPlan;
+    hasPaid: boolean;
+    archives: UserArchive[];
+
+    // Actions
+    revalidate: () => Promise<void>;
+}
+
+export function isFamilyPlan(plan: UserPlan) {
+    return plan === 'family' || plan === 'concierge';
+}
+
+export function isPersonalPlan(plan: UserPlan) {
+    return plan === 'personal';
+}
+
+export function getPlanDashboardPath(plan: UserPlan | string, userId: string) {
+    if (plan === 'family' || plan === 'concierge') {
+        return `/dashboard/family/${userId}`;
+    }
+
+    if (plan === 'personal') {
+        return `/dashboard/personal/${userId}`;
+    }
+
+    return `/dashboard/draft/${userId}`;
+}
+
+const defaultState: AuthState = {
+    authenticated: false,
+    loading: true,
+    user: null,
+    plan: 'none',
+    hasPaid: false,
+    archives: [],
+    revalidate: async () => { },
+};
+
+const AuthContext = createContext<AuthState>(defaultState);
+
+// ─── Provider ────────────────────────────────────────────────────────────────
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+    const [state, setState] = useState<Omit<AuthState, 'revalidate'>>({
+        authenticated: false,
+        loading: true,
+        user: null,
+        plan: 'none',
+        hasPaid: false,
+        archives: [],
+    });
+    const pathname = usePathname();
+    const lastFetchRef = useRef<number>(0);
+    const isFetchingRef = useRef(false);
+    const lastHeartbeatRef = useRef<number>(0);
+
+    const sendHeartbeat = useCallback(async () => {
+        if (!state.authenticated || !state.user) return;
+
+        const now = Date.now();
+        if (now - lastHeartbeatRef.current < 5 * 60 * 1000) {
+            return;
+        }
+
+        lastHeartbeatRef.current = now;
+        await fetch('/api/user/heartbeat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        }).catch(() => undefined);
+    }, [state.authenticated, state.user]);
+
+    const fetchState = useCallback(async (force = false) => {
+        // Debounce non-forced calls to avoid spam
+        const now = Date.now();
+        if (!force && now - lastFetchRef.current < 2000) return;
+        // Never block forced calls (back-button, payment completion, etc.)
+        // Only skip if a non-forced call and already fetching
+        if (!force && isFetchingRef.current) return;
+
+        isFetchingRef.current = true;
+        try {
+            const fingerprint = getOrCreateSessionFingerprint();
+            const res = await fetch('/api/user/state', {
+                cache: 'no-store',
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    ...(fingerprint
+                        ? { [SESSION_FINGERPRINT_HEADER]: fingerprint }
+                        : {}),
+                },
+            });
+            const data = await res.json();
+
+            if (
+                res.status === 401 &&
+                (data?.session?.revoked || data?.session?.expired)
+            ) {
+                const supabase = createClient();
+                await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+
+                setState({
+                    authenticated: false,
+                    loading: false,
+                    user: null,
+                    plan: 'none',
+                    hasPaid: false,
+                    archives: [],
+                });
+                lastFetchRef.current = Date.now();
+                return;
+            }
+
+            if (!res.ok) throw new Error(data?.error || 'State fetch failed');
+
+            setState({
+                authenticated: data.authenticated,
+                loading: false,
+                user: data.user,
+                plan: data.plan || 'none',
+                hasPaid: data.hasPaid || false,
+                archives: data.archives || [],
+            });
+            lastFetchRef.current = Date.now();
+        } catch (err) {
+            console.error('[AuthProvider] State fetch error:', err);
+            // Fallback: check Supabase client auth directly so we at least
+            // know if the user is authenticated (prevents false redirects to /login)
+            try {
+                const supabase = createClient();
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    setState(prev => ({
+                        ...prev,
+                        loading: false,
+                        authenticated: true,
+                        user: { id: user.id, email: user.email || '' },
+                        // Keep existing plan/archives — don't overwrite with empty
+                    }));
+                } else {
+                    setState(prev => ({ ...prev, loading: false }));
+                }
+            } catch {
+                setState(prev => ({ ...prev, loading: false }));
+            }
+        } finally {
+            isFetchingRef.current = false;
+        }
+    }, []);
+
+    // Initial fetch
+    useEffect(() => {
+        fetchState(true);
+    }, [fetchState]);
+
+    // Re-fetch when navigating to critical pages
+    useEffect(() => {
+        const criticalPaths = ['/dashboard', '/payment', '/choice-pricing', '/personal-confirmation', '/family-confirmation', '/payment-success', '/preserve'];
+        const isCritical = criticalPaths.some(p => pathname.startsWith(p));
+        if (isCritical) {
+            fetchState(true);
+        }
+    }, [pathname, fetchState]);
+
+    useEffect(() => {
+        void sendHeartbeat();
+    }, [pathname, sendHeartbeat]);
+
+    // Listen for browser back/forward button (popstate event)
+    // This is the KEY fix: when the user hits back, the browser fires popstate
+    // BEFORE React re-renders, so we force a revalidation immediately
+    useEffect(() => {
+        const handlePopState = () => {
+            fetchState(true);
+        };
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [fetchState]);
+
+    // Listen for Supabase auth state changes (login/logout)
+    useEffect(() => {
+        const supabase = createClient();
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+            if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+                fetchState(true);
+            }
+        });
+        return () => subscription.unsubscribe();
+    }, [fetchState]);
+
+    // Listen for visibility change — force revalidate when tab becomes visible
+    useEffect(() => {
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible') {
+                fetchState(true);
+                void sendHeartbeat();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => document.removeEventListener('visibilitychange', handleVisibility);
+    }, [fetchState, sendHeartbeat]);
+
+    useEffect(() => {
+        const handleStorage = (event: StorageEvent) => {
+            if (!event.key || event.key.startsWith('sb-') || event.key.startsWith('supabase.')) {
+                fetchState(true);
+            }
+        };
+
+        const handlePageShow = (event: PageTransitionEvent) => {
+            if (event.persisted) {
+                fetchState(true);
+            }
+        };
+
+        window.addEventListener('storage', handleStorage);
+        window.addEventListener('pageshow', handlePageShow);
+
+        return () => {
+            window.removeEventListener('storage', handleStorage);
+            window.removeEventListener('pageshow', handlePageShow);
+        };
+    }, [fetchState]);
+
+    const contextValue: AuthState = {
+        ...state,
+        revalidate: () => fetchState(true),
+    };
+
+    return (
+        <AuthContext.Provider value={contextValue}>
+            {children}
+        </AuthContext.Provider>
+    );
+}
+
+// ─── Hook ────────────────────────────────────────────────────────────────────
+export function useAuth(): AuthState {
+    return useContext(AuthContext);
+}
+
+// ─── Utility: Get the dashboard path for a user based on their real state ────
+export function getDashboardPath(state: AuthState): string {
+    if (!state.authenticated || !state.user) return '/login';
+
+    // Prioritize the highest plan level from the server-validated plan field
+    if (isFamilyPlan(state.plan) || isPersonalPlan(state.plan)) {
+        return getPlanDashboardPath(state.plan, state.user.id);
+    }
+
+    const draftArchive = state.archives.find(a => !a.paid);
+    if (draftArchive) {
+        return getPlanDashboardPath('draft', state.user.id);
+    }
+
+    return '/choice-pricing';
+}
+
+
+===== FILE: lib/anchor/anchorService.ts =====
+'use client';
+
+import { fileSave, supported as browserFsAccessSupported } from 'browser-fs-access';
+
+import {
+  ANCHOR_ROTATING_PHRASES,
+  type AnchorDeviceStatus,
+  type AnchorManifest,
+  type AnchorPersistedJob,
+  type AnchorRuntimeFileState,
+  type AnchorSessionSnapshot,
+  type AnchorTarget,
+  type BrowserCapabilities,
+} from '@/lib/anchor/shared';
+import { getAnchorJob, putAnchorJob } from '@/lib/anchor/db';
+
+export type {
+  AnchorDeviceStatus,
+  AnchorRuntimeFileState,
+  AnchorSessionSnapshot,
+  BrowserCapabilities,
+} from '@/lib/anchor/shared';
+
+export interface AnchorDevice {
+  id: string;
+  deviceName: string;
+  browser: string;
+  os: string;
+  syncProgressBytes: number;
+  totalBytes: number;
+  lastSyncAt: string | null;
+  status: AnchorDeviceStatus;
+  location?: string | null;
+}
+
+type WorkerSnapshotMessage = {
+  type: 'snapshot';
+  job: AnchorPersistedJob;
+  currentFileId: string | null;
+  currentFileName: string | null;
+  currentMessage: string | null;
+};
+
+type WorkerMessage = WorkerSnapshotMessage | { type: 'fatal'; message: string };
+
+interface WorkerStartMessage {
+  type: 'start';
+  payload: {
+    jobKey: string;
+    memorialId: string;
+    memorialName: string;
+    deviceId: string;
+    target: AnchorTarget;
+    manifest: AnchorManifest;
+    directoryHandle?: FileSystemDirectoryHandle | null;
+    rootDirectoryName?: string | null;
+    vaultDirectoryName: string;
+    vaultDisplayPath: string | null;
+    serviceWorkerReady: boolean;
+  };
+}
+
+type DirectoryPickerFn = (options?: {
+  id?: string;
+  mode?: 'read' | 'readwrite';
+}) => Promise<FileSystemDirectoryHandle>;
+
+type PermissionAwareDirectoryHandle = FileSystemDirectoryHandle & {
+  queryPermission?: (descriptor?: { mode?: 'read' | 'readwrite' }) => Promise<PermissionState>;
+  requestPermission?: (descriptor?: { mode?: 'read' | 'readwrite' }) => Promise<PermissionState>;
+  values?: () => AsyncIterableIterator<FileSystemHandle>;
+};
+
+const DEFAULT_SNAPSHOT: AnchorSessionSnapshot = {
+  memorialId: null,
+  memorialName: null,
+  deviceId: null,
+  target: null,
+  phase: 'idle',
+  capabilities: null,
+  summary: null,
+  totalBytes: 0,
+  transferredBytes: 0,
+  currentFileId: null,
+  currentFileName: null,
+  currentMessage: null,
+  files: [],
+  failedCount: 0,
+  canResume: false,
+  hasSavedHandle: false,
+  folderDisplayPath: null,
+  syncedAt: null,
+  lastError: null,
+  serviceWorkerReady: false,
+  offlineGalleryUrl: null,
+  fallbackDownloadUrl: null,
+};
+
+const ANCHOR_DEVICE_ID_KEY = 'ulumae-anchor-device-id';
+
+function formatWorkerMessage(phase: AnchorSessionSnapshot['phase'], currentFileName: string | null) {
+  if (phase === 'preparing') return 'Preparing your Legacy Vault...';
+  if (phase === 'finalizing') return 'Finishing the offline gallery...';
+  if (phase === 'complete') return 'This archive is now anchored to your device.';
+  if (phase === 'needs-attention') return 'Anchoring finished with a few files that still need attention.';
+  if (phase === 'unsupported') return 'Using the portable fallback for this browser...';
+  if (phase === 'syncing' && currentFileName) {
+    return `Anchoring ${currentFileName}...`;
+  }
+  return null;
+}
+
+export function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+export function detectBrowserCapabilities(): BrowserCapabilities {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return {
+      magicFolder: false,
+      opfs: false,
+      zipFallback: true,
+      browserFsAccessSupported: false,
+      browserName: 'Unknown',
+      browserVersion: '0',
+      isApplePlatform: false,
+      preferredTarget: 'fallback-save',
+      supportsWakeLock: false,
+      supportsPersistentStorage: false,
+      supportsStorageEstimate: false,
+      supportsServiceWorker: false,
+      supportsWebShare: false,
+    };
+  }
+
+  const ua = navigator.userAgent;
+  const platform = navigator.platform || '';
+  const isEdge = ua.includes('Edg/');
+  const isOpera = ua.includes('OPR/');
+  const isChrome = ua.includes('Chrome/') && !isEdge && !isOpera;
+  const isFirefox = ua.includes('Firefox/');
+  const isSafari =
+    ua.includes('Safari/') && !isChrome && !isEdge && !isOpera && !isFirefox;
+  const isApplePlatform = /(Mac|iPhone|iPad|iPod)/i.test(platform) || /(iPhone|iPad|iPod)/i.test(ua);
+
+  const browserName = isEdge
+    ? 'Edge'
+    : isOpera
+      ? 'Opera'
+      : isChrome
+        ? 'Chrome'
+        : isSafari
+          ? 'Safari'
+          : isFirefox
+            ? 'Firefox'
+            : 'Unknown';
+
+  const browserVersion =
+    ua.match(/(?:Edg|OPR|Chrome|Firefox|Version)\/(\d+)/)?.[1] || '0';
+
+  const showDirectoryPickerFn = (
+    window as typeof window & {
+      showDirectoryPicker?: DirectoryPickerFn;
+    }
+  ).showDirectoryPicker;
+  const magicFolder = typeof showDirectoryPickerFn === 'function';
+  const opfs =
+    typeof navigator.storage?.getDirectory === 'function';
+  const preferredTarget: AnchorTarget = isApplePlatform && opfs
+    ? 'opfs'
+    : magicFolder
+      ? 'file-system-access'
+      : 'fallback-save';
+
+  return {
+    magicFolder,
+    opfs,
+    zipFallback: !magicFolder && !opfs,
+    browserFsAccessSupported,
+    browserName,
+    browserVersion,
+    isApplePlatform,
+    preferredTarget,
+    supportsWakeLock: typeof navigator.wakeLock?.request === 'function',
+    supportsPersistentStorage: typeof navigator.storage?.persist === 'function',
+    supportsStorageEstimate: typeof navigator.storage?.estimate === 'function',
+    supportsServiceWorker: 'serviceWorker' in navigator,
+    supportsWebShare: typeof navigator.share === 'function',
+  };
+}
+
+export function getDeviceInfo() {
+  const capabilities = detectBrowserCapabilities();
+  const platform = typeof navigator !== 'undefined' ? navigator.platform || 'Unknown OS' : 'Unknown OS';
+
+  return {
+    name: `${capabilities.browserName} on ${platform}`,
+    browser: `${capabilities.browserName} ${capabilities.browserVersion}`,
+    os: platform,
+  };
+}
+
+function getStoredDeviceId() {
+  if (typeof window === 'undefined') return crypto.randomUUID();
+
+  const existing = window.localStorage.getItem(ANCHOR_DEVICE_ID_KEY);
+  if (existing) return existing;
+
+  const next = `dev_${crypto.randomUUID()}`;
+  window.localStorage.setItem(ANCHOR_DEVICE_ID_KEY, next);
+  return next;
+}
+
+function snapshotFromJob(
+  job: AnchorPersistedJob | null,
+  capabilities: BrowserCapabilities | null,
+  overrides?: Partial<AnchorSessionSnapshot>
+): AnchorSessionSnapshot {
+  if (!job) {
+    return {
+      ...DEFAULT_SNAPSHOT,
+      capabilities,
+      ...overrides,
+    };
+  }
+
+  const files = Object.values(job.fileStates).sort((left, right) =>
+    left.relativePath.localeCompare(right.relativePath)
+  );
+  const transferredBytes = files.reduce((sum, file) => sum + file.bytesTransferred, 0);
+  const failedCount = files.filter(
+    (file) => file.status === 'failed' || file.status === 'skipped'
+  ).length;
+  const hasSavedHandle = Boolean(job.directoryHandle) || job.target === 'opfs';
+  const canResume = hasSavedHandle && job.phase !== 'syncing';
+
+  return {
+    memorialId: job.memorialId,
+    memorialName: job.memorialName,
+    deviceId: job.deviceId,
+    target: job.target,
+    phase: job.phase,
+    capabilities,
+    summary: job.summary,
+    totalBytes: job.summary?.totalBytes || files.reduce((sum, file) => sum + file.totalBytes, 0),
+    transferredBytes,
+    currentFileId: null,
+    currentFileName: null,
+    currentMessage: formatWorkerMessage(job.phase, null),
+    files,
+    failedCount,
+    canResume,
+    hasSavedHandle,
+    folderDisplayPath: job.vaultDisplayPath || null,
+    syncedAt: job.syncedAt,
+    lastError: job.lastError,
+    serviceWorkerReady: job.serviceWorkerReady,
+    offlineGalleryUrl:
+      job.target === 'opfs' && job.serviceWorkerReady
+        ? `/anchor/offline/${job.memorialId}`
+        : null,
+    fallbackDownloadUrl: null,
+    ...overrides,
+  };
+}
+
+async function requestDirectoryHandle(memorialId: string) {
+  const picker = (
+    window as typeof window & {
+      showDirectoryPicker?: DirectoryPickerFn;
+    }
+  ).showDirectoryPicker;
+
+  if (!picker) {
+    throw new Error('This browser cannot choose a visible Legacy Vault folder.');
+  }
+
+  return picker({
+    id: `ulumae-anchor-${memorialId}`,
+    mode: 'readwrite',
+  });
+}
+
+async function ensureHandlePermission(handle: FileSystemDirectoryHandle) {
+  const permissionHandle = handle as PermissionAwareDirectoryHandle;
+  if (!permissionHandle.queryPermission || !permissionHandle.requestPermission) {
+    return handle;
+  }
+
+  const current = await permissionHandle.queryPermission({ mode: 'readwrite' });
+  if (current === 'granted') return handle;
+
+  const requested = await permissionHandle.requestPermission({ mode: 'readwrite' });
+  if (requested !== 'granted') {
+    throw new Error('The Legacy Vault folder permission was declined.');
+  }
+
+  return handle;
+}
+
+async function fetchAnchorManifest(memorialId: string): Promise<AnchorManifest> {
+  const response = await fetch('/api/anchor/manifest', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ memorialId }),
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Could not prepare the Legacy Vault manifest.');
+  }
+
+  return payload as AnchorManifest;
+}
+
+async function registerAnchorDevice(args: {
+  memorialId: string;
+  deviceId: string;
+  deviceName: string;
+  browser: string;
+  os: string;
+  syncProgressBytes?: number;
+  totalBytes?: number;
+  status?: AnchorDeviceStatus;
+  location?: string | null;
+}) {
+  const response = await fetch('/api/anchor/register-device', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(args),
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.error || 'Could not register this device for anchoring.');
+  }
+
+  return payload as {
+    deviceId: string;
+    status: AnchorDeviceStatus;
+    location: string | null;
+  };
+}
+
+async function pushSyncStatus(args: {
+  memorialId: string;
+  deviceId: string;
+  deviceName: string;
+  browser: string;
+  os: string;
+  syncProgressBytes: number;
+  totalBytes: number;
+  status: AnchorDeviceStatus;
+  location?: string | null;
+}) {
+  await fetch('/api/anchor/sync-status', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(args),
+  }).catch(() => undefined);
+}
+
+async function prepareStorage(
+  capabilities: BrowserCapabilities,
+  target: AnchorTarget,
+  totalBytes: number
+) {
+  if (capabilities.supportsPersistentStorage) {
+    try {
+      await navigator.storage.persist();
+    } catch {
+      // Best effort.
+    }
+  }
+
+  if (capabilities.supportsStorageEstimate && target === 'opfs') {
+    const estimate = await navigator.storage.estimate();
+    const available = (estimate.quota || 0) - (estimate.usage || 0);
+
+    if (available > 0 && available < totalBytes) {
+      throw new Error(
+        `This browser vault only has about ${formatBytes(available)} available, but this archive needs ${formatBytes(totalBytes)}.`
+      );
+    }
+  }
+}
+
+async function runPortableFallback(memorialId: string, memorialName: string) {
+  const response = await fetch('/api/arche/generate', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ memorialId }),
+  });
+  const payload = await response.json();
+
+  if (!response.ok || !payload?.downloadUrl) {
+    throw new Error(payload?.error || 'Could not create the portable anchor bundle.');
+  }
+
+  const archiveResponse = await fetch(payload.downloadUrl, {
+    cache: 'no-store',
+  });
+
+  if (!archiveResponse.ok) {
+    throw new Error('Could not fetch the portable anchor bundle.');
+  }
+
+  await fileSave(archiveResponse, {
+    id: `ulumae-anchor-fallback-${memorialId}`,
+    fileName: payload.filename || `${memorialName}-legacy-vault.zip`,
+    description: 'ULUMAE Legacy Vault',
+    extensions: ['.zip'],
+    mimeTypes: ['application/zip'],
+  });
+}
+
+async function getOpfsVaultDirectory(memorialId: string, vaultDirectoryName: string) {
+  const root = await navigator.storage.getDirectory();
+  const anchorRoot = await root.getDirectoryHandle('ulumae-anchor', { create: true });
+  const memorialRoot = await anchorRoot.getDirectoryHandle(memorialId, { create: true });
+  return memorialRoot.getDirectoryHandle(vaultDirectoryName, { create: true });
+}
+
+async function collectOpfsFiles(
+  directoryHandle: FileSystemDirectoryHandle,
+  files: File[] = []
+): Promise<File[]> {
+  const iterator = (directoryHandle as PermissionAwareDirectoryHandle).values?.();
+  if (!iterator) {
+    return files;
+  }
+
+  for await (const entry of iterator) {
+    if (entry.kind === 'file') {
+      files.push(await (entry as FileSystemFileHandle).getFile());
+      continue;
+    }
+
+    await collectOpfsFiles(entry as FileSystemDirectoryHandle, files);
+  }
+
+  return files;
+}
+
+class AnchorController {
+  private snapshot: AnchorSessionSnapshot = DEFAULT_SNAPSHOT;
+  private listeners = new Set<() => void>();
+  private worker: Worker | null = null;
+  private capabilities: BrowserCapabilities | null = null;
+  private currentManifest: AnchorManifest | null = null;
+  private wakeLock: WakeLockSentinel | null = null;
+  private syncTimer: number | null = null;
+  private syncIdentity:
+    | {
+        memorialId: string;
+        deviceId: string;
+        deviceName: string;
+        browser: string;
+        os: string;
+      }
+    | null = null;
+
+  subscribe(listener: () => void) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  getSnapshot() {
+    return this.snapshot;
+  }
+
+  private emit() {
+    for (const listener of this.listeners) {
+      listener();
+    }
+  }
+
+  private setSnapshot(next: AnchorSessionSnapshot) {
+    this.snapshot = next;
+    this.emit();
+  }
+
+  private async acquireWakeLock() {
+    if (!this.capabilities?.supportsWakeLock) return;
+
+    try {
+      this.wakeLock = await navigator.wakeLock.request('screen');
+    } catch {
+      this.wakeLock = null;
+    }
+  }
+
+  private async releaseWakeLock() {
+    try {
+      await this.wakeLock?.release();
+    } catch {
+      // noop
+    } finally {
+      this.wakeLock = null;
+    }
+  }
+
+  private ensureWorker() {
+    if (this.worker) return this.worker;
+
+    this.worker = new Worker(new URL('./anchor.worker.ts', import.meta.url), {
+      type: 'module',
+    });
+
+    this.worker.onmessage = async (event: MessageEvent<WorkerMessage>) => {
+      const message = event.data;
+
+      if (message.type === 'fatal') {
+        this.setSnapshot({
+          ...this.snapshot,
+          phase: 'needs-attention',
+          lastError: message.message,
+          currentMessage: message.message,
+        });
+        await this.releaseWakeLock();
+        return;
+      }
+
+      const nextSnapshot = snapshotFromJob(message.job, this.capabilities, {
+        currentFileId: message.currentFileId,
+        currentFileName: message.currentFileName,
+        currentMessage:
+          message.currentMessage ||
+          formatWorkerMessage(message.job.phase, message.currentFileName),
+      });
+
+      this.setSnapshot(nextSnapshot);
+      this.scheduleServerSync();
+
+      if (nextSnapshot.phase === 'complete' || nextSnapshot.phase === 'needs-attention') {
+        await this.releaseWakeLock();
+
+        if (nextSnapshot.target === 'opfs' && this.currentManifest) {
+          await this.activateOfflineVault(message.job, this.currentManifest);
+        }
+      }
+    };
+
+    return this.worker;
+  }
+
+  private scheduleServerSync() {
+    if (!this.syncIdentity) return;
+    if (this.syncTimer) return;
+
+    this.syncTimer = window.setTimeout(async () => {
+      this.syncTimer = null;
+      if (!this.syncIdentity) return;
+
+      const serverStatus: AnchorDeviceStatus =
+        this.snapshot.phase === 'complete'
+          ? 'synced'
+          : this.snapshot.phase === 'needs-attention'
+            ? 'error'
+            : 'syncing';
+
+      await pushSyncStatus({
+        memorialId: this.syncIdentity.memorialId,
+        deviceId: this.syncIdentity.deviceId,
+        deviceName: this.syncIdentity.deviceName,
+        browser: this.syncIdentity.browser,
+        os: this.syncIdentity.os,
+        syncProgressBytes: this.snapshot.transferredBytes,
+        totalBytes: this.snapshot.totalBytes,
+        status: serverStatus,
+        location: this.snapshot.folderDisplayPath,
+      });
+    }, 1200);
+  }
+
+  private async activateOfflineVault(job: AnchorPersistedJob, manifest: AnchorManifest) {
+    if (!this.capabilities?.supportsServiceWorker) return;
+
+    try {
+      const registration = await navigator.serviceWorker.register('/anchor-sw.js', {
+        scope: '/',
+      });
+      await navigator.serviceWorker.ready;
+
+      const vaultRoute = `/anchor/offline/${job.memorialId}`;
+      const swPayload = {
+        type: 'configure-anchor-vault',
+        payload: {
+          memorialId: job.memorialId,
+          routePath: manifest.offline.routePath || vaultRoute,
+          vaultDirectoryName: job.vaultDirectoryName,
+          remoteUrlMap: manifest.offline.remoteUrlMap,
+        },
+      };
+
+      if (registration.active) {
+        registration.active.postMessage(swPayload);
+      } else if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage(swPayload);
+      }
+
+      const refreshedJob = await getAnchorJob(job.jobKey);
+      if (refreshedJob) {
+        const nextJob = {
+          ...refreshedJob,
+          serviceWorkerReady: true,
+          updatedAt: new Date().toISOString(),
+        };
+        await putAnchorJob(nextJob);
+
+        this.setSnapshot(
+          snapshotFromJob(
+            nextJob,
+            this.capabilities,
+            {
+              serviceWorkerReady: true,
+              offlineGalleryUrl: vaultRoute,
+            }
+          )
+        );
+      }
+    } catch (error) {
+      console.error('[anchor-service-worker]', error);
+    }
+  }
+
+  async hydrate(memorialId: string) {
+    this.capabilities = detectBrowserCapabilities();
+    this.setSnapshot({
+      ...DEFAULT_SNAPSHOT,
+      memorialId,
+      capabilities: this.capabilities,
+    });
+    const job = await getAnchorJob(memorialId).catch(() => null);
+    this.setSnapshot(snapshotFromJob(job, this.capabilities));
+  }
+
+  async start(memorialId: string, options?: { resume?: boolean }) {
+    this.capabilities = detectBrowserCapabilities();
+
+    if (this.snapshot.phase === 'syncing' || this.snapshot.phase === 'preparing') {
+      return;
+    }
+
+    try {
+      const manifest = await fetchAnchorManifest(memorialId);
+      this.currentManifest = manifest;
+
+      if (this.capabilities.preferredTarget === 'fallback-save') {
+        this.setSnapshot({
+          ...DEFAULT_SNAPSHOT,
+          memorialId,
+          memorialName: manifest.memorialName,
+          capabilities: this.capabilities,
+          phase: 'unsupported',
+          currentMessage: 'Preparing the portable anchor bundle...',
+        });
+        await runPortableFallback(memorialId, manifest.memorialName);
+        this.setSnapshot({
+          ...DEFAULT_SNAPSHOT,
+          memorialId,
+          memorialName: manifest.memorialName,
+          capabilities: this.capabilities,
+          phase: 'complete',
+          currentMessage: 'A portable Legacy Vault was saved for this browser.',
+          summary: manifest.summary,
+          totalBytes: manifest.summary.totalBytes,
+          transferredBytes: manifest.summary.totalBytes,
+        });
+        return;
+      }
+
+      await prepareStorage(
+        this.capabilities,
+        this.capabilities.preferredTarget,
+        manifest.summary.totalBytes
+      );
+      await this.acquireWakeLock();
+
+      const existingJob = await getAnchorJob(memorialId).catch(() => null);
+      let directoryHandle: FileSystemDirectoryHandle | null | undefined = null;
+      let rootDirectoryName: string | null = null;
+
+      if (this.capabilities.preferredTarget === 'file-system-access') {
+        if (options?.resume && existingJob?.directoryHandle) {
+          directoryHandle = await ensureHandlePermission(existingJob.directoryHandle);
+        } else {
+          directoryHandle = await requestDirectoryHandle(memorialId);
+        }
+        rootDirectoryName = directoryHandle.name;
+      }
+
+      const vaultDisplayPath =
+        this.capabilities.preferredTarget === 'file-system-access'
+          ? `${rootDirectoryName}/${manifest.suggestedVaultName}`
+          : `Browser Vault/${manifest.suggestedVaultName}`;
+
+      const deviceInfo = getDeviceInfo();
+      const deviceId = existingJob?.deviceId || getStoredDeviceId();
+
+      await registerAnchorDevice({
+        memorialId,
+        deviceId,
+        deviceName: deviceInfo.name,
+        browser: deviceInfo.browser,
+        os: deviceInfo.os,
+        syncProgressBytes: existingJob
+          ? Object.values(existingJob.fileStates).reduce(
+              (sum, file) => sum + file.bytesTransferred,
+              0
+            )
+          : 0,
+        totalBytes: manifest.summary.totalBytes,
+        status: 'syncing',
+        location: vaultDisplayPath,
+      });
+
+      this.syncIdentity = {
+        memorialId,
+        deviceId,
+        deviceName: deviceInfo.name,
+        browser: deviceInfo.browser,
+        os: deviceInfo.os,
+      };
+
+      this.setSnapshot({
+        ...snapshotFromJob(existingJob, this.capabilities, {
+          memorialId,
+          memorialName: manifest.memorialName,
+          deviceId,
+          target: this.capabilities.preferredTarget,
+          phase: 'preparing',
+          summary: manifest.summary,
+          totalBytes: manifest.summary.totalBytes,
+          folderDisplayPath: vaultDisplayPath,
+          currentMessage: 'Preparing your Legacy Vault...',
+        }),
+      });
+
+      const worker = this.ensureWorker();
+      const message: WorkerStartMessage = {
+        type: 'start',
+        payload: {
+          jobKey: memorialId,
+          memorialId,
+          memorialName: manifest.memorialName,
+          deviceId,
+          target: this.capabilities.preferredTarget,
+          manifest,
+          directoryHandle,
+          rootDirectoryName,
+          vaultDirectoryName: manifest.suggestedVaultName,
+          vaultDisplayPath,
+          serviceWorkerReady: existingJob?.serviceWorkerReady || false,
+        },
+      };
+      worker.postMessage(message);
+    } catch (error) {
+      await this.releaseWakeLock();
+      throw error;
+    }
+  }
+
+  async shareToFiles(memorialId: string) {
+    const job = await getAnchorJob(memorialId);
+    if (!job || job.target !== 'opfs') {
+      throw new Error('This Legacy Vault is not stored in the browser vault on this device.');
+    }
+
+    if (!navigator.share || !navigator.canShare) {
+      throw new Error('This browser cannot hand the anchored files off to Files or Photos.');
+    }
+
+    const vaultDir = await getOpfsVaultDirectory(memorialId, job.vaultDirectoryName);
+    const files = await collectOpfsFiles(vaultDir);
+
+    if (files.length === 0) {
+      throw new Error('There are no anchored files ready to share yet.');
+    }
+
+    const orderedFiles = [...files].sort((left, right) =>
+      left.name === 'index.html' ? -1 : right.name === 'index.html' ? 1 : left.name.localeCompare(right.name)
+    );
+
+    if (!navigator.canShare({ files: orderedFiles })) {
+      throw new Error(
+        'This browser cannot share the full Legacy Vault in one step. Try fewer files or use the offline gallery directly.'
+      );
+    }
+
+    await navigator.share({
+      title: `${job.memorialName} Legacy Vault`,
+      text: 'Anchored locally from ULUMAE.',
+      files: orderedFiles,
+    });
+  }
+}
+
+const controller = new AnchorController();
+
+export function subscribeToAnchorSession(listener: () => void) {
+  return controller.subscribe(listener);
+}
+
+export function getAnchorSessionSnapshot() {
+  return controller.getSnapshot();
+}
+
+export function hydrateAnchorSession(memorialId: string) {
+  return controller.hydrate(memorialId);
+}
+
+export function startAnchor(memorialId: string, options?: { resume?: boolean }) {
+  return controller.start(memorialId, options);
+}
+
+export function shareAnchorToFiles(memorialId: string) {
+  return controller.shareToFiles(memorialId);
+}
+
+export { ANCHOR_ROTATING_PHRASES };
+
+
+===== FILE: lib/anchor/anchor.worker.ts =====
+/// <reference lib="webworker" />
+
+import { getAnchorJob, putAnchorJob } from '@/lib/anchor/db';
+import {
+  MAX_ANCHOR_CHUNK_BYTES,
+  type AnchorManifest,
+  type AnchorPersistedFileState,
+  type AnchorPersistedJob,
+  type AnchorTarget,
+} from '@/lib/anchor/shared';
+
+type WorkerStartPayload = {
+  jobKey: string;
+  memorialId: string;
+  memorialName: string;
+  deviceId: string;
+  target: AnchorTarget;
+  manifest: AnchorManifest;
+  directoryHandle?: FileSystemDirectoryHandle | null;
+  rootDirectoryName?: string | null;
+  vaultDirectoryName: string;
+  vaultDisplayPath: string | null;
+  serviceWorkerReady: boolean;
+};
+
+type WorkerStartMessage = {
+  type: 'start';
+  payload: WorkerStartPayload;
+};
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function buildFileState(file: AnchorManifest['files'][number]): AnchorPersistedFileState {
+  return {
+    fileId: file.id,
+    displayName: file.displayName,
+    category: file.category,
+    mimeType: file.mimeType,
+    relativePath: file.relativePath,
+    signature: file.signature,
+    status: 'pending',
+    bytesTransferred: 0,
+    totalBytes: file.size,
+    attempts: 0,
+    errorMessage: null,
+    updatedAt: nowIso(),
+  };
+}
+
+function mergeFileStates(
+  manifest: AnchorManifest,
+  existingJob: AnchorPersistedJob | null
+) {
+  return Object.fromEntries(
+    manifest.files.map((file) => {
+      const existing = existingJob?.fileStates[file.id];
+      const isSameVersion =
+        existing &&
+        existing.signature === file.signature &&
+        existing.relativePath === file.relativePath;
+
+      if (isSameVersion && existing.status === 'completed') {
+        return [
+          file.id,
+          {
+            ...existing,
+            displayName: file.displayName,
+            category: file.category,
+            mimeType: file.mimeType,
+            totalBytes: file.size,
+          },
+        ];
+      }
+
+      return [file.id, buildFileState(file)];
+    })
+  ) as Record<string, AnchorPersistedFileState>;
+}
+
+function buildJob(
+  payload: WorkerStartPayload,
+  existingJob: AnchorPersistedJob | null
+): AnchorPersistedJob {
+  const createdAt = existingJob?.createdAt || nowIso();
+
+  return {
+    jobKey: payload.jobKey,
+    memorialId: payload.memorialId,
+    memorialName: payload.memorialName,
+    deviceId: payload.deviceId,
+    target: payload.target,
+    phase: 'preparing',
+    directoryHandle:
+      payload.target === 'file-system-access'
+        ? payload.directoryHandle || null
+        : null,
+    rootDirectoryName: payload.rootDirectoryName || null,
+    vaultDirectoryName: payload.vaultDirectoryName,
+    vaultDisplayPath: payload.vaultDisplayPath,
+    lastManifestFingerprint: payload.manifest.manifestFingerprint,
+    summary: payload.manifest.summary,
+    fileStates: mergeFileStates(payload.manifest, existingJob),
+    failedFileIds: [],
+    syncedAt: null,
+    updatedAt: nowIso(),
+    createdAt,
+    lastError: null,
+    serviceWorkerReady: payload.serviceWorkerReady,
+  };
+}
+
+function postSnapshot(
+  job: AnchorPersistedJob,
+  currentFileId: string | null,
+  currentFileName: string | null,
+  currentMessage: string | null
+) {
+  self.postMessage({
+    type: 'snapshot',
+    job,
+    currentFileId,
+    currentFileName,
+    currentMessage,
+  });
+}
+
+async function persistAndPost(
+  job: AnchorPersistedJob,
+  currentFileId: string | null,
+  currentFileName: string | null,
+  currentMessage: string | null
+) {
+  job.updatedAt = nowIso();
+  await putAnchorJob(job);
+  postSnapshot(job, currentFileId, currentFileName, currentMessage);
+}
+
+async function ensureDirectoryPath(
+  root: FileSystemDirectoryHandle,
+  segments: string[]
+) {
+  let current = root;
+
+  for (const segment of segments) {
+    current = await current.getDirectoryHandle(segment, { create: true });
+  }
+
+  return current;
+}
+
+async function getTargetVaultRoot(
+  payload: WorkerStartPayload
+): Promise<FileSystemDirectoryHandle> {
+  if (payload.target === 'file-system-access') {
+    if (!payload.directoryHandle) {
+      throw new Error('No Legacy Vault folder handle is available.');
+    }
+
+    return payload.directoryHandle.getDirectoryHandle(payload.vaultDirectoryName, {
+      create: true,
+    });
+  }
+
+  const root = await navigator.storage.getDirectory();
+  const anchorRoot = await root.getDirectoryHandle('ulumae-anchor', { create: true });
+  const memorialRoot = await anchorRoot.getDirectoryHandle(payload.memorialId, {
+    create: true,
+  });
+
+  return memorialRoot.getDirectoryHandle(payload.vaultDirectoryName, { create: true });
+}
+
+async function createFileWriters(
+  root: FileSystemDirectoryHandle,
+  relativePath: string,
+  target: AnchorTarget
+) {
+  const parts = relativePath.split('/').filter(Boolean);
+  const fileName = parts.pop();
+
+  if (!fileName) {
+    throw new Error(`Invalid target path: ${relativePath}`);
+  }
+
+  const parent = await ensureDirectoryPath(root, parts);
+  const fileHandle = await parent.getFileHandle(fileName, { create: true });
+
+  if (target === 'opfs' && 'createSyncAccessHandle' in fileHandle) {
+    const syncHandle = await fileHandle.createSyncAccessHandle();
+    syncHandle.truncate(0);
+
+    return {
+      async write(chunk: Uint8Array, position: number) {
+        syncHandle.write(chunk, { at: position });
+      },
+      async close() {
+        syncHandle.flush();
+        syncHandle.close();
+      },
+    };
+  }
+
+  const writable = await fileHandle.createWritable();
+  await writable.truncate(0);
+
+  return {
+      async write(chunk: Uint8Array, position: number) {
+        const normalizedChunk = Uint8Array.from(chunk);
+        await writable.write({
+          type: 'write',
+          position,
+          data: new Blob([normalizedChunk]),
+        });
+      },
+    async close() {
+      await writable.close();
+    },
+  };
+}
+
+async function writeInlineFile(
+  root: FileSystemDirectoryHandle,
+  target: AnchorTarget,
+  file: AnchorManifest['files'][number]
+) {
+  const writer = await createFileWriters(root, file.relativePath, target);
+  const bytes = new TextEncoder().encode(
+    file.source.type === 'inline' ? file.source.content : ''
+  );
+  await writer.write(bytes, 0);
+  await writer.close();
+}
+
+async function writeRemoteFile(
+  root: FileSystemDirectoryHandle,
+  target: AnchorTarget,
+  file: AnchorManifest['files'][number],
+  onProgress: (bytesTransferred: number) => Promise<void>
+) {
+  if (file.source.type !== 'remote') {
+    throw new Error('Remote file expected.');
+  }
+
+  const writer = await createFileWriters(root, file.relativePath, target);
+  let position = 0;
+
+  try {
+    for (let start = 0; start < file.size; start += MAX_ANCHOR_CHUNK_BYTES) {
+      const end = Math.min(file.size - 1, start + MAX_ANCHOR_CHUNK_BYTES - 1);
+      const response = await fetch(file.source.url, {
+        cache: 'no-store',
+        headers: {
+          Range: `bytes=${start}-${end}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Chunk request failed with status ${response.status}.`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) {
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        await writer.write(bytes, position);
+        position += bytes.byteLength;
+        await onProgress(position);
+        continue;
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+
+        await writer.write(value, position);
+        position += value.byteLength;
+        await onProgress(position);
+      }
+    }
+  } finally {
+    await writer.close();
+  }
+}
+
+async function transferFile(
+  root: FileSystemDirectoryHandle,
+  target: AnchorTarget,
+  job: AnchorPersistedJob,
+  file: AnchorManifest['files'][number]
+) {
+  const fileState = job.fileStates[file.id];
+  fileState.status = 'syncing';
+  fileState.bytesTransferred = 0;
+  fileState.totalBytes = file.size;
+  fileState.errorMessage = null;
+  fileState.attempts += 1;
+  fileState.updatedAt = nowIso();
+  job.phase = 'syncing';
+  job.lastError = null;
+
+  await persistAndPost(
+    job,
+    file.id,
+    file.displayName,
+    `Anchoring ${file.displayName}...`
+  );
+
+  if (file.source.type === 'inline') {
+    await writeInlineFile(root, target, file);
+    fileState.bytesTransferred = file.size;
+    fileState.status = 'completed';
+    fileState.updatedAt = nowIso();
+    await persistAndPost(job, file.id, file.displayName, `Anchored ${file.displayName}.`);
+    return;
+  }
+
+  await writeRemoteFile(root, target, file, async (bytesTransferred) => {
+    fileState.bytesTransferred = bytesTransferred;
+    fileState.updatedAt = nowIso();
+    await persistAndPost(
+      job,
+      file.id,
+      file.displayName,
+      `Anchoring ${file.displayName}...`
+    );
+  });
+
+  fileState.status = 'completed';
+  fileState.bytesTransferred = file.size;
+  fileState.updatedAt = nowIso();
+
+  await persistAndPost(job, file.id, file.displayName, `Anchored ${file.displayName}.`);
+}
+
+async function run(payload: WorkerStartPayload) {
+  const existingJob = await getAnchorJob(payload.jobKey).catch(() => null);
+  const job = buildJob(payload, existingJob);
+  const root = await getTargetVaultRoot(payload);
+
+  await persistAndPost(job, null, null, 'Preparing your Legacy Vault...');
+
+  for (const file of payload.manifest.files) {
+    const fileState = job.fileStates[file.id];
+
+    if (
+      fileState &&
+      fileState.signature === file.signature &&
+      fileState.status === 'completed' &&
+      fileState.bytesTransferred >= file.size
+    ) {
+      continue;
+    }
+
+    let succeeded = false;
+
+    for (let attempt = fileState.attempts; attempt < 3; attempt += 1) {
+      try {
+        await transferFile(root, payload.target, job, file);
+        succeeded = true;
+        break;
+      } catch (error: any) {
+        fileState.status = attempt >= 2 ? 'skipped' : 'pending';
+        fileState.errorMessage = error.message || 'File transfer failed.';
+        fileState.bytesTransferred = 0;
+        fileState.updatedAt = nowIso();
+        job.lastError = fileState.errorMessage;
+
+        await persistAndPost(
+          job,
+          file.id,
+          file.displayName,
+          attempt >= 2
+            ? `Skipped ${file.displayName} after 3 attempts.`
+            : `Retrying ${file.displayName}...`
+        );
+      }
+    }
+
+    if (!succeeded) {
+      job.failedFileIds = Array.from(new Set([...job.failedFileIds, file.id]));
+    }
+  }
+
+  job.phase = job.failedFileIds.length > 0 ? 'needs-attention' : 'complete';
+  job.syncedAt = job.failedFileIds.length > 0 ? null : nowIso();
+  job.lastError =
+    job.failedFileIds.length > 0
+      ? `${job.failedFileIds.length} file(s) still need attention.`
+      : null;
+
+  await persistAndPost(
+    job,
+    null,
+    null,
+    job.phase === 'complete'
+      ? 'This archive is now anchored to your device.'
+      : 'Anchoring finished with a few files that still need attention.'
+  );
+}
+
+self.onmessage = async (event: MessageEvent<WorkerStartMessage>) => {
+  if (event.data.type !== 'start') return;
+
+  try {
+    await run(event.data.payload);
+  } catch (error: any) {
+    self.postMessage({
+      type: 'fatal',
+      message: error.message || 'Anchoring failed unexpectedly.',
+    });
+  }
+};
+
+
+===== FILE: lib/anchor/db.ts =====
+import {
+  ANCHOR_DB_NAME,
+  ANCHOR_DB_VERSION,
+  ANCHOR_JOBS_STORE,
+  type AnchorPersistedJob,
+} from '@/lib/anchor/shared';
+
+function openAnchorDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(ANCHOR_DB_NAME, ANCHOR_DB_VERSION);
+
+    request.onerror = () => reject(request.error);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+
+      if (!db.objectStoreNames.contains(ANCHOR_JOBS_STORE)) {
+        db.createObjectStore(ANCHOR_JOBS_STORE, { keyPath: 'jobKey' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+  });
+}
+
+function withStore<T>(
+  mode: IDBTransactionMode,
+  executor: (store: IDBObjectStore, tx: IDBTransaction) => void
+): Promise<T> {
+  return openAnchorDb().then(
+    (db) =>
+      new Promise<T>((resolve, reject) => {
+        const tx = db.transaction(ANCHOR_JOBS_STORE, mode);
+        const store = tx.objectStore(ANCHOR_JOBS_STORE);
+
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+        tx.oncomplete = () => db.close();
+
+        executor(store, tx);
+
+        (tx as IDBTransaction & { __resolve?: (value: T) => void }).__resolve = resolve;
+      })
+  );
+}
+
+export async function getAnchorJob(jobKey: string): Promise<AnchorPersistedJob | null> {
+  return withStore<AnchorPersistedJob | null>('readonly', (store, tx) => {
+    const request = store.get(jobKey);
+
+    request.onerror = () => tx.abort();
+    request.onsuccess = () => {
+      const resolve = (tx as IDBTransaction & { __resolve?: (value: AnchorPersistedJob | null) => void }).__resolve;
+      resolve?.((request.result as AnchorPersistedJob | undefined) || null);
+    };
+  });
+}
+
+export async function putAnchorJob(job: AnchorPersistedJob): Promise<void> {
+  await withStore<void>('readwrite', (store, tx) => {
+    const request = store.put(job);
+
+    request.onerror = () => tx.abort();
+    request.onsuccess = () => {
+      const resolve = (tx as IDBTransaction & { __resolve?: (value: void) => void }).__resolve;
+      resolve?.();
+    };
+  });
+}
+
+export async function deleteAnchorJob(jobKey: string): Promise<void> {
+  await withStore<void>('readwrite', (store, tx) => {
+    const request = store.delete(jobKey);
+
+    request.onerror = () => tx.abort();
+    request.onsuccess = () => {
+      const resolve = (tx as IDBTransaction & { __resolve?: (value: void) => void }).__resolve;
+      resolve?.();
+    };
+  });
+}
+
+
+===== FILE: lib/anchor/manifestBuilder.ts =====
+import crypto from 'crypto';
+
+import { generateAnchorOfflineGallery } from '@/lib/anchor/offlineGallery';
+import type { AnchorManifest, AnchorManifestFile } from '@/lib/anchor/shared';
+import type { MemorialRenderDataResult } from '@/lib/memorialRenderData';
+
+const MIME_EXTENSIONS: Record<string, string> = {
+  'audio/mpeg': 'mp3',
+  'audio/mp4': 'm4a',
+  'audio/ogg': 'ogg',
+  'audio/wav': 'wav',
+  'audio/webm': 'webm',
+  'image/gif': 'gif',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'text/html': 'html',
+  'text/plain': 'txt',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm',
+  'application/json': 'json',
+};
+
+function sanitizeSegment(value: string) {
+  const cleaned = value
+    .normalize('NFKD')
+    .replace(/[^\w.\-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  return cleaned || 'asset';
+}
+
+function stripExtension(value?: string | null) {
+  return (value || '').replace(/\.[^/.]+$/, '');
+}
+
+function extensionFromUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    const segment = parsed.pathname.split('/').pop() || '';
+    const ext = segment.includes('.') ? segment.split('.').pop() : '';
+    return ext ? ext.toLowerCase() : '';
+  } catch {
+    return '';
+  }
+}
+
+function extensionForFile(
+  mimeType: string,
+  originalFileName?: string | null,
+  url?: string | null
+) {
+  const nameExt = originalFileName && originalFileName.includes('.')
+    ? originalFileName.split('.').pop() || ''
+    : '';
+  const urlExt = url ? extensionFromUrl(url) : '';
+  const mimeExt = MIME_EXTENSIONS[mimeType.toLowerCase()] || '';
+
+  return sanitizeSegment(nameExt || urlExt || mimeExt || 'bin');
+}
+
+function fileNameFromPath(path: string) {
+  return path.split('/').pop() || path;
+}
+
+function remoteSignature(
+  id: string,
+  size: number,
+  sha256Hash: string | null | undefined,
+  sourceUrl: string
+) {
+  return sha256Hash || crypto.createHash('sha256').update(`${id}:${size}:${sourceUrl}`).digest('hex');
+}
+
+function inlineSignature(content: string) {
+  return crypto.createHash('sha256').update(content).digest('hex');
+}
+
+function buildRelativePath(
+  folder: string,
+  preferredName: string,
+  stableId: string,
+  mimeType: string,
+  sourceUrl?: string | null
+) {
+  const extension = extensionForFile(mimeType, preferredName, sourceUrl);
+  const stem = sanitizeSegment(stripExtension(preferredName) || stableId).slice(0, 48);
+  const suffix = sanitizeSegment(stableId).slice(-8) || 'item';
+  return `${folder}/${stem}-${suffix}.${extension}`;
+}
+
+function byteLength(value: string) {
+  return Buffer.byteLength(value, 'utf8');
+}
+
+function docDescriptor(file: AnchorManifestFile) {
+  return {
+    id: file.id,
+    kind: file.kind,
+    category: file.category,
+    relativePath: file.relativePath,
+    displayName: file.displayName,
+    mimeType: file.mimeType,
+    size: file.size,
+    signature: file.signature,
+  };
+}
+
+export function buildAnchorManifest({
+  memorial,
+  memorialData,
+  relations,
+}: MemorialRenderDataResult): AnchorManifest {
+  const files: AnchorManifestFile[] = [];
+  const resourceMap = new Map<string, string>();
+  const seenRemoteKeys = new Map<string, AnchorManifestFile>();
+  const memorialName = memorialData.step1.fullName || memorial.full_name || 'Legacy Vault';
+  const suggestedVaultName = `legacy-vault-${sanitizeSegment(memorialName).toLowerCase()}`;
+
+  const addRemoteFile = ({
+    stableId,
+    kind,
+    category,
+    folder,
+    displayName,
+    sourceUrl,
+    mimeType,
+    size,
+    originalFileName,
+    sha256Hash,
+    countAsPrimaryPhoto = false,
+  }: {
+    stableId: string;
+    kind: AnchorManifestFile['kind'];
+    category: AnchorManifestFile['category'];
+    folder: string;
+    displayName: string;
+    sourceUrl: string | null | undefined;
+    mimeType: string | null | undefined;
+    size: number | null | undefined;
+    originalFileName?: string | null;
+    sha256Hash?: string | null;
+    countAsPrimaryPhoto?: boolean;
+  }) => {
+    if (!sourceUrl || !mimeType || !size || size <= 0) {
+      return null;
+    }
+
+    const remoteKey = `${stableId}:${sourceUrl}`;
+    const existing = seenRemoteKeys.get(remoteKey);
+    if (existing) {
+      resourceMap.set(sourceUrl, existing.relativePath);
+      return existing;
+    }
+
+    const relativePath = buildRelativePath(
+      folder,
+      originalFileName || displayName,
+      stableId,
+      mimeType,
+      sourceUrl
+    );
+    const file: AnchorManifestFile = {
+      id: stableId,
+      kind,
+      category: countAsPrimaryPhoto && category === 'thumbnail' ? 'photo' : category,
+      relativePath,
+      displayName,
+      fileName: fileNameFromPath(relativePath),
+      mimeType,
+      size,
+      signature: remoteSignature(stableId, size, sha256Hash, sourceUrl),
+      source: {
+        type: 'remote',
+        url: sourceUrl,
+      },
+    };
+
+    files.push(file);
+    resourceMap.set(sourceUrl, relativePath);
+    seenRemoteKeys.set(remoteKey, file);
+    return file;
+  };
+
+  const addInlineFile = ({
+    id,
+    kind,
+    relativePath,
+    displayName,
+    mimeType,
+    content,
+  }: {
+    id: string;
+    kind: AnchorManifestFile['kind'];
+    relativePath: string;
+    displayName: string;
+    mimeType: string;
+    content: string;
+  }) => {
+    const file: AnchorManifestFile = {
+      id,
+      kind,
+      category: 'metadata',
+      relativePath,
+      displayName,
+      fileName: fileNameFromPath(relativePath),
+      mimeType,
+      size: byteLength(content),
+      signature: inlineSignature(content),
+      source: {
+        type: 'inline',
+        content,
+        encoding: 'utf-8',
+      },
+    };
+
+    files.push(file);
+    return file;
+  };
+
+  addRemoteFile({
+    stableId: `profile-${memorial.id}`,
+    kind: 'profile_photo',
+    category: 'photo',
+    folder: 'media/profile',
+    displayName: 'Profile portrait',
+    sourceUrl: memorialData.step1.profilePhotoPreview,
+    mimeType: memorialData.step1.profilePhotoMimeType || 'image/jpeg',
+    size: memorialData.step1.profilePhotoFileSize,
+    originalFileName: memorialData.step1.profilePhotoStoragePath,
+    sha256Hash: memorialData.step1.profilePhotoHash,
+  });
+
+  addRemoteFile({
+    stableId: `cover-${memorial.id}`,
+    kind: 'cover_photo',
+    category: 'photo',
+    folder: 'media/cover',
+    displayName: 'Cover image',
+    sourceUrl: memorialData.step8.coverPhotoPreview,
+    mimeType: memorialData.step8.coverPhotoMimeType || 'image/jpeg',
+    size: memorialData.step8.coverPhotoFileSize,
+    originalFileName: memorialData.step8.coverPhotoStoragePath,
+    sha256Hash: memorialData.step8.coverPhotoHash,
+  });
+
+  for (const item of memorialData.step2.childhoodPhotos || []) {
+    addRemoteFile({
+      stableId: item.assetId || item.id,
+      kind: 'gallery_photo',
+      category: 'photo',
+      folder: 'media/photos/childhood',
+      displayName: item.caption || 'Childhood photo',
+      sourceUrl: item.preview,
+      mimeType: item.mimeType || 'image/jpeg',
+      size: item.fileSize,
+      originalFileName: item.originalFileName,
+      sha256Hash: item.sha256_hash,
+    });
+  }
+
+  for (const item of memorialData.step8.gallery || []) {
+    addRemoteFile({
+      stableId: item.assetId || item.id,
+      kind: 'gallery_photo',
+      category: 'photo',
+      folder: 'media/photos/gallery',
+      displayName: item.caption || 'Photo',
+      sourceUrl: item.preview,
+      mimeType: item.mimeType || 'image/jpeg',
+      size: item.fileSize,
+      originalFileName: item.originalFileName,
+      sha256Hash: item.sha256_hash,
+    });
+  }
+
+  for (const item of memorialData.step8.interactiveGallery || []) {
+    addRemoteFile({
+      stableId: item.assetId || item.id,
+      kind: 'interactive_photo',
+      category: 'photo',
+      folder: 'media/photos/interactive',
+      displayName: item.description || 'Interactive photo story',
+      sourceUrl: item.preview,
+      mimeType: item.mimeType || 'image/jpeg',
+      size: item.fileSize,
+      originalFileName: item.originalFileName,
+      sha256Hash: item.sha256_hash,
+    });
+  }
+
+  for (const item of memorialData.step8.voiceRecordings || []) {
+    addRemoteFile({
+      stableId: item.assetId || item.id,
+      kind: 'voice_recording',
+      category: 'audio',
+      folder: 'media/audio',
+      displayName: item.title || 'Voice recording',
+      sourceUrl: item.url,
+      mimeType: item.mimeType || 'audio/mpeg',
+      size: item.fileSize,
+      originalFileName: item.originalFileName,
+      sha256Hash: item.sha256_hash,
+    });
+  }
+
+  for (const item of memorialData.step9.videos || []) {
+    addRemoteFile({
+      stableId: item.assetId || item.id,
+      kind: 'video',
+      category: 'video',
+      folder: 'media/videos',
+      displayName: item.title || 'Video memory',
+      sourceUrl: item.url,
+      mimeType: item.mimeType || 'video/mp4',
+      size: item.fileSize,
+      originalFileName: item.originalFileName,
+      sha256Hash: item.sha256_hash,
+    });
+
+    addRemoteFile({
+      stableId: item.thumbnailAssetId || `${item.id}-thumbnail`,
+      kind: 'video_thumbnail',
+      category: 'thumbnail',
+      folder: 'media/videos/thumbnails',
+      displayName: `${item.title || 'Video memory'} thumbnail`,
+      sourceUrl: item.thumbnail,
+      mimeType: item.thumbnailMimeType || 'image/jpeg',
+      size: item.thumbnailFileSize,
+      originalFileName: item.originalFileName,
+      sha256Hash: null,
+    });
+  }
+
+  const memorialDocument = JSON.stringify(
+    {
+      memorialId: memorial.id,
+      memorialName,
+      generatedAt: new Date().toISOString(),
+      relations,
+      memorialData,
+    },
+    null,
+    2
+  );
+
+  const readme = [
+    `ULUMAE LEGACY VAULT`,
+    `====================`,
+    ``,
+    `Archive for: ${memorialName}`,
+    `Generated: ${new Date().toISOString()}`,
+    ``,
+    `How to open this archive offline:`,
+    `1. Open index.html in any modern browser.`,
+    `2. Keep the media folder beside index.html.`,
+    `3. No internet connection is required.`,
+    ``,
+    `This vault contains the memorial text, gallery images, video memories,`,
+    `and a self-contained offline viewer generated for local preservation.`,
+  ].join('\n');
+
+  const offlineHtml = generateAnchorOfflineGallery(memorialData, relations, resourceMap);
+
+  addInlineFile({
+    id: `memorial-json-${memorial.id}`,
+    kind: 'memorial_json',
+    relativePath: 'memorial.json',
+    displayName: 'Memorial data',
+    mimeType: 'application/json',
+    content: memorialDocument,
+  });
+
+  addInlineFile({
+    id: `offline-gallery-${memorial.id}`,
+    kind: 'offline_gallery',
+    relativePath: 'index.html',
+    displayName: 'Offline gallery',
+    mimeType: 'text/html',
+    content: offlineHtml,
+  });
+
+  addInlineFile({
+    id: `readme-${memorial.id}`,
+    kind: 'readme',
+    relativePath: 'README.txt',
+    displayName: 'How to open this archive',
+    mimeType: 'text/plain',
+    content: readme,
+  });
+
+  const manifestSnapshotBase = {
+    version: 1,
+    memorialId: memorial.id,
+    memorialName,
+    generatedAt: new Date().toISOString(),
+    updatedAt: memorial.updated_at,
+    files: files.map(docDescriptor),
+  };
+
+  const bytesWithoutManifest = files.reduce((sum, file) => sum + file.size, 0);
+  let manifestDocument = JSON.stringify(
+    {
+      ...manifestSnapshotBase,
+      totalBytes: bytesWithoutManifest,
+    },
+    null,
+    2
+  );
+  let manifestSize = byteLength(manifestDocument);
+  let totalBytes = bytesWithoutManifest + manifestSize;
+
+  manifestDocument = JSON.stringify(
+    {
+      ...manifestSnapshotBase,
+      totalBytes,
+      files: [
+        ...files.map(docDescriptor),
+        {
+          id: `manifest-json-${memorial.id}`,
+          kind: 'manifest_json',
+          category: 'metadata',
+          relativePath: 'manifest.json',
+          displayName: 'Vault manifest',
+          mimeType: 'application/json',
+          size: manifestSize,
+        },
+      ],
+    },
+    null,
+    2
+  );
+  manifestSize = byteLength(manifestDocument);
+  totalBytes = bytesWithoutManifest + manifestSize;
+
+  addInlineFile({
+    id: `manifest-json-${memorial.id}`,
+    kind: 'manifest_json',
+    relativePath: 'manifest.json',
+    displayName: 'Vault manifest',
+    mimeType: 'application/json',
+    content: manifestDocument,
+  });
+
+  const summary = {
+    totalBytes: files.reduce((sum, file) => sum + file.size, 0),
+    totalFiles: files.length,
+    photoCount: files.filter((file) => file.category === 'photo').length,
+    videoCount: files.filter((file) => file.category === 'video').length,
+    audioCount: files.filter((file) => file.category === 'audio').length,
+    metadataCount: files.filter((file) => file.category === 'metadata').length,
+    galleryCount: 1,
+  };
+
+  const manifestFingerprint = crypto
+    .createHash('sha256')
+    .update(
+      JSON.stringify({
+        memorialId: memorial.id,
+        updatedAt: memorial.updated_at,
+        files: files.map((file) => ({
+          id: file.id,
+          relativePath: file.relativePath,
+          signature: file.signature,
+          size: file.size,
+        })),
+      })
+    )
+    .digest('hex');
+
+  return {
+    memorialId: memorial.id,
+    memorialName,
+    generatedAt: new Date().toISOString(),
+    updatedAt: memorial.updated_at,
+    plan: 'family',
+    suggestedVaultName,
+    manifestFingerprint,
+    files,
+    summary,
+    offline: {
+      routePath: `/anchor/offline/${memorial.id}`,
+      relativeIndexPath: 'index.html',
+      remoteUrlMap: files
+        .filter((file): file is AnchorManifestFile & { source: { type: 'remote'; url: string } } => file.source.type === 'remote')
+        .map((file) => ({
+          url: file.source.url,
+          relativePath: file.relativePath,
+          mimeType: file.mimeType,
+        })),
+    },
+  };
+}
+
+
+===== FILE: lib/anchor/offlineGallery.ts =====
+import type { MemorialData, MemorialRelation } from '@/types/memorial';
+
+type ResourceMap = Map<string, string>;
+
+function escapeHtml(value: unknown) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function withBreaks(value: string) {
+  return escapeHtml(value).replace(/\n/g, '<br>');
+}
+
+function resolveMedia(url: string | null | undefined, resourceMap: ResourceMap) {
+  if (!url) return '';
+  return resourceMap.get(url) || url;
+}
+
+function renderPhotoCard(
+  src: string,
+  alt: string,
+  title: string,
+  detail?: string
+) {
+  return `
+    <figure class="media-card">
+      <img src="${src}" alt="${escapeHtml(alt)}" loading="lazy">
+      <figcaption>
+        <strong>${escapeHtml(title)}</strong>
+        ${detail ? `<span>${escapeHtml(detail)}</span>` : ''}
+      </figcaption>
+    </figure>
+  `;
+}
+
+function renderVideoCard(
+  src: string,
+  poster: string | null,
+  title: string,
+  description?: string,
+  mimeType?: string | null
+) {
+  return `
+    <article class="video-card">
+      <video controls preload="metadata"${poster ? ` poster="${poster}"` : ''}>
+        <source src="${src}"${mimeType ? ` type="${escapeHtml(mimeType)}"` : ''}>
+      </video>
+      <div class="video-copy">
+        <h3>${escapeHtml(title || 'Video memory')}</h3>
+        ${description ? `<p>${withBreaks(description)}</p>` : ''}
+      </div>
+    </article>
+  `;
+}
+
+function renderAudioCard(src: string, title: string, mimeType?: string | null) {
+  return `
+    <article class="audio-card">
+      <div>
+        <h3>${escapeHtml(title || 'Voice recording')}</h3>
+      </div>
+      <audio controls preload="metadata">
+        <source src="${src}"${mimeType ? ` type="${escapeHtml(mimeType)}"` : ''}>
+      </audio>
+    </article>
+  `;
+}
+
+function renderRelationList(relations: MemorialRelation[]) {
+  if (relations.length === 0) return '';
+
+  return `
+    <section class="section card">
+      <div class="section-heading">
+        <span class="eyebrow">Family Map</span>
+        <h2>Linked memorials</h2>
+      </div>
+      <div class="relation-list">
+        ${relations
+          .map(
+            (relation) => `
+              <div class="relation-item">
+                <strong>${escapeHtml(relation.target_name || 'Linked memorial')}</strong>
+                <span>${escapeHtml(relation.relationship_type)}</span>
+              </div>
+            `
+          )
+          .join('')}
+      </div>
+    </section>
+  `;
+}
+
+export function generateAnchorOfflineGallery(
+  data: MemorialData,
+  relations: MemorialRelation[],
+  resourceMap: ResourceMap
+) {
+  const fullName = data.step1.fullName || 'Memorial Archive';
+  const cover = resolveMedia(data.step8.coverPhotoPreview, resourceMap);
+  const profile = resolveMedia(data.step1.profilePhotoPreview, resourceMap);
+  const biography = data.step6.biography || '';
+  const epitaph = data.step1.epitaph || '';
+  const childhoodPhotos = data.step2.childhoodPhotos || [];
+  const gallery = data.step8.gallery || [];
+  const interactiveGallery = data.step8.interactiveGallery || [];
+  const videos = data.step9.videos || [];
+  const voiceRecordings = data.step8.voiceRecordings || [];
+  const memories = data.step7.sharedMemories || [];
+
+  const photoCards = [
+    ...childhoodPhotos.map((photo) =>
+      renderPhotoCard(
+        resolveMedia(photo.preview, resourceMap),
+        photo.caption || 'Childhood photo',
+        photo.caption || 'Childhood photo',
+        photo.year || ''
+      )
+    ),
+    ...gallery.map((photo) =>
+      renderPhotoCard(
+        resolveMedia(photo.preview, resourceMap),
+        photo.caption || 'Memorial photo',
+        photo.caption || 'Memorial photo',
+        photo.year || ''
+      )
+    ),
+    ...interactiveGallery.map((item, index) =>
+      renderPhotoCard(
+        resolveMedia(item.preview, resourceMap),
+        item.description || `Interactive story ${index + 1}`,
+        `Interactive story ${index + 1}`,
+        item.description || ''
+      )
+    ),
+  ].join('');
+
+  const videoCards = videos
+    .map((video) =>
+      renderVideoCard(
+        resolveMedia(video.url, resourceMap),
+        video.thumbnail ? resolveMedia(video.thumbnail, resourceMap) : null,
+        video.title || 'Video memory',
+        video.description || '',
+        video.mimeType
+      )
+    )
+    .join('');
+
+  const audioCards = voiceRecordings
+    .map((recording) =>
+      renderAudioCard(
+        resolveMedia(recording.url || '', resourceMap),
+        recording.title || 'Voice recording',
+        recording.mimeType
+      )
+    )
+    .join('');
+
+  const memoryCards = memories
+    .map(
+      (memory) => `
+        <article class="memory-card">
+          <h3>${escapeHtml(memory.title || 'Shared memory')}</h3>
+          <p>${withBreaks(memory.content || '')}</p>
+          <span>${escapeHtml(memory.author || 'Contributor')}</span>
+        </article>
+      `
+    )
+    .join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(fullName)} - Legacy Vault</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #2e241c;
+      --soft-ink: #66584b;
+      --paper: #f8f3ec;
+      --paper-strong: #fffdfa;
+      --line: rgba(92, 73, 55, 0.16);
+      --accent: #b57745;
+      --accent-soft: rgba(181, 119, 69, 0.12);
+      --shadow: 0 24px 60px rgba(46, 36, 28, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, 'Times New Roman', serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top, rgba(181, 119, 69, 0.14), transparent 35%),
+        linear-gradient(180deg, #f5efe7 0%, #fcfaf6 28%, #f8f3ec 100%);
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      min-height: 420px;
+      padding: 72px 24px 48px;
+      display: flex;
+      align-items: flex-end;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(27, 19, 13, 0.1), rgba(27, 19, 13, 0.72)),
+        ${cover ? `url('${cover}') center/cover no-repeat` : 'linear-gradient(135deg, #d8c7b4, #b89b80)'};
+      transform: scale(1.04);
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+      width: min(1080px, 100%);
+      margin: 0 auto;
+      display: grid;
+      gap: 24px;
+      align-items: end;
+      grid-template-columns: auto 1fr;
+    }
+
+    .profile {
+      width: 160px;
+      height: 160px;
+      border-radius: 26px;
+      object-fit: cover;
+      border: 3px solid rgba(255,255,255,0.7);
+      box-shadow: var(--shadow);
+      background: rgba(255,255,255,0.16);
+    }
+
+    .hero-copy h1 {
+      margin: 0;
+      font-size: clamp(2.6rem, 5vw, 4.6rem);
+      color: #fff6ee;
+      letter-spacing: -0.04em;
+    }
+
+    .hero-copy p {
+      margin: 14px 0 0;
+      max-width: 720px;
+      font-size: 1.08rem;
+      line-height: 1.7;
+      color: rgba(255, 246, 238, 0.88);
+    }
+
+    .hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.14);
+      color: #fff6ee;
+      border: 1px solid rgba(255,255,255,0.2);
+      font-size: 0.92rem;
+    }
+
+    main {
+      width: min(1080px, calc(100% - 32px));
+      margin: -42px auto 72px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .card {
+      background: var(--paper-strong);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      padding: 28px;
+    }
+
+    .section {
+      margin-top: 24px;
+    }
+
+    .section-heading {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 20px;
+    }
+
+    .eyebrow {
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 0.74rem;
+      color: var(--soft-ink);
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 2rem;
+      letter-spacing: -0.03em;
+    }
+
+    .prose, .memory-card p {
+      color: var(--soft-ink);
+      line-height: 1.8;
+      font-size: 1rem;
+    }
+
+    .memory-grid,
+    .relation-list,
+    .audio-list {
+      display: grid;
+      gap: 16px;
+    }
+
+    .memory-grid {
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    }
+
+    .memory-card,
+    .relation-item,
+    .audio-card {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      border-radius: 20px;
+      padding: 18px;
+    }
+
+    .memory-card h3,
+    .video-copy h3,
+    .audio-card h3 {
+      margin: 0 0 10px;
+      font-size: 1.15rem;
+    }
+
+    .memory-card span,
+    .relation-item span {
+      color: var(--soft-ink);
+      font-size: 0.9rem;
+    }
+
+    .media-grid,
+    .video-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .media-card {
+      margin: 0;
+      overflow: hidden;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+    }
+
+    .media-card img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      object-fit: cover;
+      background: #e7ddcf;
+    }
+
+    .media-card figcaption {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 14px 16px 18px;
+      font-size: 0.92rem;
+      color: var(--soft-ink);
+    }
+
+    .video-card {
+      overflow: hidden;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+    }
+
+    .video-card video {
+      display: block;
+      width: 100%;
+      background: #18120e;
+    }
+
+    .video-copy {
+      padding: 16px 18px 18px;
+    }
+
+    .video-copy p {
+      margin: 0;
+      color: var(--soft-ink);
+      line-height: 1.7;
+    }
+
+    .legacy {
+      background: linear-gradient(135deg, var(--accent-soft), rgba(255,255,255,0.82));
+    }
+
+    footer {
+      padding: 0 24px 48px;
+      text-align: center;
+      color: var(--soft-ink);
+      font-size: 0.92rem;
+    }
+
+    a {
+      color: var(--accent);
+    }
+
+    @media (max-width: 720px) {
+      .hero {
+        min-height: 520px;
+        padding-top: 56px;
+      }
+
+      .hero-content {
+        grid-template-columns: 1fr;
+      }
+
+      .profile {
+        width: 132px;
+        height: 132px;
+      }
+
+      .card {
+        padding: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-content">
+      ${profile ? `<img class="profile" src="${profile}" alt="${escapeHtml(fullName)}">` : ''}
+      <div class="hero-copy">
+        <h1>${escapeHtml(fullName)}</h1>
+        ${
+          epitaph
+            ? `<p>${withBreaks(epitaph)}</p>`
+            : `<p>This memorial was anchored locally so it can be opened and remembered without an internet connection.</p>`
+        }
+        <div class="hero-meta">
+          ${
+            data.step1.birthDate
+              ? `<span class="pill">Born ${escapeHtml(data.step1.birthDate)}</span>`
+              : ''
+          }
+          ${
+            data.step1.deathDate
+              ? `<span class="pill">Died ${escapeHtml(data.step1.deathDate)}</span>`
+              : ''
+          }
+          ${data.step1.birthPlace ? `<span class="pill">${escapeHtml(data.step1.birthPlace)}</span>` : ''}
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    ${
+      biography
+        ? `
+          <section class="card">
+            <div class="section-heading">
+              <span class="eyebrow">Biography</span>
+              <h2>The life remembered</h2>
+            </div>
+            <div class="prose">${withBreaks(biography)}</div>
+          </section>
+        `
+        : ''
+    }
+
+    ${
+      memories.length > 0
+        ? `
+          <section class="section card">
+            <div class="section-heading">
+              <span class="eyebrow">Memories</span>
+              <h2>Shared stories</h2>
+            </div>
+            <div class="memory-grid">${memoryCards}</div>
+          </section>
+        `
+        : ''
+    }
+
+    ${
+      photoCards
+        ? `
+          <section class="section card">
+            <div class="section-heading">
+              <span class="eyebrow">Photo Gallery</span>
+              <h2>Images preserved offline</h2>
+            </div>
+            <div class="media-grid">${photoCards}</div>
+          </section>
+        `
+        : ''
+    }
+
+    ${
+      videoCards
+        ? `
+          <section class="section card">
+            <div class="section-heading">
+              <span class="eyebrow">Video Memories</span>
+              <h2>Moments that still move</h2>
+            </div>
+            <div class="video-grid">${videoCards}</div>
+          </section>
+        `
+        : ''
+    }
+
+    ${
+      audioCards
+        ? `
+          <section class="section card">
+            <div class="section-heading">
+              <span class="eyebrow">Voice Recordings</span>
+              <h2>Voices carried forward</h2>
+            </div>
+            <div class="audio-list">${audioCards}</div>
+          </section>
+        `
+        : ''
+    }
+
+    ${renderRelationList(relations)}
+
+    ${
+      data.step8.legacyStatement
+        ? `
+          <section class="section card legacy">
+            <div class="section-heading">
+              <span class="eyebrow">Legacy</span>
+              <h2>What remains</h2>
+            </div>
+            <div class="prose">${withBreaks(data.step8.legacyStatement)}</div>
+          </section>
+        `
+        : ''
+    }
+  </main>
+
+  <footer>
+    <p>This gallery was created from a local Legacy Vault. It does not require ULUMAE or an internet connection to open.</p>
+  </footer>
+</body>
+</html>`;
+}
+
+
+===== FILE: lib/anchor/shared.ts =====
+import type { MediaKind } from '@/types/media';
+
+export const ANCHOR_DB_NAME = 'ulumae-anchor';
+export const ANCHOR_DB_VERSION = 1;
+export const ANCHOR_JOBS_STORE = 'jobs';
+export const MAX_ANCHOR_CHUNK_BYTES = 8 * 1024 * 1024;
+
+export const ANCHOR_ROTATING_PHRASES = [
+  'Bringing their memory home to your device...',
+  'Securing a legacy that will outlast any server...',
+  'Their story is now finding a home on your hard drive...',
+  'Quietly weaving their memory into your device...',
+] as const;
+
+export type AnchorTarget = 'file-system-access' | 'opfs' | 'fallback-save';
+export type AnchorDeviceStatus = 'syncing' | 'synced' | 'error' | 'stale';
+export type AnchorJobPhase =
+  | 'idle'
+  | 'prompt'
+  | 'preparing'
+  | 'syncing'
+  | 'finalizing'
+  | 'complete'
+  | 'needs-attention'
+  | 'unsupported';
+export type AnchorFileStatus = 'pending' | 'syncing' | 'completed' | 'failed' | 'skipped';
+export type AnchorFileCategory =
+  | 'photo'
+  | 'video'
+  | 'audio'
+  | 'metadata'
+  | 'thumbnail';
+
+export interface BrowserCapabilities {
+  magicFolder: boolean;
+  opfs: boolean;
+  zipFallback: boolean;
+  browserFsAccessSupported: boolean;
+  browserName: string;
+  browserVersion: string;
+  isApplePlatform: boolean;
+  preferredTarget: AnchorTarget;
+  supportsWakeLock: boolean;
+  supportsPersistentStorage: boolean;
+  supportsStorageEstimate: boolean;
+  supportsServiceWorker: boolean;
+  supportsWebShare: boolean;
+}
+
+export interface AnchorManifestRemoteSource {
+  type: 'remote';
+  url: string;
+}
+
+export interface AnchorManifestInlineSource {
+  type: 'inline';
+  content: string;
+  encoding: 'utf-8';
+}
+
+export interface AnchorManifestFile {
+  id: string;
+  kind: MediaKind | 'offline_gallery' | 'memorial_json' | 'manifest_json' | 'readme';
+  category: AnchorFileCategory;
+  relativePath: string;
+  displayName: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  signature: string;
+  source: AnchorManifestRemoteSource | AnchorManifestInlineSource;
+}
+
+export interface AnchorManifestSummary {
+  totalBytes: number;
+  totalFiles: number;
+  photoCount: number;
+  videoCount: number;
+  audioCount: number;
+  metadataCount: number;
+  galleryCount: number;
+}
+
+export interface AnchorManifest {
+  memorialId: string;
+  memorialName: string;
+  generatedAt: string;
+  updatedAt: string;
+  plan: 'family';
+  suggestedVaultName: string;
+  manifestFingerprint: string;
+  files: AnchorManifestFile[];
+  summary: AnchorManifestSummary;
+  offline: {
+    routePath: string;
+    relativeIndexPath: string;
+    remoteUrlMap: Array<{
+      url: string;
+      relativePath: string;
+      mimeType: string;
+    }>;
+  };
+}
+
+export interface AnchorPersistedFileState {
+  fileId: string;
+  displayName: string;
+  category: AnchorFileCategory;
+  mimeType: string;
+  relativePath: string;
+  signature: string;
+  status: AnchorFileStatus;
+  bytesTransferred: number;
+  totalBytes: number;
+  attempts: number;
+  errorMessage: string | null;
+  updatedAt: string;
+}
+
+export interface AnchorPersistedJob {
+  jobKey: string;
+  memorialId: string;
+  memorialName: string;
+  deviceId: string;
+  target: AnchorTarget;
+  phase: AnchorJobPhase;
+  directoryHandle?: FileSystemDirectoryHandle | null;
+  rootDirectoryName?: string | null;
+  vaultDirectoryName: string;
+  vaultDisplayPath?: string | null;
+  lastManifestFingerprint?: string | null;
+  summary: AnchorManifestSummary | null;
+  fileStates: Record<string, AnchorPersistedFileState>;
+  failedFileIds: string[];
+  syncedAt: string | null;
+  updatedAt: string;
+  createdAt: string;
+  lastError: string | null;
+  serviceWorkerReady: boolean;
+}
+
+export type AnchorRuntimeFileState = AnchorPersistedFileState;
+
+export interface AnchorSessionSnapshot {
+  memorialId: string | null;
+  memorialName: string | null;
+  deviceId: string | null;
+  target: AnchorTarget | null;
+  phase: AnchorJobPhase;
+  capabilities: BrowserCapabilities | null;
+  summary: AnchorManifestSummary | null;
+  totalBytes: number;
+  transferredBytes: number;
+  currentFileId: string | null;
+  currentFileName: string | null;
+  currentMessage: string | null;
+  files: AnchorRuntimeFileState[];
+  failedCount: number;
+  canResume: boolean;
+  hasSavedHandle: boolean;
+  folderDisplayPath: string | null;
+  syncedAt: string | null;
+  lastError: string | null;
+  serviceWorkerReady: boolean;
+  offlineGalleryUrl: string | null;
+  fallbackDownloadUrl: string | null;
+}
+
+
+===== FILE: lib/archivePermissions.ts =====
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { WitnessRole } from '@/types/roles';
+
+export type ArchivePlan = 'personal' | 'family';
+
+export type ArchiveAction =
+  | 'view_archive'
+  | 'view_members'
+  | 'edit_archive'
+  | 'invite_member'
+  | 'manage_members'
+  | 'review_contributions'
+  | 'contribute_content'
+  | 'view_family_map'
+  | 'request_memorial_creation'
+  | 'export_archive'
+  | 'delete_archive'
+  | 'view_activity'
+  | 'manage_succession'
+  | 'approve_access_requests'
+  | 'manage_devices';
+
+export interface ArchiveCapabilities {
+  canViewArchive: boolean;
+  canContribute: boolean;
+  canReview: boolean;
+  canInvite: boolean;
+  canManageMembers: boolean;
+  canViewFamilyMap: boolean;
+  canRequestAccess: boolean;
+  contributionsRequireReview: boolean;
+  canEditArchive: boolean;
+  canExportArchive: boolean;
+  canDeleteArchive: boolean;
+  canViewActivity: boolean;
+  canManageSuccession: boolean;
+  canApproveAccessRequests: boolean;
+  canManageDevices: boolean;
+}
+
+export interface ArchivePermissionContext {
+  memorialId: string;
+  userId: string;
+  ownerUserId: string;
+  plan: ArchivePlan;
+  role: WitnessRole;
+  isOwner: boolean;
+}
+
+export interface ArchivePermissionResolution {
+  memorialExists: boolean;
+  context: ArchivePermissionContext | null;
+}
+
+export interface ArchiveRoleSnapshot {
+  currentUserId: string;
+  userRole: WitnessRole;
+  plan: ArchivePlan;
+  roleLabel: string;
+  permissionSignature: string;
+  capabilities: ArchiveCapabilities;
+  memorial: {
+    id: string;
+    fullName: string;
+    birthDate: string | null;
+    deathDate: string | null;
+    profilePhotoUrl: string | null;
+    userId: string;
+  };
+  myContributions: {
+    id: string;
+    type: 'memory' | 'photo' | 'video';
+    status: 'pending_approval' | 'approved' | 'rejected' | 'needs_changes';
+    title: string;
+    createdAt: string;
+    adminNotes: string | null;
+    revisionCount: number;
+  }[];
+  pendingCount: number;
+  pendingContributionCount: number;
+  pendingAccessRequestCount: number;
+  pendingCreationRequestCount: number;
+  resolvedAt: string;
+}
+
+export const ARCHIVE_ROLE_LABELS: Record<WitnessRole, string> = {
+  owner: 'Owner',
+  co_guardian: 'Co-Guardian',
+  witness: 'Witness',
+  reader: 'Reader',
+};
+
+const PERSONAL_ROLE_PERMISSIONS: Record<WitnessRole, readonly ArchiveAction[]> = {
+  owner: [
+    'view_archive',
+    'view_members',
+    'edit_archive',
+    'invite_member',
+    'manage_members',
+    'review_contributions',
+    'export_archive',
+    'delete_archive',
+    'view_activity',
+    'manage_succession',
+  ],
+  co_guardian: [], // NEVER assign this role on personal plans
+  witness: [
+    'view_archive',
+    'contribute_content',
+  ],
+  reader: [
+    'view_archive',
+  ],
+};
+
+const FAMILY_ROLE_PERMISSIONS: Record<WitnessRole, readonly ArchiveAction[]> = {
+  owner: [
+    'view_archive',
+    'view_members',
+    'edit_archive',
+    'invite_member',
+    'manage_members',
+    'review_contributions',
+    'contribute_content',
+    'view_family_map',
+    'request_memorial_creation',
+    'export_archive',
+    'delete_archive',
+    'view_activity',
+    'manage_succession',
+    'approve_access_requests',
+    'manage_devices',
+  ],
+  co_guardian: [
+    'view_archive',
+    'view_members',
+    'edit_archive',
+    'invite_member',
+    'manage_members',
+    'review_contributions',
+    'contribute_content',
+    'view_family_map',
+    'request_memorial_creation',
+    'view_activity',
+    'manage_succession',
+    'approve_access_requests',
+    'manage_devices',
+  ],
+  witness: [
+    'view_archive',
+    'contribute_content',
+    'view_family_map',
+  ],
+  reader: [
+    'view_archive',
+  ],
+};
+
+const PLAN_PERMISSIONS: Record<
+  ArchivePlan,
+  Record<WitnessRole, readonly ArchiveAction[]>
+> = {
+  personal: PERSONAL_ROLE_PERMISSIONS,
+  family: FAMILY_ROLE_PERMISSIONS,
+};
+
+const ASSIGNABLE_ROLES: Record<ArchivePlan, WitnessRole[]> = {
+  personal: ['witness', 'reader'],
+  family: ['co_guardian', 'witness', 'reader'],
+};
+
+export function getArchivePlan(mode?: string | null): ArchivePlan {
+  return mode === 'family' ? 'family' : 'personal';
+}
+
+export function getRoleLabel(role: WitnessRole): string {
+  return ARCHIVE_ROLE_LABELS[role] ?? 'Member';
+}
+
+export function getAssignableRolesForPlan(plan: ArchivePlan): WitnessRole[] {
+  return [...ASSIGNABLE_ROLES[plan]];
+}
+
+export function getPermissionsForRole(
+  roleOrContext: WitnessRole | ArchivePermissionContext,
+  planOverride?: ArchivePlan
+): readonly ArchiveAction[] {
+  const role =
+    typeof roleOrContext === 'string' ? roleOrContext : roleOrContext.role;
+  const plan =
+    typeof roleOrContext === 'string'
+      ? (planOverride ?? 'personal')
+      : roleOrContext.plan;
+
+  return PLAN_PERMISSIONS[plan][role];
+}
+
+export function getPermissionSignature(
+  roleOrContext: WitnessRole | ArchivePermissionContext,
+  planOverride?: ArchivePlan
+): string {
+  const role =
+    typeof roleOrContext === 'string' ? roleOrContext : roleOrContext.role;
+  const plan =
+    typeof roleOrContext === 'string'
+      ? (planOverride ?? 'personal')
+      : roleOrContext.plan;
+
+  return [plan, role, ...getPermissionsForRole(roleOrContext, planOverride)].join(
+    ':'
+  );
+}
+
+export function hasPermission(
+  roleOrContext: WitnessRole | ArchivePermissionContext,
+  action: ArchiveAction,
+  planOverride?: ArchivePlan
+): boolean {
+  return getPermissionsForRole(roleOrContext, planOverride).includes(action);
+}
+
+export function hasArchivePermission(
+  context: ArchivePermissionContext,
+  action: ArchiveAction
+): boolean {
+  return hasPermission(context, action);
+}
+
+export function getArchiveCapabilities(
+  role: WitnessRole,
+  plan: ArchivePlan
+): ArchiveCapabilities {
+  const canReview = hasPermission(role, 'review_contributions', plan);
+  const canContribute = hasPermission(role, 'contribute_content', plan);
+
+  return {
+    canViewArchive: hasPermission(role, 'view_archive', plan),
+    canContribute,
+    canReview,
+    canInvite: hasPermission(role, 'invite_member', plan),
+    canManageMembers: hasPermission(role, 'manage_members', plan),
+    canViewFamilyMap: hasPermission(role, 'view_family_map', plan),
+    canRequestAccess: plan === 'family' && role === 'witness',
+    contributionsRequireReview: canContribute && !canReview,
+    canEditArchive: hasPermission(role, 'edit_archive', plan),
+    canExportArchive: hasPermission(role, 'export_archive', plan),
+    canDeleteArchive: hasPermission(role, 'delete_archive', plan),
+    canViewActivity: hasPermission(role, 'view_activity', plan),
+    canManageSuccession: hasPermission(role, 'manage_succession', plan),
+    canApproveAccessRequests: hasPermission(role, 'approve_access_requests', plan),
+    canManageDevices: hasPermission(role, 'manage_devices', plan),
+  };
+}
+
+async function resolveFromMemorial(
+  supabaseAdmin: SupabaseClient,
+  memorial: {
+    id: string;
+    user_id: string;
+    mode: string | null;
+  },
+  userId: string
+): Promise<ArchivePermissionContext | null> {
+  const plan = getArchivePlan(memorial.mode);
+
+  if (memorial.user_id === userId) {
+    return {
+      memorialId: memorial.id,
+      userId,
+      ownerUserId: memorial.user_id,
+      plan,
+      role: 'owner',
+      isOwner: true,
+    };
+  }
+
+  const { data: roleRow, error: roleError } = await supabaseAdmin
+    .from('user_memorial_roles')
+    .select('role')
+    .eq('memorial_id', memorial.id)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (roleError || !roleRow?.role) {
+    return null;
+  }
+
+  return {
+    memorialId: memorial.id,
+    userId,
+    ownerUserId: memorial.user_id,
+    plan,
+    role: roleRow.role as WitnessRole,
+    isOwner: false,
+  };
+}
+
+export async function getUserRole(
+  supabaseAdmin: SupabaseClient,
+  userId: string,
+  memorialId: string
+) {
+  const { data: memorial, error } = await supabaseAdmin
+    .from('memorials')
+    .select('id, user_id, mode, deleted')
+    .eq('id', memorialId)
+    .maybeSingle();
+
+  if (error || !memorial || memorial.deleted) {
+    return null;
+  }
+
+  return resolveFromMemorial(supabaseAdmin, memorial, userId);
+}
+
+export async function resolveArchivePermissionContext(
+  supabaseAdmin: SupabaseClient,
+  memorialId: string,
+  userId: string,
+  options: { includeDeleted?: boolean } = {}
+): Promise<ArchivePermissionResolution> {
+  const { includeDeleted = false } = options;
+  const { data: memorial, error: memorialError } = await supabaseAdmin
+    .from('memorials')
+    .select('id, user_id, mode, deleted')
+    .eq('id', memorialId)
+    .maybeSingle();
+
+  if (memorialError || !memorial || (!includeDeleted && memorial.deleted)) {
+    return {
+      memorialExists: Boolean(memorial),
+      context: null,
+    };
+  }
+
+  return {
+    memorialExists: true,
+    context: await resolveFromMemorial(supabaseAdmin, memorial, userId),
+  };
+}
+
+
+===== FILE: lib/memorialRenderData.ts =====
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+import {
+  getMemorialMediaAssetsByIds,
+  normalizeMemorialMediaData,
+} from '@/lib/mediaManager';
+import type {
+  MemorialData,
+  MemorialRelation,
+} from '@/types/memorial';
+import type { StoredMediaAsset } from '@/types/media';
+
+type MemorialRow = {
+  id: string;
+  user_id: string;
+  updated_at: string;
+  paid: boolean;
+  mode: string | null;
+  full_name: string | null;
+  birth_date: string | null;
+  death_date: string | null;
+  profile_photo_url: string | null;
+  completed_steps: number[] | null;
+  step1: Record<string, unknown> | null;
+  step2: Record<string, unknown> | null;
+  step3: Record<string, unknown> | null;
+  step4: Record<string, unknown> | null;
+  step5: Record<string, unknown> | null;
+  step6: Record<string, unknown> | null;
+  step7: Record<string, unknown> | null;
+  step8: Record<string, unknown> | null;
+  step9: Record<string, unknown> | null;
+};
+
+export interface MemorialRenderDataResult {
+  memorial: MemorialRow;
+  memorialData: MemorialData;
+  relations: MemorialRelation[];
+}
+
+function buildMemorialData(record: MemorialRow): MemorialData {
+  return {
+    step1: ((record.step1 || {}) as unknown) as MemorialData['step1'],
+    step2: ((record.step2 || {}) as unknown) as MemorialData['step2'],
+    step3: ((record.step3 || {}) as unknown) as MemorialData['step3'],
+    step4: ((record.step4 || {}) as unknown) as MemorialData['step4'],
+    step5: ((record.step5 || {}) as unknown) as MemorialData['step5'],
+    step6: ((record.step6 || {}) as unknown) as MemorialData['step6'],
+    step7: ((record.step7 || {}) as unknown) as MemorialData['step7'],
+    step8: ((record.step8 || {}) as unknown) as MemorialData['step8'],
+    step9: (((record.step9 as unknown) as MemorialData['step9']) || { videos: [] }) as MemorialData['step9'],
+    currentStep: 1,
+    paid: record.paid ?? false,
+    lastSaved: record.updated_at || null,
+    completedSteps: record.completed_steps || [],
+  };
+}
+
+function collectContributionAssetIds(
+  contributions: Array<{ content: Record<string, unknown> | null }>
+) {
+  const ids = new Set<string>();
+
+  for (const contribution of contributions) {
+    const content = contribution.content || {};
+    const assetId = typeof content.assetId === 'string' ? content.assetId : null;
+    const thumbnailAssetId =
+      typeof content.thumbnailAssetId === 'string' ? content.thumbnailAssetId : null;
+
+    if (assetId) ids.add(assetId);
+    if (thumbnailAssetId) ids.add(thumbnailAssetId);
+  }
+
+  return [...ids];
+}
+
+function getContributionAssetMap(assets: StoredMediaAsset[]) {
+  return new Map<string, StoredMediaAsset>(assets.map((asset) => [asset.id, asset]));
+}
+
+function toReferenceFields(asset: StoredMediaAsset | null) {
+  if (!asset) {
+    return {
+      assetId: null,
+      bucket: null,
+      storagePath: null,
+      originalFileName: null,
+      mimeType: null,
+      fileSize: null,
+      uploadedAt: null,
+      uploadStatus: 'idle' as const,
+      uploadError: null,
+    };
+  }
+
+  return {
+    assetId: asset.id,
+    bucket: asset.bucket,
+    storagePath: asset.storagePath,
+    originalFileName: asset.originalFileName,
+    mimeType: asset.mimeType,
+    fileSize: asset.fileSize,
+    uploadedAt: asset.createdAt,
+    uploadStatus: 'ready' as const,
+    uploadError: null,
+  };
+}
+
+export async function getMemorialRenderData(
+  admin: SupabaseClient,
+  memorialId: string
+): Promise<MemorialRenderDataResult> {
+  const { data: memorial, error: memorialError } = await admin
+    .from('memorials')
+    .select(
+      'id, user_id, updated_at, paid, mode, full_name, birth_date, death_date, profile_photo_url, completed_steps, step1, step2, step3, step4, step5, step6, step7, step8, step9'
+    )
+    .eq('id', memorialId)
+    .single();
+
+  if (memorialError || !memorial) {
+    throw new Error('Archive not found');
+  }
+
+  const memorialRecord = memorial as MemorialRow;
+
+  const [normalizedData, approvedContributionsResult, relationsResult] = await Promise.all([
+    normalizeMemorialMediaData({
+      admin,
+      memorialId,
+      userId: memorialRecord.user_id,
+      data: buildMemorialData(memorialRecord),
+      preferAssetMetadata: true,
+    }),
+    admin
+      .from('memorial_contributions')
+      .select('id, type, content, witness_name, created_at')
+      .eq('memorial_id', memorialId)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: true }),
+    memorialRecord.mode === 'family'
+      ? admin
+          .from('memorial_relations')
+          .select(
+            'id, from_memorial_id, to_memorial_id, relationship_type, memorials!memorial_relations_to_memorial_id_fkey(id, full_name)'
+          )
+          .eq('from_memorial_id', memorialId)
+      : Promise.resolve({ data: [] as any[], error: null }),
+  ]);
+
+  if (approvedContributionsResult.error) {
+    throw new Error(
+      approvedContributionsResult.error.message || 'Could not load approved contributions.'
+    );
+  }
+
+  if (relationsResult.error) {
+    throw new Error(relationsResult.error.message || 'Could not load memorial relations.');
+  }
+
+  const approvedContributions = approvedContributionsResult.data || [];
+  const contributionAssetIds = collectContributionAssetIds(approvedContributions);
+  const contributionAssets =
+    contributionAssetIds.length > 0
+      ? await getMemorialMediaAssetsByIds(admin, memorialId, contributionAssetIds)
+      : [];
+  const contributionAssetMap = getContributionAssetMap(contributionAssets);
+
+  const memoryContributions = approvedContributions
+    .filter((contribution) => contribution.type === 'memory')
+    .map((contribution: any) => ({
+      id: contribution.id,
+      title: contribution.content?.title || 'Shared memory',
+      date: contribution.created_at,
+      content: contribution.content?.content || '',
+      author: contribution.witness_name || 'Contributor',
+      relationship: contribution.content?.relationship || '',
+    }));
+
+  const photoContributions = approvedContributions
+    .filter(
+      (contribution) =>
+        contribution.type === 'photo' &&
+        contribution.content?.url &&
+        contribution.content?.mediaVariant !== 'interactive_story'
+    )
+    .map((contribution: any) => {
+      const assetId =
+        typeof contribution.content?.assetId === 'string'
+          ? contribution.content.assetId
+          : null;
+      const asset = assetId ? contributionAssetMap.get(assetId) || null : null;
+
+      return {
+        id: contribution.id,
+        preview: asset?.publicUrl || contribution.content.url,
+        caption: contribution.content?.caption || '',
+        year: contribution.content?.year || '',
+        type: 'photo' as const,
+        sha256_hash: asset?.sha256Hash || contribution.content?.sha256_hash || null,
+        ...toReferenceFields(asset),
+      };
+    });
+
+  const interactivePhotoContributions = approvedContributions
+    .filter(
+      (contribution) =>
+        contribution.type === 'photo' &&
+        contribution.content?.url &&
+        contribution.content?.mediaVariant === 'interactive_story'
+    )
+    .map((contribution: any) => {
+      const assetId =
+        typeof contribution.content?.assetId === 'string'
+          ? contribution.content.assetId
+          : null;
+      const asset = assetId ? contributionAssetMap.get(assetId) || null : null;
+
+      return {
+        id: contribution.id,
+        preview: asset?.publicUrl || contribution.content.url,
+        description: contribution.content?.description || '',
+        sha256_hash: asset?.sha256Hash || contribution.content?.sha256_hash || null,
+        ...toReferenceFields(asset),
+      };
+    });
+
+  const videoContributions = approvedContributions
+    .filter((contribution) => contribution.type === 'video' && contribution.content?.url)
+    .map((contribution: any) => {
+      const assetId =
+        typeof contribution.content?.assetId === 'string'
+          ? contribution.content.assetId
+          : null;
+      const thumbnailAssetId =
+        typeof contribution.content?.thumbnailAssetId === 'string'
+          ? contribution.content.thumbnailAssetId
+          : null;
+      const asset = assetId ? contributionAssetMap.get(assetId) || null : null;
+      const thumbnailAsset = thumbnailAssetId
+        ? contributionAssetMap.get(thumbnailAssetId) || null
+        : null;
+
+      return {
+        id: contribution.id,
+        url: asset?.publicUrl || contribution.content.url,
+        thumbnail:
+          thumbnailAsset?.publicUrl || contribution.content?.thumbnail || asset?.publicUrl || '',
+        title: contribution.content?.title || '',
+        description: contribution.content?.description || '',
+        sha256_hash: asset?.sha256Hash || contribution.content?.sha256_hash || null,
+        duration: contribution.content?.duration || '',
+        ...toReferenceFields(asset),
+        thumbnailAssetId: thumbnailAsset?.id || null,
+        thumbnailBucket: thumbnailAsset?.bucket || null,
+        thumbnailStoragePath: thumbnailAsset?.storagePath || null,
+        thumbnailMimeType: thumbnailAsset?.mimeType || null,
+        thumbnailFileSize: thumbnailAsset?.fileSize || null,
+        thumbnailUploadedAt: thumbnailAsset?.createdAt || null,
+      };
+    });
+
+  const memorialData: MemorialData = {
+    ...normalizedData,
+    step7: {
+      ...(normalizedData.step7 || {}),
+      sharedMemories: [...(normalizedData.step7?.sharedMemories || []), ...memoryContributions],
+    },
+    step8: {
+      ...(normalizedData.step8 || {}),
+      gallery: [...(normalizedData.step8?.gallery || []), ...photoContributions],
+      interactiveGallery: [
+        ...(normalizedData.step8?.interactiveGallery || []),
+        ...interactivePhotoContributions,
+      ],
+    },
+    step9: {
+      ...(normalizedData.step9 || { videos: [] }),
+      videos: [...(normalizedData.step9?.videos || []), ...videoContributions],
+    },
+  };
+
+  const relations = (relationsResult.data || []).map((relation: any) => ({
+    id: relation.id,
+    from_memorial_id: relation.from_memorial_id,
+    to_memorial_id: relation.to_memorial_id,
+    relationship_type: relation.relationship_type,
+    target_name: relation.memorials?.full_name || '',
+  })) as MemorialRelation[];
+
+  return {
+    memorial: memorialRecord,
+    memorialData,
+    relations,
+  };
+}
+
+
+===== FILE: app/api/anchor/manifest/route.ts =====
+import { NextRequest, NextResponse } from 'next/server';
+
+import { requireMemorialAccess } from '@/lib/apiAuth';
+import { buildAnchorManifest } from '@/lib/anchor/manifestBuilder';
+import { getMemorialRenderData } from '@/lib/memorialRenderData';
+
+export async function POST(request: NextRequest) {
+  try {
+    const { memorialId } = (await request.json()) as { memorialId?: string };
+
+    if (!memorialId) {
+      return NextResponse.json({ error: 'Missing memorialId' }, { status: 400 });
+    }
+
+    const access = await requireMemorialAccess({
+      memorialId,
+      action: 'manage_devices',
+    });
+    if (!access.ok) return access.response;
+
+    if (access.context.plan !== 'family') {
+      return NextResponse.json(
+        { error: 'Anchor is only available for Family plan archives.' },
+        { status: 403 }
+      );
+    }
+
+    const renderData = await getMemorialRenderData(access.admin, memorialId);
+    const manifest = buildAnchorManifest(renderData);
+
+    return NextResponse.json(manifest, {
+      headers: {
+        'Cache-Control': 'no-store',
+      },
+    });
+  } catch (error: any) {
+    console.error('[anchor-manifest]', error);
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+
+===== FILE: app/api/anchor/register-device/route.ts =====
+import { randomUUID } from 'crypto';
+
+import { NextRequest, NextResponse } from 'next/server';
+
+import { safeLogMemorialActivity } from '@/lib/activityLog';
+import { requireMemorialAccess } from '@/lib/apiAuth';
+
+type RegisterAnchorDeviceBody = {
+  memorialId?: string;
+  deviceId?: string;
+  deviceName?: string;
+  browser?: string;
+  os?: string;
+  syncProgressBytes?: number;
+  totalBytes?: number;
+  status?: 'syncing' | 'synced' | 'error' | 'stale';
+  location?: string | null;
+};
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = (await req.json()) as RegisterAnchorDeviceBody;
+    const memorialId = body.memorialId || '';
+
+    const access = await requireMemorialAccess({
+      memorialId,
+      action: 'manage_devices',
+    });
+    if (!access.ok) return access.response;
+
+    if (access.context.plan !== 'family') {
+      return NextResponse.json(
+        { error: 'Anchor is only available for Family plan archives.' },
+        { status: 403 }
+      );
+    }
+
+    const { user, admin } = access;
+    const now = new Date().toISOString();
+    const deviceId = body.deviceId || `dev_${randomUUID()}`;
+
+    const { data: existingDevice, error: existingError } = await admin
+      .from('anchor_devices')
+      .select('id')
+      .eq('id', deviceId)
+      .eq('user_id', user.id)
+      .eq('memorial_id', memorialId)
+      .maybeSingle();
+
+    if (existingError) {
+      throw existingError;
+    }
+
+    const payload = {
+      id: deviceId,
+      user_id: user.id,
+      memorial_id: memorialId,
+      device_name: body.deviceName || 'Legacy Vault',
+      browser: body.browser || 'Unknown',
+      os: body.os || 'Unknown',
+      sync_progress_bytes: Math.max(0, body.syncProgressBytes || 0),
+      total_bytes: Math.max(0, body.totalBytes || 0),
+      status: body.status || 'syncing',
+      location: body.location || null,
+      last_sync_at: now,
+      updated_at: now,
+    };
+
+    const { error } = await admin
+      .from('anchor_devices')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) {
+      throw error;
+    }
+
+    if (!existingDevice) {
+      await safeLogMemorialActivity(admin, {
+        memorialId,
+        action: 'device_registered',
+        summary: `${payload.device_name} was registered for local anchoring.`,
+        actorUserId: user.id,
+        actorEmail: user.email ?? null,
+        details: {
+          deviceId,
+          browser: payload.browser,
+          os: payload.os,
+          location: payload.location,
+        },
+      });
+    }
+
+    return NextResponse.json({
+      deviceId,
+      status: payload.status,
+      location: payload.location,
+    });
+  } catch (error: any) {
+    console.error('[anchor-register-device]', error);
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+
+===== FILE: app/api/anchor/sync-status/route.ts =====
+import { NextRequest, NextResponse } from 'next/server';
+
+import { requireMemorialAccess } from '@/lib/apiAuth';
+
+type AnchorSyncUpdateBody = {
+  memorialId?: string;
+  deviceId?: string;
+  deviceName?: string;
+  browser?: string;
+  os?: string;
+  syncProgressBytes?: number;
+  totalBytes?: number;
+  status?: 'syncing' | 'synced' | 'error' | 'stale';
+  location?: string | null;
+};
+
+export async function GET(req: NextRequest) {
+  const memorialId = req.nextUrl.searchParams.get('memorialId') || '';
+
+  try {
+    const access = await requireMemorialAccess({
+      memorialId,
+      action: 'manage_devices',
+    });
+    if (!access.ok) return access.response;
+
+    if (access.context.plan !== 'family') {
+      return NextResponse.json(
+        { error: 'Anchor is only available for Family plan archives.' },
+        { status: 403 }
+      );
+    }
+
+    const { user, admin } = access;
+    const { data, error } = await admin
+      .from('anchor_devices')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('memorial_id', memorialId)
+      .order('last_sync_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json({
+      devices: (data || []).map((device) => ({
+        id: device.id,
+        deviceName: device.device_name,
+        browser: device.browser,
+        os: device.os,
+        syncProgressBytes: device.sync_progress_bytes,
+        totalBytes: device.total_bytes,
+        lastSyncAt: device.last_sync_at,
+        status: device.status,
+        location: device.location || null,
+      })),
+    });
+  } catch (error: any) {
+    console.error('[anchor-sync-status][GET]', error);
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = (await req.json()) as AnchorSyncUpdateBody;
+    const memorialId = body.memorialId || '';
+
+    const access = await requireMemorialAccess({
+      memorialId,
+      action: 'manage_devices',
+    });
+    if (!access.ok) return access.response;
+
+    if (access.context.plan !== 'family') {
+      return NextResponse.json(
+        { error: 'Anchor is only available for Family plan archives.' },
+        { status: 403 }
+      );
+    }
+
+    const { user, admin } = access;
+    const deviceId = body.deviceId || '';
+
+    if (!deviceId) {
+      return NextResponse.json({ error: 'Missing deviceId' }, { status: 400 });
+    }
+
+    const now = new Date().toISOString();
+    const payload = {
+      id: deviceId,
+      user_id: user.id,
+      memorial_id: memorialId,
+      device_name: body.deviceName || 'Legacy Vault',
+      browser: body.browser || 'Unknown',
+      os: body.os || 'Unknown',
+      sync_progress_bytes: Math.max(0, body.syncProgressBytes || 0),
+      total_bytes: Math.max(0, body.totalBytes || 0),
+      status: body.status || 'syncing',
+      location: body.location || null,
+      last_sync_at: now,
+      updated_at: now,
+    };
+
+    const { error } = await admin
+      .from('anchor_devices')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('[anchor-sync-status][POST]', error);
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+
+===== FILE: app/api/archive/[memorialId]/render-data/route.ts =====
+import { NextRequest, NextResponse } from 'next/server';
+
+import { hasPermission, resolveArchivePermissionContext } from '@/lib/archivePermissions';
+import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { getMemorialRenderData } from '@/lib/memorialRenderData';
+import { createAuthenticatedClient } from '@/utils/supabase/api';
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ memorialId: string }> }
+) {
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const { memorialId } = await params;
+    const { user } = await createAuthenticatedClient();
+
+    const permission = user
+      ? await resolveArchivePermissionContext(supabaseAdmin, memorialId, user.id)
+      : { memorialExists: false, context: null };
+
+    const renderData = await getMemorialRenderData(supabaseAdmin, memorialId);
+    const { memorial, memorialData, relations } = renderData;
+
+    const canViewViaRole =
+      !!permission.context && hasPermission(permission.context, 'view_archive');
+    const isOwner = !!user && user.id === memorial.user_id;
+    const isPaidMode = memorial.mode === 'personal' || memorial.mode === 'family';
+    const isPubliclyReadable = !!memorial.paid || isPaidMode;
+
+    if (!canViewViaRole && !isOwner && !isPubliclyReadable) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    return NextResponse.json({
+      memorialData,
+      relations,
+    });
+  } catch (error: any) {
+    console.error('[render-data]', error);
+    const message = error.message || 'Internal server error';
+    const status = message === 'Archive not found' ? 404 : 500;
+
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+
+===== FILE: app/api/arche/generate/route.ts =====
+// app/api/arche/generate/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { generateStandaloneHTML } from '@/lib/arche/htmlGenerator';
+import { ArcheArchiver } from '@/lib/arche/archiver';
+import { processMemorialMedia } from '@/lib/arche/mediaProcessor';
+import { generateManifest, generateReadme } from '@/lib/arche/metadataGenerator';
+import { requireMemorialAccess } from '@/lib/apiAuth';
+import { safeLogMemorialActivity } from '@/lib/activityLog';
+
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
+const EXPORTS_BUCKET = 'exports';
+
+export async function POST(request: NextRequest) {
+    try {
+        const { memorialId } = await request.json();
+
+        if (!memorialId) {
+            return NextResponse.json({ error: 'Missing memorialId' }, { status: 400 });
+        }
+
+        // AUTH: Use centralized permission layer — require export_archive permission
+        const access = await requireMemorialAccess({
+            memorialId,
+            action: 'export_archive',
+        });
+        if (!access.ok) return access.response;
+
+        const { user, admin: supabaseAdmin } = access;
+
+        console.log(`[Arche] Starting export for ${memorialId}...`);
+
+        // Fetch Full Data
+        const { data: memorial, error } = await supabaseAdmin
+            .from('memorials')
+            .select('*')
+            .eq('id', memorialId)
+            .single();
+
+        if (error || !memorial) {
+            return NextResponse.json({ error: 'Memorial not found' }, { status: 404 });
+        }
+
+        // 4. RATE LIMIT: 10-minute cooldown between successful exports
+        if (memorial.last_exported_at) {
+            const diffMinutes = (Date.now() - new Date(memorial.last_exported_at).getTime()) / 60000;
+            let canEnforceCooldown = true;
+
+            const { data: buckets, error: bucketsError } = await supabaseAdmin.storage.listBuckets();
+            if (bucketsError) {
+                console.warn('[Arche] Could not inspect storage buckets before cooldown check:', bucketsError.message);
+            } else {
+                const hasExportsBucket = buckets?.some((bucket) => bucket.name === EXPORTS_BUCKET);
+                if (!hasExportsBucket) {
+                    canEnforceCooldown = false;
+                } else {
+                    const { data: exportFiles, error: listError } = await supabaseAdmin.storage
+                        .from(EXPORTS_BUCKET)
+                        .list(memorialId, { limit: 1 });
+
+                    if (listError) {
+                        console.warn('[Arche] Could not inspect prior exports before cooldown check:', listError.message);
+                    } else if (!exportFiles || exportFiles.length === 0) {
+                        canEnforceCooldown = false;
+                    }
+                }
+            }
+
+            if (canEnforceCooldown && diffMinutes < 10) {
+                const waitTime = Math.ceil(10 - diffMinutes);
+                return NextResponse.json({
+                    error: `Please wait ${waitTime} minute(s) before generating another ZIP archive.`
+                }, { status: 429 });
+            }
+        }
+
+        const fullData = {
+            step1: memorial.step1,
+            step2: memorial.step2,
+            step3: memorial.step3,
+            step4: memorial.step4,
+            step5: memorial.step5,
+            step6: memorial.step6,
+            step7: memorial.step7,
+            step8: memorial.step8,
+            step9: memorial.step9,
+            currentStep: memorial.current_step || 10,
+            paid: memorial.paid,
+            lastSaved: memorial.updated_at,
+            completedSteps: memorial.completed_steps || []
+        };
+
+        // 6. Initialize Archiver
+        const archiver = new ArcheArchiver(fullData as any);
+
+        // 7. Process Media
+        await processMemorialMedia(archiver, fullData as any);
+
+        // --- Add Verification Report to ZIP ---
+        const integrityReport = archiver.getVerificationReport();
+        archiver.addTextFile('INTEGRITY_REPORT.txt', integrityReport);
+        // -------------------------------------------
+
+        // 8. Generate Metadata
+        const manifest = generateManifest(fullData as any, memorialId);
+        const readme = generateReadme(fullData as any);
+
+        archiver.addTextFile('manifest.json', manifest);
+        archiver.addTextFile('README.txt', readme);
+
+        // 9. Generate HTML
+        const resourceMap = archiver.getResourceMap();
+        const html = generateStandaloneHTML(fullData as any, resourceMap);
+        archiver.addTextFile('index.html', html);
+
+        // 10. Generate ZIP Buffer
+        console.log('[Arche] Finalizing ZIP file...');
+        const zipBuffer = await archiver.generateZip();
+
+        // 11. Upload to Supabase
+        const filename = `archive_${fullData.step1.fullName.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.zip`;
+        const filePath = `${memorialId}/${filename}`;
+
+        const { data: currentBuckets, error: currentBucketsError } = await supabaseAdmin.storage.listBuckets();
+        if (currentBucketsError) {
+            throw new Error(`Failed to inspect storage buckets: ${currentBucketsError.message}`);
+        }
+
+        const hasExportsBucket = currentBuckets?.some((bucket) => bucket.name === EXPORTS_BUCKET);
+        if (!hasExportsBucket) {
+            const { error: createBucketError } = await supabaseAdmin.storage.createBucket(EXPORTS_BUCKET, {
+                public: false,
+            });
+
+            if (createBucketError) {
+                throw new Error(`Failed to create export bucket "${EXPORTS_BUCKET}": ${createBucketError.message}`);
+            }
+        }
+
+        const { error: uploadError } = await supabaseAdmin.storage
+            .from(EXPORTS_BUCKET)
+            .upload(filePath, zipBuffer, {
+                contentType: 'application/zip',
+                upsert: true
+            });
+
+        if (uploadError) {
+            console.error('Storage Upload Error:', uploadError);
+            throw new Error('Failed to upload ZIP to storage: ' + uploadError.message);
+        }
+
+        // Generate Signed URL
+        const { data: urlData, error: urlError } = await supabaseAdmin.storage
+            .from(EXPORTS_BUCKET)
+            .createSignedUrl(filePath, 3600);
+
+        if (urlError || !urlData) {
+            throw new Error('Failed to generate download URL');
+        }
+
+        await supabaseAdmin
+            .from('memorials')
+            .update({ last_exported_at: new Date().toISOString() })
+            .eq('id', memorialId);
+
+        await safeLogMemorialActivity(supabaseAdmin, {
+            memorialId,
+            action: 'memorial_exported',
+            summary: 'Archive ZIP exported.',
+            actorUserId: user.id,
+            actorEmail: user.email ?? null,
+        });
+
+        console.log('[Arche] Export complete:', urlData.signedUrl);
+
+        return NextResponse.json({
+            success: true,
+            downloadUrl: urlData.signedUrl,
+            filename: filename
+        });
+
+    } catch (error: any) {
+        console.error('[Arche] Export Failed:', error);
+        return NextResponse.json({ error: error.message || 'Export failed' }, { status: 500 });
+    }
+}
+
+
+===== FILE: app/api/security/sessions/route.ts =====
+import { NextRequest, NextResponse } from 'next/server';
+import { createAuthenticatedClient } from '@/utils/supabase/api';
+import {
+  getRequestIpAddress,
+  revokeTrackedSession,
+  revokeTrackedSessionsByScope,
+  trackUserSessionDevice,
+} from '@/lib/sessionDevices';
+import { SESSION_ACTIVITY_STALE_HOURS } from '@/lib/constants';
+import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { getSessionFingerprintFromRequest } from '@/lib/sessionFingerprint';
+
+type SessionActionType = 'session' | 'anchor' | 'scope';
+
+function groupTrackedSessions(
+  rows: Array<{
+    id: string;
+    session_id: string;
+    fingerprint: string | null;
+    device_label: string | null;
+    ip_address: string | null;
+    user_agent: string | null;
+    last_seen_at: string | null;
+    created_at: string | null;
+    revoked_at: string | null;
+  }>,
+  currentSessionId: string | null,
+  staleThreshold: number
+) {
+  const groups = new Map<string, typeof rows>();
+
+  for (const row of rows) {
+    const key = row.fingerprint || row.session_id || row.id;
+    const existing = groups.get(key) || [];
+    existing.push(row);
+    groups.set(key, existing);
+  }
+
+  return Array.from(groups.values()).map((group) => {
+    const representative = [...group].sort((left, right) => {
+      if (left.session_id === currentSessionId) return -1;
+      if (right.session_id === currentSessionId) return 1;
+
+      const leftSeen = new Date(left.last_seen_at || left.created_at || 0).getTime();
+      const rightSeen = new Date(right.last_seen_at || right.created_at || 0).getTime();
+      return rightSeen - leftSeen;
+    })[0];
+
+    const lastSeenAt =
+      [...group]
+        .map((row) => row.last_seen_at)
+        .filter(Boolean)
+        .sort((left, right) => new Date(right as string).getTime() - new Date(left as string).getTime())[0] ||
+      representative.last_seen_at;
+
+    const revokedAt =
+      group.every((row) => !!row.revoked_at)
+        ? [...group]
+            .map((row) => row.revoked_at)
+            .filter(Boolean)
+            .sort((left, right) => new Date(right as string).getTime() - new Date(left as string).getTime())[0] || null
+        : null;
+
+    return {
+      id: representative.id,
+      sessionId: representative.session_id,
+      fingerprint: representative.fingerprint,
+      deviceLabel: representative.device_label,
+      ipAddress: representative.ip_address,
+      userAgent: representative.user_agent,
+      lastSeenAt: lastSeenAt || null,
+      createdAt: representative.created_at,
+      revokedAt,
+      isCurrent: group.some((row) => row.session_id === currentSessionId),
+      isStale: !!lastSeenAt && new Date(lastSeenAt).getTime() < staleThreshold,
+    };
+  });
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const {
+      user,
+      error,
+      session,
+      sessionId,
+      sessionState,
+    } = await createAuthenticatedClient();
+
+    if (error || !user) {
+      return NextResponse.json(
+        { error: error?.message || 'Unauthorized', session: sessionState },
+        { status: 401 }
+      );
+    }
+
+    const trackedSession = await trackUserSessionDevice(supabaseAdmin, {
+      userId: user.id,
+      sessionId,
+      fingerprint: getSessionFingerprintFromRequest(request),
+      ipAddress: getRequestIpAddress(request),
+      userAgent: request.headers.get('user-agent'),
+      expiresAt: session?.expires_at
+        ? new Date(session.expires_at * 1000).toISOString()
+        : null,
+    });
+
+    const [sessionRowsResult, anchorRowsResult] = await Promise.all([
+      supabaseAdmin
+        .from('user_session_devices')
+        .select('id, session_id, fingerprint, device_label, ip_address, user_agent, last_seen_at, created_at, revoked_at')
+        .eq('user_id', user.id)
+        .order('last_seen_at', { ascending: false }),
+      supabaseAdmin
+        .from('anchor_devices')
+        .select('id, memorial_id, device_name, browser, os, last_sync_at, status, created_at')
+        .eq('user_id', user.id)
+        .order('last_sync_at', { ascending: false }),
+    ]);
+
+    if (sessionRowsResult.error) {
+      throw sessionRowsResult.error;
+    }
+
+    if (anchorRowsResult.error) {
+      throw anchorRowsResult.error;
+    }
+
+    const staleThreshold = Date.now() - SESSION_ACTIVITY_STALE_HOURS * 60 * 60 * 1000;
+
+    return NextResponse.json(
+      {
+        currentSessionId: sessionId,
+        currentSession: trackedSession || sessionState,
+        sessions: groupTrackedSessions(
+          sessionRowsResult.data || [],
+          sessionId,
+          staleThreshold
+        ),
+        devices: (anchorRowsResult.data || []).map((device) => ({
+          id: device.id,
+          memorialId: device.memorial_id,
+          deviceName: device.device_name,
+          browser: device.browser,
+          os: device.os,
+          lastSyncAt: device.last_sync_at,
+          status: device.status,
+          createdAt: device.created_at,
+        })),
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      }
+    );
+  } catch (error: any) {
+    console.error('[security-sessions]', error);
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const {
+      supabase,
+      user,
+      error,
+      session,
+      sessionId,
+      sessionState,
+    } = await createAuthenticatedClient();
+
+    if (error || !user) {
+      return NextResponse.json(
+        { error: error?.message || 'Unauthorized', session: sessionState },
+        { status: 401 }
+      );
+    }
+
+    const {
+      targetId,
+      type,
+      scope,
+    } = (await request.json()) as {
+      targetId?: string;
+      type?: SessionActionType;
+      scope?: 'others' | 'global';
+    };
+
+    if (type === 'scope') {
+      if (scope !== 'others' && scope !== 'global') {
+        return NextResponse.json({ error: 'Invalid scope' }, { status: 400 });
+      }
+
+      await revokeTrackedSessionsByScope(supabaseAdmin, {
+        userId: user.id,
+        currentSessionId: sessionId,
+        scope,
+      });
+
+      let trustedSessionsQuery = supabaseAdmin
+        .from('user_two_factor_trusted_sessions')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (scope === 'others' && sessionId) {
+        trustedSessionsQuery = trustedSessionsQuery.neq('session_id', sessionId);
+      }
+
+      await trustedSessionsQuery;
+
+      return NextResponse.json({ success: true });
+    }
+
+    if (!targetId || !type || !['session', 'anchor'].includes(type)) {
+      return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
+    }
+
+    if (type === 'session') {
+      await revokeTrackedSession(supabaseAdmin, {
+        userId: user.id,
+        sessionId: targetId,
+      });
+
+      await supabaseAdmin
+        .from('user_two_factor_trusted_sessions')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('session_id', targetId);
+
+      const isCurrentSession = targetId === sessionId;
+      if (isCurrentSession) {
+        if (session?.access_token) {
+          await supabase.auth.admin.signOut(session.access_token, 'local');
+        }
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+      }
+
+      return NextResponse.json({
+        success: true,
+        signedOutCurrentSession: isCurrentSession,
+      });
+    }
+
+    const { error: revokeError } = await supabaseAdmin
+      .from('anchor_devices')
+      .update({ status: 'stale' })
+      .eq('user_id', user.id)
+      .eq('id', targetId);
+
+    if (revokeError) throw revokeError;
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('[security-sessions-revoke]', error);
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+
+===== FILE: app/dashboard/family/[userId]/page.tsx =====
+// app/dashboard/family/[userId]/page.tsx
+
+'use client';
+import { useState, useEffect, use } from 'react';
+import Link from 'next/link';
+import { Plus, Eye, Edit, Trash2, User, Search, Filter, RefreshCcw, AlertTriangle, Archive, Wifi, BellDot } from 'lucide-react';
+import { supabase, Memorial } from '@/lib/supabase';
+import AnchorPanel from '@/components/AnchorPanel';
+import DashboardShell from '@/components/dashboard/DashboardShell';
+import ArchiveExportAction from '@/components/dashboard/ArchiveExportAction';
+import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
+import EditableFamilyTitle from '@/components/dashboard/EditableFamilyTitle';
+
+import { useSearchParams, useRouter } from 'next/navigation';
+import { isFamilyPlan, useAuth } from '@/components/providers/AuthProvider';
+import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
+import { useNotifications } from '@/hooks/useNotifications';
+import { permanentlyDeleteMemorial, updateMemorialTrashState } from '@/lib/memorialClientActions';
+import toast from 'react-hot-toast';
+
+type FamilySortOption = 'birth' | 'created_asc' | 'created_desc';
+
+export default function FamilyDashboard({ params }: { params: Promise<{ userId: string }> }) {
+    const unwrappedParams = use(params);
+    const userId = unwrappedParams.userId;
+    const auth = useAuth();
+    const router = useRouter();
+    const { data: notificationData } = useNotifications();
+    const [memorials, setMemorials] = useState<Memorial[]>([]);
+    const [deletedMemorials, setDeletedMemorials] = useState<Memorial[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [skeletonCount, setSkeletonCount] = useState(3);
+    const [pendingConfirm, setPendingConfirm] = useState<
+        | { kind: 'soft-delete'; id: string; sharedCount: number }
+        | { kind: 'permanent-delete'; id: string; stage: 1 | 2 }
+        | null
+    >(null);
+    const [showWelcome, setShowWelcome] = useState(false);
+    const [anchoredDeviceCount, setAnchoredDeviceCount] = useState(0);
+
+    const [searchTerm, setSearchTerm] = useState('');
+    const [sortOption, setSortOption] = useState<FamilySortOption>('created_desc');
+
+    const searchParams = useSearchParams();
+
+    // Auth guard: verify the URL userId matches the authenticated user + plan enforcement
+    useEffect(() => {
+        if (auth.loading) return;
+        if (!auth.authenticated) {
+            router.replace('/login?next=/dashboard');
+            return;
+        }
+        if (auth.user && auth.user.id !== userId) {
+            router.replace(`/dashboard/family/${auth.user.id}`);
+            return;
+        }
+        // PLAN ENFORCEMENT: Personal-only users cannot access family dashboard
+        if (auth.plan === 'personal') {
+            console.log('[Plan Guard] User attempted Family access with Personal plan. Redirecting.');
+            router.replace(`/dashboard/personal/${userId}`);
+            return;
+        }
+        // Draft users go to draft dashboard
+        if (auth.plan === 'draft' || auth.plan === 'none') {
+            router.replace(`/dashboard/draft/${userId}`);
+            return;
+        }
+    }, [auth.loading, auth.authenticated, auth.user, auth.plan, userId, router]);
+
+    useEffect(() => {
+        try {
+            const stored = sessionStorage.getItem(`family-count-${userId}`);
+            if (stored) setSkeletonCount(Math.max(1, Math.min(parseInt(stored, 10) || 3, 8)));
+        } catch { /* sessionStorage unavailable */ }
+        loadMemorials();
+        if (searchParams.get('welcome') === 'true') {
+            setShowWelcome(true);
+            window.history.replaceState({}, '', `/dashboard/family/${userId}`);
+            setTimeout(() => setShowWelcome(false), 5000);
+        }
+    }, [userId, searchParams]);
+
+    useEffect(() => {
+        const section = searchParams.get('section');
+        if (!section) return;
+
+        const target = document.getElementById(section);
+        if (!target) return;
+
+        window.requestAnimationFrame(() => {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }, [searchParams, notificationData.pendingCount, memorials.length]);
+
+    useEffect(() => {
+        const interval = window.setInterval(() => {
+            loadMemorials();
+        }, 30000);
+
+        return () => window.clearInterval(interval);
+    }, [userId]);
+
+    // Refetch when user navigates back via browser back button or tab switch
+    useEffect(() => {
+        const handlePopState = () => loadMemorials();
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible') loadMemorials();
+        };
+        window.addEventListener('popstate', handlePopState);
+        document.addEventListener('visibilitychange', handleVisibility);
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+            document.removeEventListener('visibilitychange', handleVisibility);
+        };
+    }, [userId]);
+
+    const loadMemorials = async () => {
+        setLoading(true);
+        const { data, error } = await supabase
+            .from('memorials')
+            .select('*, payment_confirmed_at')
+            .eq('user_id', userId)
+            .eq('mode', 'family')
+            .order('updated_at', { ascending: false });
+
+        if (error) console.error('Error:', error);
+
+        if (data) {
+            const activeMemorials = data.filter(m => !m.deleted);
+            const visibleMemorialCount = activeMemorials.filter(m => m.full_name).length;
+            setMemorials(activeMemorials);
+            setDeletedMemorials(data.filter(m => m.deleted));
+            try { sessionStorage.setItem(`family-count-${userId}`, String(visibleMemorialCount || activeMemorials.length || 1)); } catch { /* noop */ }
+        }
+        setLoading(false);
+    };
+
+    const handleCreate = () => {
+        // Reuse an existing empty paid memorial (plan marker) if available
+        const emptyPaid = memorials.find(m => !m.full_name && m.paid);
+        if (emptyPaid) {
+            window.location.href = `/create?id=${emptyPaid.id}&mode=family`;
+        } else {
+            window.location.href = '/create?mode=family';
+        }
+    };
+
+    // Soft Delete with Contributor Check — blocks preserved archives
+    const softDeleteMemorial = async (id: string) => {
+        const target = memorials.find(m => m.id === id);
+        if (target && (target as any).preservation_state === 'preserved') {
+            toast.error('This archive has been permanently preserved on the blockchain and cannot be removed.');
+            return;
+        }
+        const { count } = await supabase
+            .from('memorial_contributions')
+            .select('*', { count: 'exact', head: true })
+            .eq('memorial_id', id)
+            .neq('user_id', userId);
+
+        setPendingConfirm({ kind: 'soft-delete', id, sharedCount: count || 0 });
+    };
+
+    const restoreMemorial = async (id: string) => {
+        try {
+            await updateMemorialTrashState(id, 'restore');
+            loadMemorials();
+        } catch (error) {
+            toast.error('Error restoring memorial');
+            console.error(error);
+        }
+    };
+
+    const permanentDeleteMemorial = (id: string) => {
+        setPendingConfirm({ kind: 'permanent-delete', id, stage: 1 });
+    };
+
+    const handleConfirmDestructive = async () => {
+        if (!pendingConfirm) return;
+        if (pendingConfirm.kind === 'soft-delete') {
+            const id = pendingConfirm.id;
+            setPendingConfirm(null);
+            try {
+                await updateMemorialTrashState(id, 'delete');
+                loadMemorials();
+            } catch (error) {
+                toast.error('Error deleting memorial');
+                console.error(error);
+            }
+            return;
+        }
+        if (pendingConfirm.kind === 'permanent-delete' && pendingConfirm.stage === 1) {
+            setPendingConfirm({ kind: 'permanent-delete', id: pendingConfirm.id, stage: 2 });
+            return;
+        }
+        if (pendingConfirm.kind === 'permanent-delete' && pendingConfirm.stage === 2) {
+            const id = pendingConfirm.id;
+            setPendingConfirm(null);
+            try {
+                await permanentlyDeleteMemorial(id);
+                loadMemorials();
+            } catch {
+                toast.error('Error permanently deleting memorial. Please try again.');
+            }
+        }
+    };
+
+    const getDaysRemaining = (deletedAt: string) => {
+        const deleteDate = new Date(deletedAt);
+        const expiryDate = new Date(deleteDate.getTime() + (SOFT_DELETE_RETENTION_DAYS * 24 * 60 * 60 * 1000));
+        const now = new Date();
+        const diff = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 3600 * 24));
+        return diff > 0 ? diff : 0;
+    };
+
+    // Filter Active Memorials — exclude empty plan markers (no full_name)
+    const realMemorials = memorials.filter(m => m.full_name);
+    const searchedMemorials = realMemorials.filter((m) =>
+        (m.full_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const parseTime = (value?: string | null) => {
+        if (!value) return Number.NaN;
+        const parsed = new Date(value).getTime();
+        return Number.isFinite(parsed) ? parsed : Number.NaN;
+    };
+
+    const filteredMemorials = [...searchedMemorials].sort((a, b) => {
+        if (sortOption === 'birth') {
+            const aTime = parseTime(a.birth_date);
+            const bTime = parseTime(b.birth_date);
+            if (Number.isNaN(aTime) && Number.isNaN(bTime)) return 0;
+            if (Number.isNaN(aTime)) return 1;
+            if (Number.isNaN(bTime)) return -1;
+            return aTime - bTime;
+        }
+
+        const aCreated = parseTime(a.created_at);
+        const bCreated = parseTime(b.created_at);
+        const aSafe = Number.isNaN(aCreated) ? 0 : aCreated;
+        const bSafe = Number.isNaN(bCreated) ? 0 : bCreated;
+
+        return sortOption === 'created_asc' ? aSafe - bSafe : bSafe - aSafe;
+    });
+
+    const firstPaidMemorial = memorials.find(m => m.paid);
+
+    const pendingRequestCount = notificationData.pendingCount;
+
+    // BLOCK RENDERING until auth checks pass
+    const hasAccess = isFamilyPlan(auth.plan);
+    if (auth.loading || !auth.authenticated || !hasAccess) {
+        return (
+            <div className="bg-surface-low min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-12 h-12 border-2 border-warm-border/30 border-t-olive rounded-full animate-spin mx-auto mb-4" />
+                    <p className="text-warm-muted text-sm font-sans">Verifying access...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <DashboardShell userId={userId}>
+        <div className="bg-surface-low min-h-screen">
+            {/* Welcome banner */}
+            {showWelcome && (
+                <div className="animate-fadeIn bg-surface-mid border-b border-warm-border/30">
+                    <div className="max-w-7xl mx-auto px-6 py-4 text-center">
+                        <p className="text-sm font-sans text-warm-muted tracking-wide">
+                            When you are ready, everything is here.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* HEADER */}
+            <div className="bg-surface-mid/50 border-b border-warm-border/30">
+                <div className="max-w-7xl mx-auto px-6 py-8">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <div className="flex flex-wrap items-center gap-3 mb-3">
+                                <EditableFamilyTitle />
+                                <span className="live-badge inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-semibold bg-olive/10 text-olive border border-olive/20">
+                                    Live
+                                </span>
+                                {pendingRequestCount > 0 && (
+                                    <span className="inline-flex items-center gap-1.5 rounded-full border border-warm-brown/20 bg-warm-brown/10 px-3 py-1 text-xs font-semibold text-warm-brown">
+                                        <BellDot size={12} />
+                                        {pendingRequestCount} pending item{pendingRequestCount !== 1 ? 's' : ''}
+                                    </span>
+                                )}
+                            </div>
+                            <p className="text-warm-muted font-sans text-sm tracking-wide">
+                                {realMemorials.length} memorial{realMemorials.length !== 1 ? 's' : ''} &bull; {pendingRequestCount} pending item{pendingRequestCount !== 1 ? 's' : ''} &bull; {anchoredDeviceCount} device{anchoredDeviceCount !== 1 ? 's' : ''} anchored
+                            </p>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={handleCreate}
+                                className="px-5 py-3 rounded-none font-sans font-semibold flex items-center gap-2 glass-btn-primary text-sm"
+                            >
+                                <Plus size={18} />
+                                Create Memorial
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="max-w-7xl mx-auto px-6 py-12">
+                {/* SEARCH & SORT TOOLBAR */}
+                {!loading && realMemorials.length > 0 && (
+                    <div className="flex flex-col md:flex-row gap-4 mb-8">
+                        <div className="flex-1 relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-warm-outline" size={20} />
+                            <input
+                                type="text"
+                                placeholder="Search by name..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-12 pr-4 py-3 glass-input rounded-none"
+                            />
+                        </div>
+                        <div className="relative">
+                            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-warm-outline" size={20} />
+                            <select
+                                value={sortOption}
+                                onChange={(e) => setSortOption(e.target.value as FamilySortOption)}
+                                className="pl-12 pr-8 py-3 glass-input rounded-none appearance-none cursor-pointer"
+                            >
+                                <option value="birth">Date of birth</option>
+                                <option value="created_asc">Creation date (ascending)</option>
+                                <option value="created_desc">Creation date (descending)</option>
+                            </select>
+                        </div>
+                    </div>
+                )}
+
+                {loading ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" aria-label="Loading memorials">
+                        {Array.from({ length: skeletonCount }).map((_, i) => (
+                            <div key={i} className="bg-white border border-warm-border/30 rounded-none overflow-hidden animate-pulse">
+                                <div className="h-48 bg-surface-mid" />
+                                <div className="p-5">
+                                    <div className="h-5 w-2/3 bg-surface-mid mb-2 rounded-none" />
+                                    <div className="h-3 w-1/2 bg-surface-mid/70 mb-4 rounded-none" />
+                                    <div className="h-8 bg-surface-mid rounded-none" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : realMemorials.length === 0 ? (
+                    <div className="text-center py-20">
+                        <div className="w-24 h-24 bg-surface-mid rounded-none flex items-center justify-center mx-auto mb-6">
+                            <User size={48} className="text-warm-muted" />
+                        </div>
+                        <h2 className="font-serif text-3xl text-warm-dark mb-3">Create Your First Memorial</h2>
+                        <p className="text-warm-muted font-sans mb-6">Begin preserving your family&apos;s legacy</p>
+                        <button onClick={handleCreate} className="inline-flex items-center gap-2 px-6 py-3 glass-btn-primary rounded-none font-sans font-semibold text-sm">
+                            <Plus size={20} />
+                            Create
+                        </button>
+                    </div>
+                ) : (
+                    <>
+                        {/* FAMILY ROW: Visual Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            {filteredMemorials.map((memorial) => (
+                                <div key={memorial.id} className="bg-white border border-warm-border/30 rounded-none overflow-hidden transition-all group hover:border-warm-border/50">
+                                    {/* Profile Photo */}
+                                    <div className="relative h-48 bg-surface-mid">
+                                        {memorial.profile_photo_url ? (
+                                            <img src={memorial.profile_photo_url} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <User size={64} className="text-warm-border/30" />
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Card Body */}
+                                    <div className="p-5">
+                                        <h3 className="font-serif text-xl text-warm-dark mb-1">{memorial.full_name || 'Untitled'}</h3>
+                                        <p className="text-xs text-warm-muted font-sans mb-4">
+                                            {memorial.birth_date || '?'} &mdash; {memorial.death_date || 'Present'}
+                                        </p>
+
+                                        {/* Actions */}
+                                        <div className="flex gap-2">
+                                            <Link href={`/person/${memorial.id}`} className="flex-1 py-2 px-3 bg-surface-mid rounded-none font-sans font-medium text-center text-sm flex items-center justify-center gap-1 text-warm-dark hover:bg-surface-high transition-colors">
+                                                <Eye size={14} /> View
+                                            </Link>
+                                            <Link href={`/create?id=${memorial.id}&mode=family`} className="flex-1 py-2 px-3 bg-surface-mid rounded-none font-sans font-medium text-center text-sm flex items-center justify-center gap-1 text-warm-dark hover:bg-surface-high transition-colors">
+                                                <Edit size={14} /> Edit
+                                            </Link>
+                                            {(memorial as any).preservation_state !== 'preserved' && (
+                                                <button
+                                                    onClick={() => softDeleteMemorial(memorial.id)}
+                                                    aria-label="Delete memorial"
+                                                    className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-500 rounded-none transition-colors"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="mt-4">
+                                            <ArchiveExportAction
+                                                memorialId={memorial.id}
+                                                panelClassName="border border-warm-border/25 bg-white p-4 rounded-none"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+
+                            {/* + Add Memorial Card */}
+                            <button
+                                onClick={handleCreate}
+                                className="group flex min-h-[320px] cursor-pointer flex-col items-center justify-center overflow-hidden border border-dashed border-warm-border/30 bg-white transition-all hover:border-olive/30 hover:shadow-lg rounded-none"
+                            >
+                                <div className="mb-4 flex h-16 w-16 items-center justify-center bg-surface-mid transition-colors group-hover:bg-olive/10 rounded-none">
+                                    <Plus size={28} className="text-warm-muted group-hover:text-olive transition-colors" />
+                                </div>
+                                <p className="font-sans font-semibold text-warm-muted group-hover:text-warm-dark text-sm transition-colors">Add Memorial</p>
+                            </button>
+                        </div>
+                    </>
+                )}
+
+                {/* ANCHOR PANEL — Family Sync Status */}
+                {firstPaidMemorial && (
+                    <div className="mt-12">
+                        <AnchorPanel
+                            memorialId={firstPaidMemorial.id}
+                            onDeviceCountChange={setAnchoredDeviceCount}
+                        />
+                    </div>
+                )}
+
+                {/* OFFLINE ACCESS GUARANTEE */}
+                <div className="mt-8">
+                    <div className="border border-warm-border/30 bg-white p-6 rounded-none">
+                        <div className="flex items-start gap-3">
+                            <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center bg-olive/10 rounded-none">
+                                <Wifi size={16} className="text-olive" />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-semibold text-warm-dark font-sans mb-1">Offline Access Guarantee</h3>
+                                <p className="text-sm text-warm-muted font-sans leading-relaxed">
+                                    Every anchored device holds a complete, verified copy of your family&apos;s memorial data.
+                                    Your legacy remains accessible even without an internet connection &mdash; no subscription,
+                                    no server dependency. Once anchored, it&apos;s yours forever.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* REMOVED ARCHIVES */}
+                {deletedMemorials.length > 0 && (
+                    <div className="mt-16 pt-10 border-t border-warm-border/30 animate-fadeIn">
+                        <h3 className="text-xl font-serif text-warm-dark mb-2 flex items-center gap-2">
+                            <Archive size={20} className="text-warm-muted" />
+                            Removed Archives
+                        </h3>
+                        <p className="text-sm text-warm-muted font-sans mb-6">
+                            Archives are kept for {SOFT_DELETE_RETENTION_DAYS} days before permanent deletion.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 opacity-75">
+                            {deletedMemorials.map((memorial) => (
+                                <div key={memorial.id} className="flex items-center justify-between border border-warm-border/30 bg-white p-4 rounded-none">
+                                    <div>
+                                        <p className="font-sans font-medium text-warm-dark">{memorial.full_name || 'Untitled'}</p>
+                                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1 font-sans">
+                                            <AlertTriangle size={12} />
+                                            {getDaysRemaining(memorial.deleted_at!)} days until permanent deletion
+                                        </p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => restoreMemorial(memorial.id)}
+                                            className="border border-warm-border/30 bg-surface-mid p-2 text-warm-dark transition-colors hover:bg-surface-high rounded-none"
+                                            title="Restore"
+                                        >
+                                            <RefreshCcw size={18} />
+                                        </button>
+                                        <button
+                                            onClick={() => permanentDeleteMemorial(memorial.id)}
+                                            className="border border-red-200 bg-red-50 p-2 text-red-500 transition-colors hover:bg-red-100 hover:text-red-600 rounded-none"
+                                            title="Delete permanently"
+                                        >
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+        <ConfirmDialog
+            open={pendingConfirm !== null}
+            variant="danger"
+            title={
+                pendingConfirm?.kind === 'soft-delete'
+                    ? pendingConfirm.sharedCount > 0
+                        ? 'Delete this shared memorial?'
+                        : 'Move this memorial to the trash?'
+                    : pendingConfirm?.kind === 'permanent-delete' && pendingConfirm.stage === 1
+                        ? 'Permanently delete this memorial?'
+                        : 'This is irreversible'
+            }
+            description={
+                pendingConfirm?.kind === 'soft-delete'
+                    ? pendingConfirm.sharedCount > 0
+                        ? `This archive contains contributions from ${pendingConfirm.sharedCount} other ${pendingConfirm.sharedCount === 1 ? 'person' : 'people'}. They will lose access to their contributions.`
+                        : `It will be moved to the trash for ${SOFT_DELETE_RETENTION_DAYS} days. You can restore it until then.`
+                    : pendingConfirm?.kind === 'permanent-delete' && pendingConfirm.stage === 1
+                        ? 'This action cannot be undone. The memorial and all its content will be lost forever.'
+                        : 'Last chance. Once confirmed, the memorial and all its content are gone forever.'
+            }
+            confirmLabel={
+                pendingConfirm?.kind === 'soft-delete'
+                    ? 'Move to trash'
+                    : pendingConfirm?.kind === 'permanent-delete' && pendingConfirm.stage === 1
+                        ? 'Continue'
+                        : 'Delete forever'
+            }
+            onConfirm={handleConfirmDestructive}
+            onCancel={() => setPendingConfirm(null)}
+        />
+        </DashboardShell>
+    );
+}
+
+
+===== FILE: public/anchor-sw.js =====
+const INDEX_CACHE = 'ulumae-anchor-index-v1';
+const INDEX_KEY = '/__ulumae_anchor_index__';
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(self.skipWaiting());
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
+async function readIndex() {
+  const cache = await caches.open(INDEX_CACHE);
+  const response = await cache.match(INDEX_KEY);
+
+  if (!response) {
+    return {};
+  }
+
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+async function writeIndex(index) {
+  const cache = await caches.open(INDEX_CACHE);
+  await cache.put(
+    INDEX_KEY,
+    new Response(JSON.stringify(index), {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+  );
+}
+
+async function getVaultRoot(memorialId, vaultDirectoryName) {
+  const root = await navigator.storage.getDirectory();
+  const anchorRoot = await root.getDirectoryHandle('ulumae-anchor');
+  const memorialRoot = await anchorRoot.getDirectoryHandle(memorialId);
+  return memorialRoot.getDirectoryHandle(vaultDirectoryName);
+}
+
+async function getFileHandleFromRelativePath(root, relativePath) {
+  const parts = relativePath.split('/').filter(Boolean);
+  const fileName = parts.pop();
+
+  if (!fileName) {
+    throw new Error(`Invalid relative path: ${relativePath}`);
+  }
+
+  let current = root;
+  for (const part of parts) {
+    current = await current.getDirectoryHandle(part);
+  }
+
+  return current.getFileHandle(fileName);
+}
+
+async function readVaultFile(entry, relativePath, mimeType) {
+  const root = await getVaultRoot(entry.memorialId, entry.vaultDirectoryName);
+  const fileHandle = await getFileHandleFromRelativePath(root, relativePath);
+  const file = await fileHandle.getFile();
+
+  return new Response(file.stream(), {
+    headers: {
+      'Content-Type': mimeType || file.type || 'application/octet-stream',
+      'Content-Length': String(file.size),
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
+function findRouteEntry(index, pathname) {
+  return Object.values(index).find((entry) => entry.routePath === pathname) || null;
+}
+
+function findRemoteEntry(index, url) {
+  for (const entry of Object.values(index)) {
+    const remoteMatch = (entry.remoteUrlMap || []).find((item) => item.url === url);
+    if (remoteMatch) {
+      return {
+        entry,
+        remoteMatch,
+      };
+    }
+  }
+
+  return null;
+}
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'configure-anchor-vault') {
+    return;
+  }
+
+  event.waitUntil(
+    (async () => {
+      const index = await readIndex();
+      index[event.data.payload.memorialId] = event.data.payload;
+      await writeIndex(index);
+    })()
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+
+  event.respondWith(
+    (async () => {
+      const index = await readIndex();
+
+      if (url.origin === self.location.origin) {
+        const routeEntry = findRouteEntry(index, url.pathname);
+        if (routeEntry) {
+          try {
+            return await readVaultFile(routeEntry, 'index.html', 'text/html');
+          } catch (error) {
+            console.error('[anchor-sw][route]', error);
+          }
+        }
+      }
+
+      const remoteEntry = findRemoteEntry(index, request.url);
+      if (remoteEntry) {
+        try {
+          return await fetch(request);
+        } catch {
+          return readVaultFile(
+            remoteEntry.entry,
+            remoteEntry.remoteMatch.relativePath,
+            remoteEntry.remoteMatch.mimeType
+          );
+        }
+      }
+
+      return fetch(request);
+    })()
+  );
+});
+
+
+===== FILE: types/memorial.ts =====
+// types/memorial.ts - UPDATED with Step 9 for Videos
+
+import type { MediaBucket, MediaReferenceFields } from '@/types/media';
+
+export interface MediaImageReference extends MediaReferenceFields {
+  id: string;
+  file?: File | null;
+  preview: string;
+  caption: string;
+  year: string;
+  type: 'photo' | 'video';
+  sha256_hash?: string;
+}
+
+export interface InteractiveMediaReference extends MediaReferenceFields {
+  id: string;
+  file?: File | null;
+  preview: string;
+  description: string;
+  sha256_hash?: string;
+}
+
+export interface VoiceRecordingReference extends MediaReferenceFields {
+  id: string;
+  file?: File | null;
+  title: string;
+  url?: string | null;
+  sha256_hash?: string;
+}
+
+export interface VideoReference extends MediaReferenceFields {
+  id: string;
+  file?: File | null;
+  url: string;
+  thumbnail: string;
+  thumbnailAssetId?: string | null;
+  thumbnailBucket?: MediaBucket | null;
+  thumbnailStoragePath?: string | null;
+  thumbnailMimeType?: string | null;
+  thumbnailFileSize?: number | null;
+  thumbnailUploadedAt?: string | null;
+  title: string;
+  duration?: string;
+  description?: string;
+  sha256_hash?: string;
+}
+
+export interface ChildhoodPhotoReference extends MediaReferenceFields {
+  id: string;
+  file?: File | null;
+  preview: string;
+  caption: string;
+  year: string;
+  sha256_hash?: string;
+}
+
+export interface BasicInfo {
+  fullName: string;
+  birthDate: string;
+  deathDate: string | null;
+  isStillLiving: boolean;
+  isSelfArchive?: boolean; // NEW: Track if user is creating for themselves
+  privateUntilDeath?: boolean; // NEW: Controls visibility logic
+  birthPlace: string;
+  deathPlace: string;
+  profilePhoto: File | null;
+  profilePhotoPreview: string | null;
+  profilePhotoAssetId?: string | null;
+  profilePhotoBucket?: MediaBucket | null;
+  profilePhotoStoragePath?: string | null;
+  profilePhotoMimeType?: string | null;
+  profilePhotoFileSize?: number | null;
+  profilePhotoUploadedAt?: string | null;
+  profilePhotoUploadStatus?: MediaReferenceFields['uploadStatus'];
+  profilePhotoUploadError?: string | null;
+  profilePhotoHash?: string; // NEW: Store hash for profile photo
+  epitaph: string;
+}
+
+export interface ChildhoodInfo {
+  childhoodHome: string;
+  familyBackground: string;
+  schools: {
+    elementary: string;
+    highSchool: string;
+    college: string;
+    additionalEducation: string;
+  };
+  childhoodPersonality: string[];
+  earlyInterests: string[];
+  childhoodPhotos: ChildhoodPhotoReference[];
+}
+
+export interface CareerEducation {
+  occupations: Array<{
+    id: string;
+    title: string;
+    company: string;
+    yearsFrom: string;
+    yearsTo: string;
+    description: string;
+  }>;
+  careerHighlights: string[];
+  education: {
+    major: string;
+    graduationYear: string;
+    honors: string;
+  };
+}
+
+export interface RelationshipsFamily {
+  partners: Array<{
+    id: string;
+    name: string;
+    relationshipType: string;
+    yearsFrom: string;
+    yearsTo: string;
+    description: string;
+    photo: File | null;
+    photoPreview: string | null;
+  }>;
+  children: Array<{
+    id: string;
+    name: string;
+    birthYear: string;
+    description: string;
+  }>;
+  majorLifeEvents: Array<{
+    id: string;
+    year: string;
+    title: string;
+    category: 'marriage' | 'birth' | 'career' | 'achievement' | 'loss' | 'milestone';
+    description: string;
+  }>;
+}
+
+export interface PersonalityValues {
+  personalityTraits: string[];
+  coreValues: string[];
+  passions: string[];
+  lifePhilosophy: string;
+  favoriteQuotes: Array<{
+    id: string;
+    text: string;
+    context: string;
+  }>;
+  memorableSayings: string[];
+}
+
+export interface LifeStory {
+  biography: string;
+  lifeChapters: Array<{
+    id: string;
+    period: string;
+    ageRange: string;
+    title: string;
+    description: string;
+    keyEvents: string[];
+  }>;
+}
+
+// NEW: Invitation tracking type
+export interface SentInvitation {
+  email: string;
+  sentAt: string;        // ISO date string
+  status: 'sent' | 'accepted' | 'declined' | 'pending';
+  acceptedAt?: string;   // When witness accepted the invitation
+}
+
+export interface SharedMemory {
+  id: string;
+  title: string;
+  date: string;
+  content: string;
+  author: string;
+  relationship: string;
+}
+
+export interface ImpactStory {
+  id: string;
+  title: string;
+  content: string;
+  author: string;
+}
+
+export interface MemoriesStories {
+  sharedMemories: SharedMemory[];
+  impactStories: ImpactStory[];
+  invitedEmails: string[];
+  witnessPersonalMessage: string;     // ← NEW
+  sentInvitations: SentInvitation[];  // ← NEW
+  memorialId?: string;               // ← NEW (passed from parent for API calls)
+}
+
+// UPDATED: Step 8 now only has Photos & Legacy (no videos)
+export interface MediaLegacy {
+  coverPhoto: File | null;
+  coverPhotoPreview: string | null;
+  coverPhotoAssetId?: string | null;
+  coverPhotoBucket?: MediaBucket | null;
+  coverPhotoStoragePath?: string | null;
+  coverPhotoMimeType?: string | null;
+  coverPhotoFileSize?: number | null;
+  coverPhotoUploadedAt?: string | null;
+  coverPhotoUploadStatus?: MediaReferenceFields['uploadStatus'];
+  coverPhotoUploadError?: string | null;
+  coverPhotoHash?: string; // NEW: Store hash for cover photo
+  gallery: MediaImageReference[];
+  interactiveGallery: InteractiveMediaReference[];
+  voiceRecordings: VoiceRecordingReference[];
+  legacyStatement: string;
+}
+
+// NEW: Step 9 for Videos only
+export interface VideoContent {
+  videos: VideoReference[];
+}
+
+
+// UPDATED: MemorialData with step9
+export interface MemorialData {
+  step1: BasicInfo;
+  step2: ChildhoodInfo;
+  step3: CareerEducation;
+  step4: RelationshipsFamily;
+  step5: PersonalityValues;
+  step6: LifeStory;
+  step7: MemoriesStories;
+  step8: MediaLegacy;
+  step9: VideoContent; // NEW
+  currentStep: number;
+  paid: boolean; // Tracking payment status
+  lastSaved: string | null;
+  completedSteps: number[];
+}
+
+export const TOTAL_STEPS = 10; // UPDATED from 9 to 10
+
+// Emotional state vocabulary
+export const STEP_NAMES = [
+  'Basic Information',
+  'Early Life & Childhood',
+  'Career & Education',
+  'Relationships & Family',
+  'Personality, Values & Passions',
+  'Full Life Story',
+  'Memories & Witnesses',
+  'Photos & Legacy',
+  'Videos',
+  'Review & Seal'
+];
+
+export type EmotionalStateName = 'void' | 'fragile' | 'emerging' | 'substantial' | 'eternal';
+
+// ==========================================
+// PHASE 2: WITNESS & COLLABORATION TYPES
+// ==========================================
+
+export type WitnessRole = 'owner' | 'co_guardian' | 'witness' | 'reader';
+
+export type InvitationStatus = 'pending' | 'accepted' | 'declined' | 'expired';
+
+export type ContributionStatus = 'pending_approval' | 'approved' | 'rejected' | 'needs_changes';
+
+export interface WitnessInvitation {
+  id: string; // Unique token/UUID for the link
+  memorialId: string;
+  inviterName: string;
+  inviteeEmail: string;
+  role: WitnessRole;
+  personalMessage?: string;
+  status: InvitationStatus;
+  createdAt: string;
+  expiresAt: string; // Invitations should expire for security (e.g., 30 days)
+}
+
+export interface MemorialWitness {
+  id: string;
+  memorialId: string;
+  userId: string; // Link to the registered user
+  displayName: string;
+  email: string;
+  role: WitnessRole;
+  joinedAt: string;
+  status: 'active' | 'suspended';
+}
+
+// Updated structure for a Memory/Contribution to support the Approval System
+export interface WitnessContribution {
+  id: string;
+  memorialId: string;
+  witnessId: string; // Who wrote it
+  type: 'memory' | 'photo' | 'video';
+  content: any; // The actual data (text, url, etc.)
+  status: ContributionStatus;
+  adminNotes?: string; // If rejected or needs changes, owner writes why here
+  createdAt: string;
+  updatedAt: string;
+  disputed?: boolean; // For Step 2.1.6 (Conflict detection)
+}
+
+
+export interface MemorialRelation {
+  id: string;
+  from_memorial_id: string;
+  to_memorial_id: string;
+  target_name?: string; // Fetched from the joined table
+  target_photo?: string; // Fetched from the joined table
+  relationship_type: 'parent' | 'child' | 'spouse' | 'sibling' | 'other';
+}
+
+
+// ==========================================
+// PRESERVATION & LUXURY PLATFORM TYPES
+// ==========================================
+
+export type PreservationState =
+  | 'draft'
+  | 'building'
+  | 'review'
+  | 'preserving'
+  | 'preserved'
+  | 'archived';
+
+export interface PreservationStatus {
+  state: PreservationState;
+  arweaveTxId: string | null;
+  gatewayUrls: string[];
+  nodeCount: number;
+  lastVerifiedAt: string | null;
+  preservedAt: string | null;
+  storageBytesUsed: number;
+  storageBytesIncluded: number; // e.g. 100GB
+}
+
+export interface AnchorDeviceInfo {
+  id: string;
+  deviceName: string;
+  browser: string;
+  os: string;
+  syncProgressBytes: number;
+  totalBytes: number;
+  lastSyncAt: string | null;
+  status: 'syncing' | 'synced' | 'error' | 'stale';
+  location?: string;
+}
+
+export interface RecoveryContactInfo {
+  id: string;
+  name: string;
+  email: string;
+  relationship: string;
+  status: 'pending' | 'confirmed' | 'delivered';
+}
+
+export type SuccessorAccessLevel = 'read_only' | 'editorial' | 'full_ownership';
+
+export interface ContentReviewStatus {
+  status: 'not_submitted' | 'pending_review' | 'approved' | 'needs_changes';
+  submittedAt: string | null;
+  reviewedAt: string | null;
+  flaggedItems: string[];
+}
+
+
+===== FILE: types/media.ts =====
+export type MediaBucket = 'memorial-media' | 'videos';
+
+export type MediaKind =
+  | 'profile_photo'
+  | 'cover_photo'
+  | 'gallery_photo'
+  | 'interactive_photo'
+  | 'voice_recording'
+  | 'video'
+  | 'video_thumbnail'
+  | 'contribution_photo';
+
+export type MediaItemStatus =
+  | 'idle'
+  | 'uploading'
+  | 'ready'
+  | 'error'
+  | 'deleting'
+  | 'deleted';
+
+export interface StoredMediaAsset {
+  id: string;
+  memorialId: string;
+  contributionId: string | null;
+  kind: MediaKind;
+  bucket: MediaBucket;
+  storagePath: string;
+  publicUrl: string;
+  originalFileName: string | null;
+  mimeType: string;
+  fileSize: number;
+  sha256Hash: string;
+  metadata: Record<string, unknown>;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  deletedBy: string | null;
+}
+
+export interface MediaUploadError {
+  code: string;
+  message: string;
+  retryable?: boolean;
+  details?: Record<string, unknown>;
+}
+
+export interface MediaUploadResponse {
+  success: boolean;
+  data?: {
+    asset: StoredMediaAsset;
+  };
+  error?: MediaUploadError;
+}
+
+export interface MediaDeleteResponse {
+  success: boolean;
+  data?: {
+    assetIds: string[];
+    mode: 'soft' | 'restore' | 'hard';
+  };
+  error?: MediaUploadError;
+}
+
+export interface MediaMetadataUpdateResponse {
+  success: boolean;
+  data?: {
+    assetId: string;
+    metadata: Record<string, unknown>;
+  };
+  error?: MediaUploadError;
+}
+
+export interface MediaReferenceFields {
+  assetId?: string | null;
+  bucket?: MediaBucket | null;
+  storagePath?: string | null;
+  originalFileName?: string | null;
+  mimeType?: string | null;
+  fileSize?: number | null;
+  uploadedAt?: string | null;
+  deletedAt?: string | null;
+  uploadStatus?: MediaItemStatus;
+  uploadError?: string | null;
+}
+
+
+===== FILE: package.json =====
+{
+  "name": "ulumae",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fingerprintjs/fingerprintjs": "^5.0.1",
+    "@getbrevo/brevo": "^5.0.1",
+    "@stripe/react-stripe-js": "^5.6.0",
+    "@stripe/stripe-js": "^8.7.0",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.93.1",
+    "@xyflow/react": "^12.10.0",
+    "browser-fs-access": "^0.38.0",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.562.0",
+    "next": "^16.1.1",
+    "otplib": "^13.4.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "react-hot-toast": "^2.6.0",
+    "react-resizable-panels": "^4.6.0",
+    "resend": "^6.9.2",
+    "stripe": "^20.4.1"
+  },
+  "devDependencies": {
+    "@types/jszip": "^3.4.0",
+    "@types/node": "^25.0.10",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.2.9",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.23",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.9.3"
+  }
+}
+
+

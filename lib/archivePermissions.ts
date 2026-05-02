@@ -102,7 +102,6 @@ const PERSONAL_ROLE_PERMISSIONS: Record<WitnessRole, readonly ArchiveAction[]> =
     'delete_archive',
     'view_activity',
     'manage_succession',
-    'manage_devices',
   ],
   co_guardian: [], // NEVER assign this role on personal plans
   witness: [

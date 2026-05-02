@@ -12,7 +12,7 @@ import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 import EditableFamilyTitle from '@/components/dashboard/EditableFamilyTitle';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/components/providers/AuthProvider';
+import { isFamilyPlan, useAuth } from '@/components/providers/AuthProvider';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
 import { useNotifications } from '@/hooks/useNotifications';
 import { permanentlyDeleteMemorial, updateMemorialTrashState } from '@/lib/memorialClientActions';
@@ -36,6 +36,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
         | null
     >(null);
     const [showWelcome, setShowWelcome] = useState(false);
+    const [anchoredDeviceCount, setAnchoredDeviceCount] = useState(0);
 
     const [searchTerm, setSearchTerm] = useState('');
     const [sortOption, setSortOption] = useState<FamilySortOption>('created_desc');
@@ -247,7 +248,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
     const pendingRequestCount = notificationData.pendingCount;
 
     // BLOCK RENDERING until auth checks pass
-    const hasAccess = auth.plan === 'family' || auth.plan === 'concierge';
+    const hasAccess = isFamilyPlan(auth.plan);
     if (auth.loading || !auth.authenticated || !hasAccess) {
         return (
             <div className="bg-surface-low min-h-screen flex items-center justify-center">
@@ -291,7 +292,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                 )}
                             </div>
                             <p className="text-warm-muted font-sans text-sm tracking-wide">
-                                {realMemorials.length} memorial{realMemorials.length !== 1 ? 's' : ''} &bull; {pendingRequestCount} pending item{pendingRequestCount !== 1 ? 's' : ''} &bull; 0 devices anchored
+                                {realMemorials.length} memorial{realMemorials.length !== 1 ? 's' : ''} &bull; {pendingRequestCount} pending item{pendingRequestCount !== 1 ? 's' : ''} &bull; {anchoredDeviceCount} device{anchoredDeviceCount !== 1 ? 's' : ''} anchored
                             </p>
                         </div>
 
@@ -431,7 +432,10 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                 {/* ANCHOR PANEL — Family Sync Status */}
                 {firstPaidMemorial && (
                     <div className="mt-12">
-                        <AnchorPanel memorialId={firstPaidMemorial.id} />
+                        <AnchorPanel
+                            memorialId={firstPaidMemorial.id}
+                            onDeviceCountChange={setAnchoredDeviceCount}
+                        />
                     </div>
                 )}
 
