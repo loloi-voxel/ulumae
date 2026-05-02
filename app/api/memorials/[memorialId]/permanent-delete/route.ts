@@ -52,8 +52,14 @@ export async function DELETE(
             memorial.preservation_state === 'preserved' ||
             isMemorialSealLocked(memorial.seal_status)
         ) {
+            const sealingInProgress =
+                memorial.seal_status === 'pending' || memorial.seal_status === 'in_progress';
             return NextResponse.json(
-                { error: 'Sealed memorials cannot be permanently deleted.' },
+                {
+                    error: sealingInProgress
+                        ? 'This archive is currently being sealed and cannot be permanently deleted.'
+                        : 'Sealed or otherwise locked memorials cannot be permanently deleted.',
+                },
                 { status: 403 }
             );
         }

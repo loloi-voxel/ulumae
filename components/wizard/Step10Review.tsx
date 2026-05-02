@@ -1,14 +1,32 @@
 // components/wizard/Step10Review.tsx
-// Ritual finalization with emotional state gating
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
-  Edit, Eye, Send, ArrowLeft, User, Home, Briefcase, Heart,
-  Sparkles, BookOpen, MessageCircle, Image as ImageIcon, Film,
-  Users, Shield, Gift, X
+  Edit,
+  Eye,
+  ArrowLeft,
+  User,
+  Home,
+  Briefcase,
+  Heart,
+  Sparkles,
+  BookOpen,
+  MessageCircle,
+  Image as ImageIcon,
+  Film,
+  Users,
+  Shield,
+  Gift,
+  X,
 } from 'lucide-react';
-import { MemorialData } from '@/types/memorial';
+
+import {
+  MemorialData,
+  type MemorialSealStatus,
+  isMemorialSealLocked,
+  isMemorialSealed,
+} from '@/types/memorial';
 import { calculateCompletion } from '@/lib/completionLogic';
 import { createFullSnapshot } from '@/lib/versionService';
 import PreviewModal from './PreviewModal';
@@ -25,11 +43,19 @@ interface Step10Props {
   userId?: string;
   isPaid?: boolean;
   showStatusInsights?: boolean;
+  sealStatus?: MemorialSealStatus;
 }
 
 const STEP_ICONS: Record<number, any> = {
-  1: User, 2: Home, 3: Briefcase, 4: Heart,
-  5: Sparkles, 6: BookOpen, 7: MessageCircle, 8: ImageIcon, 9: Film,
+  1: User,
+  2: Home,
+  3: Briefcase,
+  4: Heart,
+  5: Sparkles,
+  6: BookOpen,
+  7: MessageCircle,
+  8: ImageIcon,
+  9: Film,
 };
 
 export default function Step10Review({
@@ -42,10 +68,11 @@ export default function Step10Review({
   hasSuccessor = false,
   userId = '',
   isPaid = false,
-  showStatusInsights = true
+  showStatusInsights = true,
+  sealStatus = null,
 }: Step10Props) {
   const [isSealing, setIsSealing] = useState(false);
-  const [sealPhase, setSealPhase] = useState<'idle' | 'review' | 'pause' | 'sealing' | 'sealed'>('idle');
+  const [sealPhase, setSealPhase] = useState<'idle' | 'review' | 'pause' | 'transition'>('idle');
   const [showPreview, setShowPreview] = useState(false);
   const [showSuccessorModal, setShowSuccessorModal] = useState(false);
 
@@ -55,67 +82,92 @@ export default function Step10Review({
 
   const isBlockedBySuccessor = isSelfArchive && !hasSuccessor;
   const isSealReady = canSeal && !isBlockedBySuccessor;
+  const sealCompleted = isMemorialSealed(sealStatus);
+  const sealLocked = isMemorialSealLocked(sealStatus);
+  const canUseBlockchainSeal = plan === 'personal' && isPaid;
+  const isFamilyArchive = plan === 'family' || plan === 'concierge';
+  const preservationHref = memorialId && userId
+    ? `/dashboard/preservation/${userId}?memorialId=${memorialId}`
+    : userId
+      ? `/dashboard/preservation/${userId}`
+      : '/dashboard';
+  const familyDashboardHref = userId
+    ? `/dashboard/family/${userId}`
+    : '/dashboard';
+  const primaryButtonLabel = sealCompleted
+    ? 'Already sealed'
+    : sealLocked
+      ? 'Sealing in progress'
+      : canUseBlockchainSeal
+        ? 'Prepare Seal Forever'
+        : isFamilyArchive && isSealReady
+          ? 'Return to dashboard'
+          : isSealReady
+            ? 'Seal the Archive'
+            : 'Strengthen their legacy';
+  const introCopy = canUseBlockchainSeal
+    ? 'Look over what you have built. When you are ready, continue to the final Seal Forever selection.'
+    : isFamilyArchive
+      ? 'Look over what you have built. Family archives stay editable and collaborative; blockchain sealing remains exclusive to Personal plans.'
+      : 'Look over what you have built. When you are ready, continue toward preservation.';
 
-  // Ritual: 3-phase seal sequence
   const handleSeal = async () => {
+    if (sealLocked || sealCompleted) {
+      window.location.href = canUseBlockchainSeal ? preservationHref : familyDashboardHref;
+      return;
+    }
+
     if (!isSealReady) return;
 
-    // Phase 1: Review moment
     setSealPhase('review');
 
-    // Phase 2: Intentional pause (2.5s)
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     setSealPhase('pause');
-    await new Promise(resolve => setTimeout(resolve, 2500));
+    await new Promise((resolve) => setTimeout(resolve, 2500));
 
-    // Phase 3: Seal
-    setSealPhase('sealing');
+    setSealPhase('transition');
     setIsSealing(true);
 
     if (memorialId) {
       const { createClient } = await import('@/utils/supabase/client');
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       await createFullSnapshot({
         memorialId,
         data,
         userId: user?.id || undefined,
         userName: 'Owner',
-        changeSummary: 'Archive sealed — protected forever',
+        changeSummary: canUseBlockchainSeal
+          ? 'Archive prepared for permanent sealing'
+          : 'Archive reviewed before preservation step',
         changeReason: 'archive_seal',
         changeType: 'manual',
       });
     }
 
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setSealPhase('sealed');
-    await new Promise(resolve => setTimeout(resolve, 800));
+    await new Promise((resolve) => setTimeout(resolve, 1200));
 
-    if (isPaid) {
-      // Already paid — go directly to success
-      window.location.href = '/success';
-    } else {
-      // Draft — proceed to payment to protect the archive
-      const sealUrl = memorialId
-        ? `/seal-confirmation?memorialId=${memorialId}`
-        : '/seal-confirmation';
-      window.location.href = sealUrl;
+    if (canUseBlockchainSeal) {
+      window.location.href = preservationHref;
+      return;
     }
-  };
 
-  // Depth labels for paths
-  const depthLabel = (depth: string) => {
-    switch (depth) {
-      case 'embodied': return 'Honored';
-      case 'meaningful': return 'Growing deeper';
-      case 'shallow': return 'Their story stirs';
-      default: return 'Awaiting your voice';
+    if (isFamilyArchive) {
+      window.location.href = familyDashboardHref;
+      return;
     }
+
+    const sealUrl = memorialId
+      ? `/seal-confirmation?memorialId=${memorialId}`
+      : '/seal-confirmation';
+    window.location.href = sealUrl;
   };
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
-      {/* Ritual overlay */}
       {sealPhase !== 'idle' && (
         <div className="fixed inset-0 z-[200] bg-warm-dark/90 backdrop-blur-sm flex items-center justify-center">
           <div className="text-center max-w-md px-8">
@@ -132,25 +184,19 @@ export default function Step10Review({
                   Take a moment.
                 </p>
                 <p className="text-surface-low/50 text-sm">
-                  What you seal will be protected forever.
+                  What you preserve next will shape how this life is remembered.
                 </p>
               </div>
             )}
-            {sealPhase === 'sealing' && (
+            {sealPhase === 'transition' && (
               <div className="animate-fadeIn">
                 <div className="w-12 h-12 mx-auto mb-6 border-2 border-surface-low/20 border-t-surface-low/70 rounded-full animate-spin" />
                 <p className="font-serif text-xl text-surface-low/80">
-                  Sealing the archive...
-                </p>
-              </div>
-            )}
-            {sealPhase === 'sealed' && (
-              <div className="animate-fadeIn">
-                <div className="w-12 h-12 mx-auto mb-6 rounded-full bg-olive/20 flex items-center justify-center">
-                  <Shield size={24} className="text-surface-low/80" />
-                </div>
-                <p className="font-serif text-xl text-surface-low/90">
-                  Protected.
+                  {canUseBlockchainSeal
+                    ? 'Opening the sealing console...'
+                    : isFamilyArchive
+                      ? 'Returning to your archive...'
+                      : 'Preparing preservation...'}
                 </p>
               </div>
             )}
@@ -163,55 +209,96 @@ export default function Step10Review({
           Review & Seal
         </h2>
         <p className="text-warm-dark/50 text-lg">
-          Look over what you have built. When you are ready, seal the archive.
+          {introCopy}
         </p>
       </div>
 
-      {/* Emotional state message */}
-      {showEmotionalInsights && (
-      <div className={`mb-10 p-6 rounded-xl border transition-all duration-700 ${
-        emotionalState === 'eternal'
-          ? 'bg-olive/[0.04] border-olive/20'
-          : emotionalState === 'substantial'
-            ? 'bg-surface-low border-warm-border/30'
-            : 'bg-warm-border/5 border-warm-border/20'
-      }`}>
-        <p className="text-sm text-warm-dark/60 leading-relaxed">
-          {completion.message}
-        </p>
-
-        {/* Path depth indicators */}
-        <div className="flex flex-wrap gap-3 mt-4">
-          {(['Facts', 'Body', 'Soul', 'Presence', 'Witnesses'] as const).map((pathName) => {
-            const pathSteps: Record<string, number[]> = {
-              Facts: [1], Body: [2, 3, 4], Soul: [5, 6], Presence: [8, 9], Witnesses: [7]
-            };
-            const stepsForPath = pathSteps[pathName];
-            const pathCompleted = stepsForPath.every(s =>
-              completion.steps.find(st => st.step === s)?.completed
-            );
-            const pathStarted = stepsForPath.some(s =>
-              completion.steps.find(st => st.step === s)?.completed
-            );
-
-            return (
-              <div key={pathName} className="flex items-center gap-1.5">
-                <div className={`w-2 h-2 rounded-full transition-all duration-500 ${
-                  pathCompleted ? 'bg-warm-dark/40' : pathStarted ? 'bg-warm-dark/15' : 'bg-warm-border/40'
-                }`} />
-                <span className={`text-xs ${
-                  pathCompleted ? 'text-warm-dark/50' : 'text-warm-dark/25'
-                }`}>
-                  {pathName}{pathCompleted ? ' — honored' : pathStarted ? ' — begun' : ''}
-                </span>
-              </div>
-            );
-          })}
+      {sealLocked && (
+        <div className="mb-10 rounded-xl border border-olive/20 bg-olive/5 p-6">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-white rounded-full text-olive shrink-0">
+              <Shield size={24} />
+            </div>
+            <div>
+              <h3 className="font-serif text-xl text-warm-dark mb-2">
+                {sealCompleted ? 'This memorial has already been sealed' : 'Sealing is already in progress'}
+              </h3>
+              <p className="text-warm-dark/60 text-sm leading-relaxed">
+                {sealCompleted
+                  ? 'The archive is now permanent and can only be viewed in read-only mode.'
+                  : 'The archive is locked while the background seal completes. You can follow its progress from the preservation page.'}
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
       )}
 
-      {/* Seal block reasons — gentle, not punishing */}
+      {isFamilyArchive && (
+        <div className="mb-10 p-6 rounded-xl border border-warm-border/20 bg-warm-border/5">
+          <h3 className="font-serif text-lg text-warm-dark mb-3">Family archive guidance</h3>
+          <p className="text-sm text-warm-dark/60 leading-relaxed">
+            Family plans use shared stewardship and Cloudflare R2 for video and audio, but Seal Forever on Arweave is reserved for Personal memorials.
+          </p>
+        </div>
+      )}
+
+      {showEmotionalInsights && (
+        <div
+          className={`mb-10 p-6 rounded-xl border transition-all duration-700 ${
+            emotionalState === 'eternal'
+              ? 'bg-olive/[0.04] border-olive/20'
+              : emotionalState === 'substantial'
+                ? 'bg-surface-low border-warm-border/30'
+                : 'bg-warm-border/5 border-warm-border/20'
+          }`}
+        >
+          <p className="text-sm text-warm-dark/60 leading-relaxed">
+            {completion.message}
+          </p>
+
+          <div className="flex flex-wrap gap-3 mt-4">
+            {(['Facts', 'Body', 'Soul', 'Presence', 'Witnesses'] as const).map((pathName) => {
+              const pathSteps: Record<string, number[]> = {
+                Facts: [1],
+                Body: [2, 3, 4],
+                Soul: [5, 6],
+                Presence: [8, 9],
+                Witnesses: [7],
+              };
+              const stepsForPath = pathSteps[pathName];
+              const pathCompleted = stepsForPath.every((step) =>
+                completion.steps.find((entry) => entry.step === step)?.completed
+              );
+              const pathStarted = stepsForPath.some((step) =>
+                completion.steps.find((entry) => entry.step === step)?.completed
+              );
+
+              return (
+                <div key={pathName} className="flex items-center gap-1.5">
+                  <div
+                    className={`w-2 h-2 rounded-full transition-all duration-500 ${
+                      pathCompleted
+                        ? 'bg-warm-dark/40'
+                        : pathStarted
+                          ? 'bg-warm-dark/15'
+                          : 'bg-warm-border/40'
+                    }`}
+                  />
+                  <span
+                    className={`text-xs ${
+                      pathCompleted ? 'text-warm-dark/50' : 'text-warm-dark/25'
+                    }`}
+                  >
+                    {pathName}
+                    {pathCompleted ? ' - honored' : pathStarted ? ' - begun' : ''}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {!canSeal && sealBlockReasons.length > 0 && (
         <div className="mb-10 p-6 rounded-xl border border-warm-border/20 bg-warm-border/5">
           <h3 className="font-serif text-lg text-warm-dark mb-3">Strengthen their legacy</h3>
@@ -219,8 +306,8 @@ export default function Step10Review({
             The archive needs more depth before it can be sealed and protected forever.
           </p>
           <ul className="space-y-2">
-            {sealBlockReasons.map((reason, i) => (
-              <li key={i} className="text-sm text-warm-dark/50 flex items-start gap-2">
+            {sealBlockReasons.map((reason, index) => (
+              <li key={index} className="text-sm text-warm-dark/50 flex items-start gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-warm-dark/15 mt-1.5 flex-shrink-0" />
                 {reason}
               </li>
@@ -229,7 +316,6 @@ export default function Step10Review({
         </div>
       )}
 
-      {/* SELF-ARCHIVE SUCCESSOR WARNING */}
       {isBlockedBySuccessor && (
         <div className="mb-10 p-6 bg-warm-border/5 border border-warm-brown/20 rounded-xl">
           <div className="flex items-start gap-4">
@@ -254,7 +340,6 @@ export default function Step10Review({
         </div>
       )}
 
-      {/* CORE PATHS */}
       <div className="mb-4">
         <h3 className="text-xs font-medium text-warm-dark/30 uppercase tracking-wider">
           Core Paths
@@ -262,15 +347,16 @@ export default function Step10Review({
       </div>
       <div className="space-y-3 mb-10">
         {completion.steps
-          .filter(s => s.category === 'core')
+          .filter((section) => section.category === 'core')
           .map((section) => {
             const Icon = STEP_ICONS[section.step] || User;
             return (
               <div
                 key={section.step}
-                className={`p-5 rounded-xl border transition-all duration-500 ${section.completed
-                  ? 'bg-white border-warm-border/20'
-                  : 'bg-warm-border/5 border-warm-border/15'
+                className={`p-5 rounded-xl border transition-all duration-500 ${
+                  section.completed
+                    ? 'bg-white border-warm-border/20'
+                    : 'bg-warm-border/5 border-warm-border/15'
                 }`}
               >
                 <div className="flex items-start gap-4">
@@ -283,9 +369,11 @@ export default function Step10Review({
                         <h4 className="font-medium text-warm-dark text-sm">{section.title}</h4>
                         <p className="text-xs text-warm-dark/40 mt-0.5">{section.summary}</p>
                       </div>
-                      <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 transition-all duration-500 ${
-                        section.completed ? 'bg-warm-dark/30' : 'bg-warm-border/30'
-                      }`} />
+                      <div
+                        className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 transition-all duration-500 ${
+                          section.completed ? 'bg-warm-dark/30' : 'bg-warm-border/30'
+                        }`}
+                      />
                     </div>
                     <button
                       onClick={() => onJumpToStep(section.step)}
@@ -301,7 +389,6 @@ export default function Step10Review({
           })}
       </div>
 
-      {/* ENRICHMENT SECTIONS */}
       <div className="mb-4">
         <h3 className="text-xs font-medium text-warm-dark/30 uppercase tracking-wider flex items-center gap-2">
           <Gift size={12} />
@@ -313,15 +400,16 @@ export default function Step10Review({
       </div>
       <div className="space-y-3 mb-10">
         {completion.steps
-          .filter(s => s.category === 'enrichment')
+          .filter((section) => section.category === 'enrichment')
           .map((section) => {
             const Icon = STEP_ICONS[section.step] || User;
             return (
               <div
                 key={section.step}
-                className={`p-5 rounded-xl border transition-all duration-500 ${section.completed
-                  ? 'bg-white border-warm-border/20'
-                  : 'bg-surface-low border-dashed border-warm-border/20'
+                className={`p-5 rounded-xl border transition-all duration-500 ${
+                  section.completed
+                    ? 'bg-white border-warm-border/20'
+                    : 'bg-surface-low border-dashed border-warm-border/20'
                 }`}
               >
                 <div className="flex items-start gap-4">
@@ -334,9 +422,13 @@ export default function Step10Review({
                         <h4 className="font-medium text-warm-dark text-sm">{section.title}</h4>
                         <p className="text-xs text-warm-dark/40 mt-0.5">{section.summary}</p>
                       </div>
-                      <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                        section.completed ? 'bg-warm-dark/20' : 'bg-transparent border border-warm-border/30'
-                      }`} />
+                      <div
+                        className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                          section.completed
+                            ? 'bg-warm-dark/20'
+                            : 'bg-transparent border border-warm-border/30'
+                        }`}
+                      />
                     </div>
                     <button
                       onClick={() => onJumpToStep(section.step)}
@@ -352,19 +444,19 @@ export default function Step10Review({
           })}
       </div>
 
-      {/* Missing dimensions whisper */}
-      {showEmotionalInsights && emotionalResult.missingDimensions.length > 0 && emotionalState !== 'eternal' && (
-        <div className="mb-10 p-5 rounded-xl bg-warm-border/[0.04] border border-warm-border/10">
-          <p className="text-xs text-warm-dark/30 mb-3 italic">
-            You&apos;ve captured {emotionalResult.fragmentCount} fragments of their life.
-            {emotionalResult.missingDimensions.length > 0 && (
-              <> {emotionalResult.missingDimensions[0].whisper}</>
-            )}
-          </p>
-        </div>
-      )}
+      {showEmotionalInsights &&
+        emotionalResult.missingDimensions.length > 0 &&
+        emotionalState !== 'eternal' && (
+          <div className="mb-10 p-5 rounded-xl bg-warm-border/[0.04] border border-warm-border/10">
+            <p className="text-xs text-warm-dark/30 mb-3 italic">
+              You&apos;ve captured {emotionalResult.fragmentCount} fragments of their life.
+              {emotionalResult.missingDimensions.length > 0 && (
+                <> {emotionalResult.missingDimensions[0].whisper}</>
+              )}
+            </p>
+          </div>
+        )}
 
-      {/* ACTION BUTTONS */}
       <div className="space-y-4">
         <button
           onClick={() => setShowPreview(true)}
@@ -376,15 +468,15 @@ export default function Step10Review({
 
         <button
           onClick={handleSeal}
-          disabled={isSealing || !isSealReady}
+          disabled={isSealing || (!sealLocked && !isSealReady)}
           className={`w-full py-5 px-6 rounded-xl font-medium transition-all duration-500 flex items-center justify-center gap-2 text-lg ${
-            !isSealReady
-              ? 'bg-warm-border/20 text-warm-dark/30 cursor-not-allowed'
-              : 'bg-warm-dark hover:bg-warm-dark/90 text-surface-low seal-ready'
+            sealLocked || isSealReady
+              ? 'bg-warm-dark hover:bg-warm-dark/90 text-surface-low seal-ready'
+              : 'bg-warm-border/20 text-warm-dark/30 cursor-not-allowed'
           }`}
         >
           <Shield size={20} />
-          {isSealReady ? 'Seal the Archive' : 'Strengthen their legacy'}
+          {primaryButtonLabel}
         </button>
 
         {isBlockedBySuccessor && (
@@ -402,7 +494,6 @@ export default function Step10Review({
         </button>
       </div>
 
-      {/* Auto-preserve note */}
       <div className="mt-8 p-4 bg-warm-border/5 rounded-lg text-center">
         <p className="text-xs text-warm-dark/25">
           Your work is automatically preserved. You can close this page and return anytime.

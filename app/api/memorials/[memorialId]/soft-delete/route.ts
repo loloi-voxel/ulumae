@@ -56,8 +56,14 @@ export async function PATCH(
             action === 'delete' &&
             (memorial.preservation_state === 'preserved' || isMemorialSealLocked(memorial.seal_status))
         ) {
+            const sealingInProgress =
+                memorial.seal_status === 'pending' || memorial.seal_status === 'in_progress';
             return NextResponse.json(
-                { error: 'This archive has been permanently preserved on the blockchain and cannot be deleted.' },
+                {
+                    error: sealingInProgress
+                        ? 'This archive is currently being sealed and cannot be deleted.'
+                        : 'This archive is sealed or otherwise locked and cannot be deleted.',
+                },
                 { status: 403 }
             );
         }

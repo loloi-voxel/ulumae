@@ -1,13 +1,22 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Shield, ExternalLink, Download, CheckCircle, Clock, Globe, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import {
+    Shield,
+    ExternalLink,
+    Download,
+    CheckCircle,
+    Clock,
+    Globe,
+    AlertCircle,
+} from 'lucide-react';
+
 import { type ArweaveTransaction } from '@/lib/arweave/arweaveService';
 import { downloadCertificate, type CertificateData } from '@/lib/certificate/certificateGenerator';
 
-// Pull preservation status from the server. The arweave client placeholder
-// is intentionally throw-only in production — preservation state must come
-// from the database (sealed by the worker that does the real upload).
+const CERTIFICATE_WARNING =
+    'This password cannot be recovered. If it is lost, the sealed memorial cannot be decrypted.';
+
 async function fetchPreservationStatus(
     memorialId: string,
     txId: string
@@ -56,18 +65,26 @@ export default function PreservationStatus({
     deathDate,
     planType,
     storageBytesUsed = 234_567_890,
-    storageBytesIncluded = 53_687_091_200, // 50 GB
+    storageBytesIncluded = 53_687_091_200,
 }: PreservationStatusProps) {
     const [txData, setTxData] = useState<ArweaveTransaction | null>(null);
     const [loading, setLoading] = useState(true);
     const [statusError, setStatusError] = useState<string | null>(null);
+    const [hasCertificatePassword, setHasCertificatePassword] = useState(false);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        setHasCertificatePassword(Boolean(window.sessionStorage.getItem(`ulumae-seal-password:${memorialId}`)));
+    }, [memorialId]);
 
     useEffect(() => {
         if (!arweaveTxId) {
             setLoading(false);
             return;
         }
+
         let cancelled = false;
+
         fetchPreservationStatus(memorialId, arweaveTxId)
             .then((data) => {
                 if (cancelled) return;
@@ -83,24 +100,31 @@ export default function PreservationStatus({
                 setStatusError('Could not verify preservation status.');
                 setLoading(false);
             });
+
         return () => {
             cancelled = true;
         };
     }, [arweaveTxId, memorialId]);
 
     const handleDownloadCertificate = () => {
-        if (!txData) return;
+        if (!txData || typeof window === 'undefined') return;
+        const password = window.sessionStorage.getItem(`ulumae-seal-password:${memorialId}`);
+        if (!password) return;
+
         const certData: CertificateData = {
             fullName,
             birthDate,
             deathDate,
-            preservationDate: txData.confirmedAt || new Date().toISOString(),
+            preservationDate: txData.confirmedAt || txData.createdAt || new Date().toISOString(),
             transactionId: txData.txId,
-            nodeCount: 847,
-            endowmentYears: 200,
             gatewayUrls: txData.gatewayUrls,
+            gatewayUrl: txData.gatewayUrls[0] || null,
             memorialId,
             planType,
+            password,
+            warning: CERTIFICATE_WARNING,
+            nodeCount: 847,
+            endowmentYears: 200,
         };
         downloadCertificate(certData);
     };
@@ -141,6 +165,7 @@ export default function PreservationStatus({
     const usagePercent = Math.min(100, (storageBytesUsed / storageBytesIncluded) * 100);
     const isConfirmed = txData.status === 'confirmed';
     const isFailed = txData.status === 'failed';
+    const primaryGateway = txData.gatewayUrls[0] || `https://arweave.net/${txData.txId}`;
     const statusLabel = isConfirmed
         ? 'Confirmed'
         : isFailed
@@ -178,7 +203,6 @@ export default function PreservationStatus({
                 </div>
             )}
 
-            {/* Transaction ID */}
             <div className="mb-4">
                 <p className="text-xs text-warm-muted font-sans mb-1">Arweave Transaction</p>
                 <code className="text-xs text-olive/80 font-mono bg-warm-dark/5 px-2 py-1 rounded break-all">
@@ -186,7 +210,6 @@ export default function PreservationStatus({
                 </code>
             </div>
 
-            {/* Stats grid */}
             <div className="grid grid-cols-3 gap-4 mb-5">
                 <div>
                     <div className="flex items-center gap-1.5 mb-1">
@@ -211,7 +234,6 @@ export default function PreservationStatus({
                 </div>
             </div>
 
-            {/* Storage usage */}
             <div className="mb-5">
                 <div className="flex items-center justify-between mb-1.5">
                     <span className="text-xs text-warm-muted font-sans">Storage used</span>
@@ -227,10 +249,9 @@ export default function PreservationStatus({
                 </div>
             </div>
 
-            {/* Actions */}
             <div className="flex gap-3">
                 <a
-                    href={txData.gatewayUrls[0]}
+                    href={primaryGateway}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center gap-1.5 px-3 py-2 text-xs font-sans font-medium text-warm-dark bg-warm-dark/5 rounded-lg hover:bg-warm-dark/10 transition-colors"
@@ -240,9 +261,9 @@ export default function PreservationStatus({
                 </a>
                 <button
                     onClick={handleDownloadCertificate}
-                    disabled={!isConfirmed}
+                    disabled={!isConfirmed || !hasCertificatePassword}
                     className={`flex items-center gap-1.5 px-3 py-2 text-xs font-sans font-medium rounded-lg transition-colors ${
-                        isConfirmed
+                        isConfirmed && hasCertificatePassword
                             ? 'text-olive bg-olive/10 hover:bg-olive/20'
                             : 'text-warm-muted bg-warm-dark/5 cursor-not-allowed'
                     }`}
@@ -251,6 +272,12 @@ export default function PreservationStatus({
                     Download Certificate
                 </button>
             </div>
+
+            {isConfirmed && !hasCertificatePassword && (
+                <p className="mt-3 text-xs text-warm-muted font-sans">
+                    The password is never stored by ULUMAE. Use the certificate attached to the seal completion email, or regenerate it from this browser session right after sealing.
+                </p>
+            )}
         </div>
     );
 }

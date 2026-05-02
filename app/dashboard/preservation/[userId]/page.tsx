@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   CheckCircle2,
-  Clock3,
   Film,
   Image as ImageIcon,
   Loader2,
@@ -46,10 +45,19 @@ function formatBytes(value: number) {
   return `${amount.toFixed(power === 0 ? 0 : 1)} ${units[power]}`;
 }
 
-function buildGeneratedPassword() {
-  const bytes = new Uint8Array(24);
-  window.crypto.getRandomValues(bytes);
-  return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+async function buildGeneratedPassword() {
+  const key = await window.crypto.subtle.generateKey(
+    {
+      name: 'AES-GCM',
+      length: 256,
+    },
+    true,
+    ['encrypt', 'decrypt']
+  );
+  const exported = await window.crypto.subtle.exportKey('raw', key);
+  return Array.from(new Uint8Array(exported), (value) =>
+    value.toString(16).padStart(2, '0')
+  ).join('');
 }
 
 export default function DashboardPreservationPage({
@@ -251,7 +259,7 @@ export default function DashboardPreservationPage({
       setSubmitting(true);
       setErrorMessage(null);
 
-      const password = buildGeneratedPassword();
+      const password = await buildGeneratedPassword();
       if (sessionPasswordKey) {
         sessionStorage.setItem(sessionPasswordKey, password);
       }
@@ -276,6 +284,9 @@ export default function DashboardPreservationPage({
       setShowPicker(false);
       await loadSealState(memorialId);
     } catch (error: any) {
+      if (sessionPasswordKey) {
+        sessionStorage.removeItem(sessionPasswordKey);
+      }
       setErrorMessage(error?.message || 'Could not start the seal process.');
     } finally {
       setSubmitting(false);

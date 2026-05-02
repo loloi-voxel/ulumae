@@ -16,6 +16,7 @@ import DashboardShell from '@/components/dashboard/DashboardShell';
 import ArchiveExportAction from '@/components/dashboard/ArchiveExportAction';
 import ConfirmDialog from '@/components/dashboard/ConfirmDialog';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
+import { isMemorialSealLocked, isMemorialSealed } from '@/types/memorial';
 import toast from 'react-hot-toast';
 import {
     getOrCreateSessionFingerprint,
@@ -167,8 +168,17 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
     };
 
     const softDelete = (id: string) => {
-        if (activeArchive?.id === id && (activeArchive as any).preservation_state === 'preserved') {
-            toast.error('This archive has been permanently preserved on the blockchain and cannot be removed.');
+        const sealStatus = (activeArchive as any)?.seal_status || null;
+        if (
+            activeArchive?.id === id &&
+            ((activeArchive as any).preservation_state === 'preserved' ||
+                isMemorialSealLocked(sealStatus))
+        ) {
+            toast.error(
+                sealStatus === 'pending' || sealStatus === 'in_progress'
+                    ? 'This archive is currently being sealed and cannot be removed.'
+                    : 'This archive has been permanently preserved on the blockchain and cannot be removed.'
+            );
             return;
         }
         setPendingConfirm({ kind: 'soft-delete', id });
@@ -228,6 +238,11 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
 
     const hasPersonalAccess = planVerified && !auth.loading && auth.authenticated && isPersonalPlan(auth.plan);
     const restoreBlocked = Boolean(activeArchive);
+    const activeArchiveIsSealed = Boolean(
+        activeArchive &&
+        (isMemorialSealed((activeArchive as any).seal_status) ||
+            (activeArchive as any).preservation_state === 'preserved')
+    );
     if (!hasPersonalAccess) {
         return (
             <div className="bg-surface-low min-h-screen flex items-center justify-center">
@@ -329,7 +344,7 @@ export default function PersonalDashboard({ params }: { params: Promise<{ userId
                 )}
 
                 {/* Removed Archives */}
-                {deletedArchives.length > 0 && (
+                {deletedArchives.length > 0 && !activeArchiveIsSealed && (
                     <div className="mt-20">
                         <div className="separator-warm mb-10" />
                         <h3 className="text-xs uppercase tracking-widest text-warm-outline mb-6 font-serif flex items-center gap-2">
@@ -437,12 +452,21 @@ function ActiveArchiveView({
     const dates = birthYear
         ? deathYear ? `${birthYear} — ${deathYear}` : `b. ${birthYear}`
         : null;
-    const sealedDate = paymentConfirmedAt
-        ? new Date(paymentConfirmedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    const sealStatus = (archive as any).seal_status || null;
+    const isPreserved =
+        isMemorialSealed(sealStatus) || (archive as any).preservation_state === 'preserved';
+    const isSealLocked =
+        isMemorialSealLocked(sealStatus) || (archive as any).preservation_state === 'preserved';
+    const isSealing = sealStatus === 'pending' || sealStatus === 'in_progress';
+    const sealedDateSource =
+        (archive as any).preservation_date ||
+        (archive as any).sealed_at ||
+        paymentConfirmedAt;
+    const sealedDate = sealedDateSource
+        ? new Date(sealedDateSource).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
         : null;
 
     const arweaveTxId = (archive as any).arweave_tx_id || null;
-    const isPreserved = (archive as any).preservation_state === 'preserved';
 
     const handleCopyLink = () => {
         const url = `${window.location.origin}/person/${archive.id}`;
@@ -506,10 +530,16 @@ function ActiveArchiveView({
                                         <span className="h-1.5 w-1.5 rounded-none bg-olive badge-live" />
                                         Live
                                     </span>
+                                    {isSealing && (
+                                        <span className="flex items-center gap-1.5 border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-serif text-amber-700 rounded-none">
+                                            <Clock size={11} />
+                                            Sealing
+                                        </span>
+                                    )}
                                     {isPreserved && (
                                         <span className="flex items-center gap-1.5 border border-warm-brown/20 bg-warm-brown/10 px-3 py-1.5 text-[11px] font-serif text-warm-brown badge-glow rounded-none">
                                             <Shield size={11} />
-                                            Preserved
+                                            Sealed
                                         </span>
                                     )}
                                 </div>
@@ -537,7 +567,7 @@ function ActiveArchiveView({
                                 className="flex items-center gap-2 px-6 py-2.5 glass-btn-primary text-sm font-serif tracking-wide rounded-none"
                             >
                                 <Edit size={14} />
-                                Open editor
+                                {isSealLocked ? 'Open read-only' : 'Open editor'}
                             </Link>
                             <Link
                                 href={`/person/${archive.id}`}
@@ -546,7 +576,7 @@ function ActiveArchiveView({
                                 <Eye size={14} />
                                 View memorial
                             </Link>
-                            {!isPreserved && (
+                            {!isSealLocked && (
                                 <button
                                     onClick={() => onDelete(archive.id)}
                                     aria-label="Remove archive"
@@ -586,8 +616,16 @@ function ActiveArchiveView({
                         <div className="border border-warm-border/25 bg-white p-6 rounded-none">
                             <h4 className="font-serif text-base text-warm-dark mb-4">Current state</h4>
                             <div className="space-y-4">
-                                <StatusRow label="State" value={isPreserved ? 'Preserved on Arweave' : 'Active'} />
-                                {sealedDate && <StatusRow label="Activated" value={sealedDate} />}
+                                <StatusRow
+                                    label="State"
+                                    value={isPreserved ? 'Sealed on Arweave' : isSealing ? 'Sealing in progress' : 'Active'}
+                                />
+                                {sealedDate && (
+                                    <StatusRow
+                                        label={isPreserved ? 'Sealed' : isSealing ? 'Started' : 'Activated'}
+                                        value={sealedDate}
+                                    />
+                                )}
                                 <StatusRow label="Last edit" value={timeAgo(archive.updated_at)} />
                                 <StatusRow label="Content" value={`${totalContent} item${totalContent !== 1 ? 's' : ''}`} />
                                 <StatusRow label="Visibility" value="Shared by direct link" />

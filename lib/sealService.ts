@@ -332,6 +332,10 @@ export async function startMemorialSealRequest({
     throw new Error('Seal Forever is available only on Personal plans.');
   }
 
+  if (!memorial.paid) {
+    throw new Error('Seal Forever is available only after the Personal plan is active.');
+  }
+
   if (!safeString(memorial.full_name)) {
     throw new Error('Create the memorial before sealing it.');
   }
@@ -358,13 +362,6 @@ export async function startMemorialSealRequest({
     throw new Error('The selected seal bundle exceeds the 50 GB limit.');
   }
 
-  const eventResult = await sendEvent({
-    memorialId,
-    selectedAssetIds: filteredAssetIds,
-    ownerEmail: user.email || null,
-    certificatePassword,
-  });
-
   const now = new Date().toISOString();
   const nextSelectedAssetIds = filteredAssetIds;
 
@@ -375,7 +372,7 @@ export async function startMemorialSealRequest({
       deleted_at: null,
       sealed_at: now,
       seal_status: 'pending',
-      seal_job_id: eventResult.id || null,
+      seal_job_id: null,
       seal_selected_asset_ids: nextSelectedAssetIds,
       preservation_state: 'preserving',
       updated_at: now,
@@ -384,6 +381,40 @@ export async function startMemorialSealRequest({
 
   if (updateError) {
     throw new Error(updateError.message || 'Could not start the seal process.');
+  }
+
+  let eventResult: { id?: string | null } = {};
+
+  try {
+    eventResult = await sendEvent({
+      memorialId,
+      selectedAssetIds: filteredAssetIds,
+      ownerEmail: user.email || null,
+      certificatePassword,
+    });
+  } catch (error: any) {
+    await admin
+      .from('memorials')
+      .update({
+        sealed_at: null,
+        seal_status: 'failed',
+        seal_job_id: null,
+        preservation_state: 'review',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', memorialId);
+
+    throw new Error(error?.message || 'Could not queue the seal job.');
+  }
+
+  if (eventResult.id) {
+    await admin
+      .from('memorials')
+      .update({
+        seal_job_id: eventResult.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', memorialId);
   }
 
   await safeLogMemorialActivity(admin, {

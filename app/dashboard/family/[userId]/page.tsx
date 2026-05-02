@@ -16,6 +16,7 @@ import { isFamilyPlan, useAuth } from '@/components/providers/AuthProvider';
 import { SOFT_DELETE_RETENTION_DAYS } from '@/lib/constants';
 import { useNotifications } from '@/hooks/useNotifications';
 import { permanentlyDeleteMemorial, updateMemorialTrashState } from '@/lib/memorialClientActions';
+import { isMemorialSealLocked } from '@/types/memorial';
 import toast from 'react-hot-toast';
 
 type FamilySortOption = 'birth' | 'created_asc' | 'created_desc';
@@ -148,8 +149,16 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
     // Soft Delete with Contributor Check — blocks preserved archives
     const softDeleteMemorial = async (id: string) => {
         const target = memorials.find(m => m.id === id);
-        if (target && (target as any).preservation_state === 'preserved') {
-            toast.error('This archive has been permanently preserved on the blockchain and cannot be removed.');
+        const sealStatus = (target as any)?.seal_status || null;
+        if (
+            target &&
+            ((target as any).preservation_state === 'preserved' || isMemorialSealLocked(sealStatus))
+        ) {
+            toast.error(
+                sealStatus === 'pending' || sealStatus === 'in_progress'
+                    ? 'This archive is currently locked while sealing and cannot be removed.'
+                    : 'This archive is locked and cannot be removed.'
+            );
             return;
         }
         const { count } = await supabase
@@ -242,8 +251,19 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
 
         return sortOption === 'created_asc' ? aSafe - bSafe : bSafe - aSafe;
     });
+    const memorialCards = filteredMemorials.map((memorial) => ({
+        memorial,
+        isArchiveLocked:
+            (memorial as any).preservation_state === 'preserved' ||
+            isMemorialSealLocked((memorial as any).seal_status || null),
+    }));
 
     const firstPaidMemorial = memorials.find(m => m.paid);
+    const hasLockedArchive = realMemorials.some(
+        memorial =>
+            (memorial as any).preservation_state === 'preserved' ||
+            isMemorialSealLocked((memorial as any).seal_status || null)
+    );
 
     const pendingRequestCount = notificationData.pendingCount;
 
@@ -367,7 +387,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                     <>
                         {/* FAMILY ROW: Visual Cards */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {filteredMemorials.map((memorial) => (
+                            {memorialCards.map(({ memorial, isArchiveLocked }) => (
                                 <div key={memorial.id} className="bg-white border border-warm-border/30 rounded-none overflow-hidden transition-all group hover:border-warm-border/50">
                                     {/* Profile Photo */}
                                     <div className="relative h-48 bg-surface-mid">
@@ -393,9 +413,9 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                                                 <Eye size={14} /> View
                                             </Link>
                                             <Link href={`/create?id=${memorial.id}&mode=family`} className="flex-1 py-2 px-3 bg-surface-mid rounded-none font-sans font-medium text-center text-sm flex items-center justify-center gap-1 text-warm-dark hover:bg-surface-high transition-colors">
-                                                <Edit size={14} /> Edit
+                                                <Edit size={14} /> {isArchiveLocked ? 'Read-only' : 'Edit'}
                                             </Link>
-                                            {(memorial as any).preservation_state !== 'preserved' && (
+                                            {!isArchiveLocked && (
                                                 <button
                                                     onClick={() => softDeleteMemorial(memorial.id)}
                                                     aria-label="Delete memorial"
@@ -459,7 +479,7 @@ export default function FamilyDashboard({ params }: { params: Promise<{ userId: 
                 </div>
 
                 {/* REMOVED ARCHIVES */}
-                {deletedMemorials.length > 0 && (
+                {deletedMemorials.length > 0 && !hasLockedArchive && (
                     <div className="mt-16 pt-10 border-t border-warm-border/30 animate-fadeIn">
                         <h3 className="text-xl font-serif text-warm-dark mb-2 flex items-center gap-2">
                             <Archive size={20} className="text-warm-muted" />

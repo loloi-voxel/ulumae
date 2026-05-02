@@ -34,8 +34,12 @@ import {
   MemoriesStories,
   MediaLegacy,
   VideoContent,
+  type MemorialSealState,
+  type MemorialSealStatus,
   TOTAL_STEPS,
-  WitnessRole
+  WitnessRole,
+  isMemorialSealLocked,
+  isMemorialSealed,
 } from '@/types/memorial';
 import { PathId } from '@/types/paths';
 import { createClient } from '@/utils/supabase/client';
@@ -144,6 +148,43 @@ const getInitialData = (): MemorialData => ({
   completedSteps: [],
 });
 
+const EMPTY_MEMORIAL_SEAL_STATE: MemorialSealState = {
+  status: null,
+  sealedAt: null,
+  arweaveTxId: null,
+  sealJobId: null,
+  selectedAssetIds: [],
+  isLocked: false,
+};
+
+function buildSealStateFromMemorial(memorial?: {
+  preservationState?: string | null;
+  sealedAt?: string | null;
+  sealStatus?: MemorialSealStatus;
+  arweaveTxId?: string | null;
+  sealJobId?: string | null;
+  sealSelectedAssetIds?: string[] | null;
+} | null): MemorialSealState {
+  if (!memorial) {
+    return EMPTY_MEMORIAL_SEAL_STATE;
+  }
+
+  const status =
+    memorial.sealStatus ||
+    (memorial.preservationState === 'preserved' ? 'completed' : null);
+
+  return {
+    status,
+    sealedAt: memorial.sealedAt || null,
+    arweaveTxId: memorial.arweaveTxId || null,
+    sealJobId: memorial.sealJobId || null,
+    selectedAssetIds: Array.isArray(memorial.sealSelectedAssetIds)
+      ? memorial.sealSelectedAssetIds
+      : [],
+    isLocked: isMemorialSealLocked(status),
+  };
+}
+
 function CreateMemorialPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -161,6 +202,7 @@ function CreateMemorialPageContent() {
   const [showHistory, setShowHistory] = useState(false);
   const [userRole, setUserRole] = useState<WitnessRole>('owner'); // Default to owner
   const [hasSuccessor, setHasSuccessor] = useState(false); // NEW: Track if user has a successor
+  const [memorialSealState, setMemorialSealState] = useState<MemorialSealState>(EMPTY_MEMORIAL_SEAL_STATE);
 
   // Keep a stable snapshot so restores and saves stay aligned
   const stepEntryDataRef = useRef<MemorialData>(getInitialData());
@@ -171,6 +213,7 @@ function CreateMemorialPageContent() {
   const dbModeRef = useRef<string | null>(null);
   const memorialOwnerIdRef = useRef<string | null>(null);
   const userRoleRef = useRef<WitnessRole>('owner');
+  const memorialSealStateRef = useRef<MemorialSealState>(EMPTY_MEMORIAL_SEAL_STATE);
   const isSaveInFlightRef = useRef(false);
   const saveQueuedRef = useRef(false);
   const activeSavePromiseRef = useRef<Promise<void> | null>(null);
@@ -186,7 +229,8 @@ function CreateMemorialPageContent() {
     dbModeRef.current = dbMode;
     memorialOwnerIdRef.current = memorialOwnerId;
     userRoleRef.current = userRole;
-  }, [memorialData, currentMemorialId, authUserId, dbMode, memorialOwnerId, userRole]);
+    memorialSealStateRef.current = memorialSealState;
+  }, [memorialData, currentMemorialId, authUserId, dbMode, memorialOwnerId, userRole, memorialSealState]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -274,6 +318,10 @@ function CreateMemorialPageContent() {
   const isPaidMode = effectiveMode === 'personal' || effectiveMode === 'family' || effectiveMode === 'concierge';
   const hasFullAccess = isPaidMode || memorialData.paid;
   const showDraftStatusInsights = effectiveMode === 'draft';
+  const memorialSealLocked = memorialSealState.isLocked;
+  const memorialSealed = isMemorialSealed(memorialSealState.status);
+  const memorialSealingInProgress =
+    memorialSealState.status === 'pending' || memorialSealState.status === 'in_progress';
 
   const isMemorialOwner = !!authUserId && memorialOwnerId === authUserId;
   // Determine the correct dashboard path based on the memorial's actual mode.
@@ -314,6 +362,47 @@ function CreateMemorialPageContent() {
         <p className="text-xs text-warm-outline leading-relaxed">
           This is your private preview. The archive will remain private until you choose permanent preservation. Take all the time you need.
         </p>
+      </div>
+    );
+  };
+
+  const SealLockBanner = ({ compact = false }: { compact?: boolean }) => {
+    if (!memorialSealLocked) return null;
+
+    const description = memorialSealed
+      ? 'This memorial has already been sealed. You can still read it here, but edits are permanently disabled.'
+      : 'Seal Forever is in progress. The memorial is locked until the background job finishes.';
+
+    return (
+      <div
+        className={`border border-olive/20 bg-olive/5 ${
+          compact ? 'px-4 py-3' : 'max-w-3xl mx-auto mb-10 px-6 py-5'
+        }`}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center bg-white text-olive rounded-none">
+              <Lock size={18} />
+            </div>
+            <div>
+              <p className="font-serif text-lg text-warm-dark">
+                {memorialSealed ? 'Sealed forever' : 'Seal in progress'}
+              </p>
+              <p className="text-sm text-warm-dark/60 leading-relaxed">
+                {description}
+              </p>
+            </div>
+          </div>
+          {authUserId && currentMemorialId && (
+            <Link
+              href={`/dashboard/preservation/${authUserId}?memorialId=${currentMemorialId}`}
+              className="inline-flex items-center justify-center gap-2 border border-olive/25 bg-white px-4 py-2 text-sm text-olive hover:bg-olive/10 rounded-none"
+            >
+              <Shield size={16} />
+              View preservation
+            </Link>
+          )}
+        </div>
       </div>
     );
   };
@@ -447,6 +536,24 @@ function CreateMemorialPageContent() {
     checkPermissions();
   }, [memorialId, searchParams, router]);
 
+  useEffect(() => {
+    if (!currentMemorialId) return;
+
+    const refresh = () =>
+      refreshMemorialSealState(currentMemorialId).catch((error) => {
+        console.error('Failed to refresh seal state:', error);
+      });
+
+    refresh();
+
+    const intervalId = window.setInterval(
+      refresh,
+      memorialSealingInProgress ? 4000 : 10000
+    );
+
+    return () => window.clearInterval(intervalId);
+  }, [currentMemorialId, memorialSealingInProgress]);
+
   // Auth is now handled by middleware — no temp user creation needed
 
   // Check for successor on mount
@@ -534,6 +641,13 @@ function CreateMemorialPageContent() {
           paid: boolean;
           updatedAt: string | null;
           completedSteps: number[];
+          preservationState?: string | null;
+          preservationDate?: string | null;
+          sealedAt?: string | null;
+          sealStatus?: MemorialSealStatus;
+          arweaveTxId?: string | null;
+          sealJobId?: string | null;
+          sealSelectedAssetIds?: string[];
         };
         memorialData?: MemorialData;
       }>(response);
@@ -544,12 +658,14 @@ function CreateMemorialPageContent() {
         if (response.status === 404) {
           setCurrentMemorialId(null);
           setMemorialData(getInitialData());
+          setMemorialSealState(EMPTY_MEMORIAL_SEAL_STATE);
         }
 
         throw new Error(message);
       }
 
       const { memorial, memorialData: normalizedData } = payload;
+      setMemorialSealState(buildSealStateFromMemorial(memorial));
 
       if (normalizedData) {
         setMemorialOwnerId(memorial.userId || null);
@@ -586,6 +702,27 @@ function CreateMemorialPageContent() {
     }
   };
 
+  const refreshMemorialSealState = async (id: string) => {
+    const response = await fetch(`/api/memorials/${id}/state`, {
+      cache: 'no-store',
+    });
+    const { data: payload } = await parseApiPayload<{
+      memorial?: {
+        preservationState?: string | null;
+        preservationDate?: string | null;
+        sealedAt?: string | null;
+        sealStatus?: MemorialSealStatus;
+        arweaveTxId?: string | null;
+        sealJobId?: string | null;
+        sealSelectedAssetIds?: string[];
+      };
+    }>(response);
+
+    if (response.ok && payload?.memorial) {
+      setMemorialSealState(buildSealStateFromMemorial(payload.memorial));
+    }
+  };
+
   const generateSlug = (name: string) => {
     return name
       .toLowerCase()
@@ -594,19 +731,25 @@ function CreateMemorialPageContent() {
   };
 
   const canEditStep = (stepNumber: number) => {
+    if (memorialSealLocked) return false;
     if (userRole === 'owner' || userRole === 'co_guardian') return true;
     const contributionSteps = [7, 8, 9];
     return contributionSteps.includes(stepNumber);
   };
 
   useEffect(() => {
+    if (memorialSealLocked) return;
     const saveTimer = setTimeout(() => {
       saveToSupabase();
     }, 1000);
     return () => clearTimeout(saveTimer);
-  }, [memorialData]);
+  }, [memorialData, memorialSealLocked]);
 
   useEffect(() => {
+    if (memorialSealLocked) {
+      setSaveStatus('saved');
+      return;
+    }
     if (isLoading) return;
 
     const currentSignature = getMemorialSaveSignature(memorialData);
@@ -618,9 +761,10 @@ function CreateMemorialPageContent() {
     }
 
     setSaveStatus(isSaveInFlightRef.current ? 'saving' : 'saved');
-  }, [isLoading, memorialData]);
+  }, [isLoading, memorialData, memorialSealLocked]);
 
   useEffect(() => {
+    if (memorialSealLocked) return;
     if (isLoading) return;
 
     const hasPendingMedia = hasPendingMemorialMedia(memorialData);
@@ -637,11 +781,12 @@ function CreateMemorialPageContent() {
     }
 
     void saveToSupabase();
-  }, [isLoading, memorialData]);
+  }, [isLoading, memorialData, memorialSealLocked]);
 
   // Prevent data loss: warn if the user tries to close the tab while a save
   // is still pending or errored. The 'saved' state is silent so we don't nag.
   useEffect(() => {
+    if (memorialSealLocked) return;
     if (saveStatus !== 'unsaved' && saveStatus !== 'saving' && saveStatus !== 'error') {
       return;
     }
@@ -651,9 +796,13 @@ function CreateMemorialPageContent() {
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [saveStatus]);
+  }, [saveStatus, memorialSealLocked]);
 
   const saveToSupabase = async () => {
+    if (isMemorialSealLocked(memorialSealStateRef.current.status)) {
+      return Promise.resolve();
+    }
+
     if (isSaveInFlightRef.current) {
       saveQueuedRef.current = true;
       return activeSavePromiseRef.current ?? Promise.resolve();
@@ -763,6 +912,13 @@ function CreateMemorialPageContent() {
         setSaveStatus(latestHasPendingMedia || latestSignature !== lastSavedSignatureRef.current ? 'unsaved' : 'saved');
       } catch (error: any) {
         console.error('Save error:', error?.message || error?.code || JSON.stringify(error));
+        if (
+          currentMemorialIdRef.current &&
+          typeof error?.message === 'string' &&
+          error.message.toLowerCase().includes('cannot be modified')
+        ) {
+          await refreshMemorialSealState(currentMemorialIdRef.current).catch(() => undefined);
+        }
         setSaveStatus('error');
       } finally {
         isSaveInFlightRef.current = false;
@@ -1162,6 +1318,8 @@ function CreateMemorialPageContent() {
             </div>
           )}
 
+          <SealLockBanner />
+
           {/* Organic path layout */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {/* Row 1: Facts + Body */}
@@ -1245,12 +1403,22 @@ function CreateMemorialPageContent() {
               <div className="w-16 h-16 bg-plum text-warm-bg rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
                 <Shield size={32} />
               </div>
-              <h3 className="font-serif text-3xl text-warm-dark mb-4">This Memory is Protected</h3>
+              <h3 className="font-serif text-3xl text-warm-dark mb-4">
+                {memorialSealed
+                  ? 'This Memory Is Sealed'
+                  : effectiveMode === 'personal'
+                    ? 'Seal Forever is ready when you are'
+                    : 'Your family archive is active'}
+              </h3>
               <p className="text-warm-muted max-w-lg mx-auto mb-8 text-sm">
-                The archive is preserved at its permanent address. Manage witnesses and contributions from your dashboard.
+                {memorialSealed
+                  ? 'The memorial has been permanently sealed. You can still view it here, but editing is now read-only.'
+                  : effectiveMode === 'personal'
+                    ? 'Paid personal archives stay editable until you explicitly choose which media to seal forever from the preservation console.'
+                    : 'Family archives stay collaborative and editable. Video and audio now live in Cloudflare R2, while blockchain sealing remains exclusive to Personal plans.'}
               </p>
 
-              <div className="flex justify-center gap-4">
+              <div className="flex flex-wrap justify-center gap-4">
                 <Link
                   href={`/person/${currentMemorialId}`}
                   target="_blank"
@@ -1258,6 +1426,14 @@ function CreateMemorialPageContent() {
                 >
                   Visit the Archive
                 </Link>
+                {authUserId && currentMemorialId && effectiveMode === 'personal' && (
+                  <Link
+                    href={`/dashboard/preservation/${authUserId}?memorialId=${currentMemorialId}`}
+                    className="px-8 py-3 border border-plum/30 bg-white text-warm-dark rounded-lg font-medium hover:bg-plum/5 transition-all"
+                  >
+                    {memorialSealed ? 'View seal details' : 'Open preservation'}
+                  </Link>
+                )}
               </div>
 
               {/* Review & Seal — always accessible for paid users to re-review */}
@@ -1294,19 +1470,27 @@ function CreateMemorialPageContent() {
                   {/* Navigate to Step 10 — the review & ritual */}
                   <button
                     onClick={() => {
+                      if (memorialSealLocked && authUserId && currentMemorialId) {
+                        router.push(`/dashboard/preservation/${authUserId}?memorialId=${currentMemorialId}`);
+                        return;
+                      }
                       setMemorialData(prev => ({ ...prev, currentStep: 10 }));
                       setActivePath(null);
                       setViewMode('path');
                     }}
                     className={`px-10 py-4 rounded-xl font-medium transition-all ${
-                      emotionalResult.canSeal
+                      memorialSealLocked || emotionalResult.canSeal
                         ? 'bg-warm-dark text-warm-bg hover:bg-warm-dark/90'
                         : 'bg-warm-border/20 text-warm-dark/60 hover:bg-warm-border/30'
                     }`}
                   >
-                    {emotionalResult.canSeal
-                      ? 'Review & Seal the Archive'
-                      : 'Review what you\u2019ve built'}
+                    {memorialSealed
+                      ? 'View sealing details'
+                      : memorialSealingInProgress
+                        ? 'Sealing is in progress'
+                        : emotionalResult.canSeal
+                          ? 'Review & Seal the Archive'
+                          : 'Review what you\u2019ve built'}
                   </button>
 
                   {/* Missing dimensions hint */}
@@ -1351,24 +1535,26 @@ function CreateMemorialPageContent() {
 
               {/* Save Status — Step 1.1.3: Minimal, no anxiety */}
               <div className="flex items-center gap-2">
-                {saveStatus === 'unsaved' && (
+                {memorialSealLocked ? (
+                  <div className="flex items-center gap-1.5 text-xs text-olive">
+                    <Lock size={12} />
+                    <span>{memorialSealed ? 'Sealed forever' : 'Locked while sealing'}</span>
+                  </div>
+                ) : saveStatus === 'unsaved' ? (
                   <div className="flex items-center gap-1.5 text-xs text-warm-outline">
                     <span>Unsaved changes</span>
                   </div>
-                )}
-                {saveStatus === 'saving' && (
+                ) : saveStatus === 'saving' ? (
                   <div className="flex items-center gap-1.5 text-xs text-warm-outline">
                     <div className="w-3 h-3 border-1.5 border-warm-outline/15 border-t-warm-outline/40 rounded-full animate-spin" />
                     <span>Saving</span>
                   </div>
-                )}
-                {saveStatus === 'saved' && (
+                ) : saveStatus === 'saved' ? (
                   <div className="flex items-center gap-1.5 text-xs text-warm-outline animate-fadeIn">
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                     <span>Saved</span>
                   </div>
-                )}
-                {saveStatus === 'error' && (
+                ) : saveStatus === 'error' ? (
                   <div className="flex items-center gap-1.5 text-xs text-warm-brown">
                     <span>Could not save</span>
                     <button
@@ -1379,7 +1565,7 @@ function CreateMemorialPageContent() {
                       Try again
                     </button>
                   </div>
-                )}
+                ) : null}
               </div>
 
               {/* Step 1.2.4: View as a visitor button */}
@@ -1417,6 +1603,10 @@ function CreateMemorialPageContent() {
                 </button>
               )}
             </div>
+          </div>
+
+          <div className="flex-none px-4 sm:px-8 pt-4">
+            <SealLockBanner compact />
           </div>
 
           {/* Step 1.1.2: Contextual emotional message for active path */}
@@ -1566,6 +1756,7 @@ function CreateMemorialPageContent() {
                           userId={authUserId || ''}
                           isPaid={hasFullAccess}
                           showStatusInsights={showDraftStatusInsights}
+                          sealStatus={memorialSealState.status}
                         />
                       )}
                     </div>

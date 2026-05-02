@@ -1,157 +1,305 @@
-// app/success/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Shield, Share2, Mail, Copy, Eye, Home, CheckCircle } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+    CheckCircle2,
+    Download,
+    ExternalLink,
+    Loader2,
+    Lock,
+    Mail,
+    Shield,
+} from 'lucide-react';
+
+import DashboardShell from '@/components/dashboard/DashboardShell';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { downloadCertificate, type CertificateData } from '@/lib/certificate/certificateGenerator';
+import type { MemorialSealState } from '@/types/memorial';
+
+const CERTIFICATE_WARNING =
+    'This password cannot be recovered. If it is lost, the sealed memorial cannot be decrypted.';
+
+interface CertificatePayload {
+    fullName: string;
+    birthDate: string;
+    deathDate: string | null;
+    preservationDate: string | null;
+    transactionId: string;
+    gatewayUrls: string[];
+    memorialId: string;
+    planType: string;
+    sealStatus?: string | null;
+}
+
+interface SealStatePayload {
+    success: boolean;
+    memorial?: {
+        id: string;
+        fullName: string | null;
+        mode: string | null;
+        preservationState: string | null;
+        preservationDate: string | null;
+    };
+    sealState?: MemorialSealState;
+    error?: string;
+}
+
+function buildGatewayUrl(payload: CertificatePayload) {
+    return payload.gatewayUrls[0] || `https://arweave.net/${payload.transactionId}`;
+}
 
 export default function SuccessPage() {
-    const [copied, setCopied] = useState(false);
+    const auth = useAuth();
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const memorialId = searchParams.get('memorialId');
 
-    // Simulated memorial URL (in real app, this would come from database)
-    const memorialUrl = 'https://ulumae.com/memorial/eleanor-thompson';
+    const [certificateData, setCertificateData] = useState<CertificatePayload | null>(null);
+    const [sealState, setSealState] = useState<MemorialSealState | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [hasPassword, setHasPassword] = useState(false);
 
-    const copyToClipboard = () => {
-        navigator.clipboard.writeText(memorialUrl);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+    useEffect(() => {
+        if (auth.loading) return;
+        if (!auth.authenticated) {
+            const next = memorialId ? `/success?memorialId=${memorialId}` : '/success';
+            router.replace(`/login?next=${encodeURIComponent(next)}`);
+        }
+    }, [auth.loading, auth.authenticated, memorialId, router]);
+
+    useEffect(() => {
+        if (!memorialId || typeof window === 'undefined') {
+            setHasPassword(false);
+            return;
+        }
+
+        setHasPassword(Boolean(window.sessionStorage.getItem(`ulumae-seal-password:${memorialId}`)));
+    }, [memorialId]);
+
+    useEffect(() => {
+        if (auth.loading || !auth.authenticated) return;
+        if (!memorialId) {
+            setErrorMessage('A memorial ID is required to view the seal confirmation.');
+            setLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+
+        const load = async () => {
+            try {
+                const [certificateRes, sealRes] = await Promise.all([
+                    fetch(`/api/arweave/certificate?memorialId=${encodeURIComponent(memorialId)}`, {
+                        cache: 'no-store',
+                    }),
+                    fetch(`/api/seal/state?memorialId=${encodeURIComponent(memorialId)}`, {
+                        cache: 'no-store',
+                    }),
+                ]);
+
+                const certificatePayload = await certificateRes.json().catch(() => null);
+                const sealPayload = (await sealRes.json().catch(() => null)) as SealStatePayload | null;
+
+                if (!certificateRes.ok || !certificatePayload) {
+                    throw new Error(certificatePayload?.error || 'Could not load the seal certificate.');
+                }
+
+                if (!sealRes.ok || !sealPayload?.success || !sealPayload.sealState) {
+                    throw new Error(sealPayload?.error || 'Could not load the seal state.');
+                }
+
+                if (cancelled) return;
+                setCertificateData(certificatePayload as CertificatePayload);
+                setSealState(sealPayload.sealState);
+                setErrorMessage(null);
+            } catch (error: any) {
+                if (cancelled) return;
+                setErrorMessage(error?.message || 'Could not load the seal confirmation.');
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        load();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [auth.loading, auth.authenticated, memorialId]);
+
+    const gatewayUrl = useMemo(
+        () => (certificateData ? buildGatewayUrl(certificateData) : null),
+        [certificateData]
+    );
+
+    const handleDownload = async () => {
+        if (!certificateData || !memorialId || typeof window === 'undefined') return;
+        const password = window.sessionStorage.getItem(`ulumae-seal-password:${memorialId}`);
+        if (!password) {
+            setHasPassword(false);
+            return;
+        }
+
+        const payload: CertificateData = {
+            fullName: certificateData.fullName,
+            birthDate: certificateData.birthDate,
+            deathDate: certificateData.deathDate,
+            preservationDate: certificateData.preservationDate || new Date().toISOString(),
+            transactionId: certificateData.transactionId,
+            gatewayUrls: certificateData.gatewayUrls,
+            gatewayUrl,
+            memorialId: certificateData.memorialId,
+            planType: certificateData.planType,
+            password,
+            warning: CERTIFICATE_WARNING,
+        };
+
+        await downloadCertificate(payload);
     };
 
-    const shareViaEmail = () => {
-        const subject = encodeURIComponent('Memorial for [Name]');
-        const body = encodeURIComponent(`I've created a memorial page. View it here: ${memorialUrl}`);
-        window.location.href = `mailto:?subject=${subject}&body=${body}`;
-    };
+    if (auth.loading || !auth.authenticated || !auth.user?.id || loading) {
+        return (
+            <div className="min-h-screen bg-surface-low flex items-center justify-center">
+                <Loader2 className="h-10 w-10 animate-spin text-warm-muted/50" />
+            </div>
+        );
+    }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-olive/10 via-surface-low to-warm-muted/10 flex items-center justify-center p-6 relative overflow-hidden">
-            {/* Main Content */}
-            <div className="relative z-10 w-full max-w-2xl border border-warm-border/30 bg-white p-8 shadow-2xl md:p-12 rounded-none">
-                {/* Icon */}
-                <div className="flex justify-center mb-6">
-                    <div className="flex h-24 w-24 items-center justify-center bg-gradient-to-br from-olive to-olive/80 shadow-lg rounded-none">
-                        <Shield size={48} className="text-surface-low" strokeWidth={2} />
+        <DashboardShell userId={auth.user.id}>
+            <div className="min-h-screen bg-surface-low">
+                <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
+                    <div className="rounded-none border border-warm-border/30 bg-white p-8 shadow-sm md:p-12">
+                        {errorMessage ? (
+                            <div className="rounded-none border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+                                {errorMessage}
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex flex-col items-center text-center">
+                                    <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-olive/10 text-olive">
+                                        <CheckCircle2 size={40} />
+                                    </div>
+                                    <p className="text-[11px] uppercase tracking-[0.18em] text-warm-outline">
+                                        Seal Forever
+                                    </p>
+                                    <h1 className="mt-3 font-serif text-4xl text-warm-dark md:text-5xl">
+                                        The memorial is now sealed.
+                                    </h1>
+                                    <p className="mt-4 max-w-2xl text-sm text-warm-muted">
+                                        {certificateData?.fullName || 'This memorial'} has been written to Arweave and locked against further editing. A PDF certificate has been emailed to the memorial owner.
+                                    </p>
+                                </div>
+
+                                <div className="mt-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+                                    <section className="rounded-none border border-warm-border/30 bg-surface-mid/30 p-6">
+                                        <p className="text-[11px] uppercase tracking-[0.14em] text-warm-outline">
+                                            Arweave Record
+                                        </p>
+                                        <code className="mt-3 block break-all text-sm text-olive">
+                                            {certificateData?.transactionId}
+                                        </code>
+                                        {gatewayUrl && (
+                                            <a
+                                                href={gatewayUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="mt-4 inline-flex items-center gap-2 text-sm text-olive hover:text-olive/80"
+                                            >
+                                                <ExternalLink size={15} />
+                                                View the permanent record
+                                            </a>
+                                        )}
+
+                                        <div className="mt-6 space-y-3 text-sm text-warm-dark/80">
+                                            <div className="rounded-none border border-warm-border/25 bg-white px-4 py-3">
+                                                Status: {sealState?.status === 'completed' ? 'Completed' : sealState?.status || 'Unknown'}
+                                            </div>
+                                            <div className="rounded-none border border-warm-border/25 bg-white px-4 py-3">
+                                                Sealed on: {certificateData?.preservationDate
+                                                    ? new Date(certificateData.preservationDate).toLocaleDateString('en-US', {
+                                                        year: 'numeric',
+                                                        month: 'long',
+                                                        day: 'numeric',
+                                                    })
+                                                    : 'Unknown date'}
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section className="rounded-none border border-warm-border/30 bg-surface-mid/30 p-6">
+                                        <div className="flex items-start gap-3">
+                                            <div className="flex h-11 w-11 items-center justify-center rounded-none bg-white text-warm-brown">
+                                                <Lock size={18} />
+                                            </div>
+                                            <div>
+                                                <h2 className="font-serif text-2xl text-warm-dark">
+                                                    Certificate & password
+                                                </h2>
+                                                <p className="mt-2 text-sm text-warm-muted">
+                                                    The decryption password is never stored by ULUMAE. Keep the PDF certificate safe. If the password is lost, the sealed data cannot be decrypted.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-6 space-y-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleDownload()}
+                                                disabled={!hasPassword}
+                                                className={`inline-flex w-full items-center justify-center gap-2 rounded-none px-5 py-3 text-sm font-medium transition-colors ${
+                                                    hasPassword
+                                                        ? 'bg-warm-dark text-white hover:bg-warm-dark/90'
+                                                        : 'cursor-not-allowed border border-warm-border/30 bg-white text-warm-muted'
+                                                }`}
+                                            >
+                                                <Download size={16} />
+                                                Download PDF certificate
+                                            </button>
+
+                                            {!hasPassword && (
+                                                <div className="rounded-none border border-warm-border/25 bg-white px-4 py-3 text-sm text-warm-muted">
+                                                    The browser no longer has the one-time password for this memorial. Use the certificate attached to the confirmation email.
+                                                </div>
+                                            )}
+
+                                            <div className="rounded-none border border-warm-border/25 bg-white px-4 py-3 text-sm text-warm-dark/80">
+                                                <div className="flex items-start gap-2">
+                                                    <Mail size={16} className="mt-0.5 text-warm-brown" />
+                                                    <span>
+                                                        The seal completion email includes the PDF certificate attachment so you can keep an offline copy.
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </section>
+                                </div>
+
+                                <div className="mt-8 flex flex-wrap gap-3">
+                                    <Link
+                                        href={`/dashboard/preservation/${auth.user.id}${memorialId ? `?memorialId=${memorialId}` : ''}`}
+                                        className="inline-flex items-center gap-2 rounded-none border border-warm-border/30 bg-white px-5 py-3 text-sm text-warm-dark hover:bg-surface-mid/40"
+                                    >
+                                        <Shield size={16} />
+                                        View preservation details
+                                    </Link>
+                                    <Link
+                                        href={`/dashboard/personal/${auth.user.id}`}
+                                        className="inline-flex items-center gap-2 rounded-none border border-warm-border/30 bg-white px-5 py-3 text-sm text-warm-dark hover:bg-surface-mid/40"
+                                    >
+                                        Back to dashboard
+                                    </Link>
+                                </div>
+                            </>
+                        )}
                     </div>
-                </div>
-
-                {/* Header */}
-                <div className="text-center mb-8">
-                    <h1 className="font-serif text-4xl md:text-5xl text-warm-dark mb-3">
-                        Their story is now protected.
-                    </h1>
-                    <p className="text-lg text-warm-dark/70">
-                        What you have built will endure. Share it with those who carry their memory.
-                    </p>
-                </div>
-
-                {/* Memorial URL Card */}
-                <div className="mb-8 border-2 border-warm-border/30 bg-gradient-to-br from-olive/5 to-warm-muted/5 p-6 rounded-none">
-                    <label className="block text-sm font-medium text-warm-dark/70 mb-2">
-                        Memorial Page URL
-                    </label>
-                    <div className="flex gap-2">
-                        <div className="flex-1 border border-warm-border/40 bg-white px-4 py-3 text-sm text-warm-dark break-all rounded-none">
-                            {memorialUrl}
-                        </div>
-                        <button
-                            onClick={copyToClipboard}
-                            className={`flex items-center gap-2 px-4 py-3 font-medium transition-all rounded-none ${copied
-                                ? 'bg-olive/10 text-olive'
-                                : 'bg-white border border-warm-border/40 text-warm-dark hover:bg-warm-border/10'
-                                }`}
-                        >
-                            {copied ? (
-                                <>
-                                    <CheckCircle size={18} />
-                                    Copied!
-                                </>
-                            ) : (
-                                <>
-                                    <Copy size={18} />
-                                    Copy
-                                </>
-                            )}
-                        </button>
-                    </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="space-y-3 mb-8">
-                    <Link
-                        href={memorialUrl}
-                        className="flex w-full items-center justify-center gap-2 bg-gradient-to-r from-olive/10 to-olive/10 py-4 font-semibold transition-all hover:shadow-lg glass-btn-dark rounded-none"
-                    >
-                        <Eye size={20} />
-                        Visit the archive
-                    </Link>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <button
-                            onClick={shareViaEmail}
-                            className="flex items-center justify-center gap-2 border-2 border-warm-border/40 bg-white py-3 font-medium text-warm-dark transition-all hover:border-olive hover:bg-olive/5 rounded-none"
-                        >
-                            <Mail size={18} />
-                            Invite others to remember
-                        </button>
-
-                        <button
-                            onClick={copyToClipboard}
-                            className="flex items-center justify-center gap-2 border-2 border-warm-border/40 bg-white py-3 font-medium text-warm-dark transition-all hover:border-warm-brown hover:bg-warm-brown/5 rounded-none"
-                        >
-                            <Share2 size={18} />
-                            Share their legacy
-                        </button>
-                    </div>
-                </div>
-
-                {/* Info Cards */}
-                <div className="space-y-4 mb-8">
-                    <div className="border border-olive/30 bg-olive/10 p-4 rounded-none">
-                        <h3 className="font-semibold text-warm-dark mb-2 flex items-center gap-2">
-                            <Shield size={18} className="text-olive" />
-                            What this means
-                        </h3>
-                        <ul className="text-sm text-warm-dark/70 space-y-1.5 ml-6">
-                            <li>Their memorial is preserved and accessible</li>
-                            <li>You can return to tend it anytime from your dashboard</li>
-                            <li>Pass the link to family and those who knew them</li>
-                            <li>Others may add their own memories</li>
-                        </ul>
-                    </div>
-
-                    <div className="border border-warm-muted/30 bg-warm-muted/10 p-4 rounded-none">
-                        <h3 className="font-semibold text-warm-dark mb-2 flex items-center gap-2">
-                            <Shield size={18} className="text-warm-muted" />
-                            Tending their memorial
-                        </h3>
-                        <ul className="text-sm text-warm-dark/70 space-y-1.5 ml-6">
-                            <li>Add more photos and stories as they surface</li>
-                            <li>Invite others to contribute what they remember</li>
-                            <li>Adjust the design and layout over time</li>
-                            <li>Download a PDF version for safekeeping</li>
-                        </ul>
-                    </div>
-                </div>
-
-                {/* Bottom Actions */}
-                <div className="flex flex-col sm:flex-row gap-3">
-                    <Link
-                        href="/"
-                        className="flex flex-1 items-center justify-center gap-2 border-2 border-warm-border/40 py-3 font-medium text-warm-dark transition-all hover:bg-warm-border/10 rounded-none"
-                    >
-                        <Home size={18} />
-                        Back to Home
-                    </Link>
-
-                    <Link
-                        href="/create"
-                        className="flex flex-1 items-center justify-center gap-2 border-2 border-warm-brown/30 bg-warm-brown/10 py-3 font-medium text-warm-brown transition-all hover:bg-warm-brown/20 rounded-none"
-                    >
-                        <Shield size={18} />
-                        Protect Another
-                    </Link>
                 </div>
             </div>
-        </div>
+        </DashboardShell>
     );
 }

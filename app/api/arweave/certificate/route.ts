@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAuthenticatedClient } from '@/utils/supabase/api';
-import { hasPermission, resolveArchivePermissionContext } from '@/lib/archivePermissions';
-import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { getGatewayUrls } from '@/lib/arweave/arweaveService';
+import { requireMemorialAccess } from '@/lib/apiAuth';
 
 export async function GET(req: NextRequest) {
-    const supabaseAdmin = getSupabaseAdmin();
     const memorialId = req.nextUrl.searchParams.get('memorialId');
 
     if (!memorialId) {
@@ -12,42 +10,28 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const { user } = await createAuthenticatedClient();
-
-        if (!user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
-
-        const permission = await resolveArchivePermissionContext(
-            supabaseAdmin,
+        const access = await requireMemorialAccess({
             memorialId,
-            user.id
-        );
+            action: 'view_archive',
+        });
+        if (!access.ok) return access.response;
 
-        if (!permission.memorialExists || !permission.context) {
-            return NextResponse.json({ error: 'Memorial not found' }, { status: 404 });
-        }
+        const { admin: supabaseAdmin } = access;
 
-        if (
-            !hasPermission(permission.context, 'view_activity') &&
-            !hasPermission(permission.context, 'export_archive')
-        ) {
-            return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-        }
-
-        const { data: memorial } = await supabaseAdmin
+        const { data: memorial, error: memorialError } = await supabaseAdmin
             .from('memorials')
-            .select('id, full_name, birth_date, death_date, plan_type, payment_confirmed_at')
+            .select('id, full_name, birth_date, death_date, mode, preservation_date, sealed_at, arweave_tx_id, seal_status')
             .eq('id', memorialId)
             .single();
 
-        if (!memorial) {
+        if (memorialError || !memorial) {
             return NextResponse.json({ error: 'Memorial not found' }, { status: 404 });
         }
 
         // Try to get arweave transaction
-        let txId = 'pending';
+        let txId = memorial.arweave_tx_id || 'pending';
         let gatewayUrls: string[] = [];
+        let confirmedAt: string | null = memorial.preservation_date || memorial.sealed_at || null;
         const { data: tx, error: txError } = await supabaseAdmin
             .from('arweave_transactions')
             .select('tx_id, gateway_urls, confirmed_at')
@@ -63,6 +47,7 @@ export async function GET(req: NextRequest) {
         if (tx) {
             txId = tx.tx_id;
             gatewayUrls = tx.gateway_urls || [];
+            confirmedAt = tx.confirmed_at || confirmedAt;
         }
 
         const isPlaceholder = txId.startsWith('PLACEHOLDER_') || txId === 'pending';
@@ -71,12 +56,13 @@ export async function GET(req: NextRequest) {
             fullName: memorial.full_name || 'Unknown',
             birthDate: memorial.birth_date || '',
             deathDate: memorial.death_date || null,
-            preservationDate: memorial.payment_confirmed_at || null,
+            preservationDate: confirmedAt,
             transactionId: txId,
             isPlaceholder,
-            gatewayUrls,
+            gatewayUrls: gatewayUrls.length > 0 ? gatewayUrls : (txId && txId !== 'pending' ? getGatewayUrls(txId) : []),
             memorialId,
-            planType: memorial.plan_type || 'personal',
+            planType: memorial.mode || 'personal',
+            sealStatus: memorial.seal_status || null,
         });
     } catch (error: any) {
         console.error('Certificate data error:', error);
