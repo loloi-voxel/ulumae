@@ -1,4 +1,4 @@
-export type MediaBucket = 'memorial-media' | 'videos';
+export type MediaBucket = 'memorial-media' | 'videos' | 'r2';
 
 export type MediaKind =
   | 'profile_photo'
@@ -36,6 +36,8 @@ export interface StoredMediaAsset {
   updatedAt: string;
   deletedAt: string | null;
   deletedBy: string | null;
+  arweaveUrl: string | null;
+  sealedAt: string | null;
 }
 
 export interface MediaUploadError {
@@ -82,4 +84,6 @@ export interface MediaReferenceFields {
   deletedAt?: string | null;
   uploadStatus?: MediaItemStatus;
   uploadError?: string | null;
+  arweaveUrl?: string | null;
+  sealedAt?: string | null;
 }

@@ -11,6 +11,7 @@ import {
     normalizeMemorialMediaData,
     softDeleteMemorialMediaAssets,
 } from '@/lib/mediaManager';
+import { assertMemorialWritable } from '@/lib/sealService';
 
 function generateSlug(name: string) {
     return name
@@ -50,6 +51,7 @@ export async function POST(
         if (!access.ok) return access.response;
 
         const { user, admin: supabaseAdmin, context } = access;
+        await assertMemorialWritable(supabaseAdmin, memorialId);
 
         const body = await request.json();
         const memorialData = body?.memorialData as MemorialData | undefined;

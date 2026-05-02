@@ -309,3 +309,64 @@ export function getDeadManSwitchTransferEmail(
     </div>
   `;
 }
+
+export function getSealCompletedEmail({
+  memorialName,
+  transactionId,
+  gatewayUrl,
+  successUrl,
+}: {
+  memorialName: string;
+  transactionId: string;
+  gatewayUrl: string;
+  successUrl: string;
+}) {
+  const safeMemorialName = escapeHtml(memorialName);
+  const safeTransactionId = escapeHtml(transactionId);
+  const safeGatewayUrl = escapeHtml(gatewayUrl);
+  const safeSuccessUrl = escapeHtml(successUrl);
+
+  return `
+    <div style="margin:0; padding:48px 20px; background:#f4efe6; font-family: Georgia, serif; color:#4f4338;">
+      <div style="max-width:640px; margin:0 auto; background:#fcfaf5; border:1px solid #ddd0bf; overflow:hidden; box-shadow:0 10px 30px rgba(79, 67, 56, 0.06);">
+        <div style="padding:16px 28px; background:#f0e7da; border-bottom:1px solid #ddd0bf; text-align:center;">
+          <p style="margin:0; font-size:11px; letter-spacing:0.28em; text-transform:uppercase; color:#8d7765;">ULUMAE</p>
+        </div>
+
+        <div style="padding:48px 36px 36px;">
+          <p style="margin:0 0 14px; font-size:12px; letter-spacing:0.22em; text-transform:uppercase; color:#9a8572;">Seal complete</p>
+          <h1 style="margin:0; font-size:38px; line-height:1.08; font-weight:400; color:#4f4338;">
+            ${safeMemorialName}
+            <span style="display:block; font-style:italic; color:#7b8a63;">has been sealed forever</span>
+          </h1>
+
+          <p style="margin:26px 0 0; font-size:17px; line-height:1.8; color:#5e5145;">
+            The memorial has been permanently written to Arweave. Your PDF certificate is attached to this email.
+          </p>
+
+          <div style="margin:28px 0 0; padding:18px 20px; background:#f7f2ea; border:1px solid #e3d7c8;">
+            <p style="margin:0; font-size:11px; letter-spacing:0.18em; text-transform:uppercase; color:#9a8572;">Transaction ID</p>
+            <p style="margin:10px 0 0; font-size:14px; line-height:1.7; color:#4f4338; word-break:break-word;">${safeTransactionId}</p>
+          </div>
+
+          <p style="margin:22px 0 0; font-size:14px; line-height:1.8; color:#7a6a5c;">
+            Keep the attached certificate and its password in a safe place. ULUMAE cannot recover that password if it is lost.
+          </p>
+
+          <div style="margin:34px 0 0; text-align:center;">
+            <a href="${safeSuccessUrl}" style="display:inline-block; padding:16px 32px; background:#667552; color:#fcfaf5; text-decoration:none; border:1px solid #667552; font-size:13px; letter-spacing:0.16em; text-transform:uppercase;">
+              View sealed memorial
+            </a>
+          </div>
+
+          <p style="margin:28px 0 0; font-size:14px; line-height:1.8; color:#7a6a5c; text-align:center;">
+            Arweave link:
+          </p>
+          <p style="margin:12px 0 0; font-size:13px; line-height:1.7; word-break:break-all; text-align:center;">
+            <a href="${safeGatewayUrl}" style="color:#667552; text-decoration:underline;">${safeGatewayUrl}</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+}

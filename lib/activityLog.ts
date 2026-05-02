@@ -21,7 +21,10 @@ export type MemorialActivityAction =
   | 'authorization_submitted'
   | 'content_review_submitted'
   | 'plan_upgraded'
-  | 'memorial_edited';
+  | 'memorial_edited'
+  | 'memorial_seal_started'
+  | 'memorial_seal_completed'
+  | 'memorial_seal_failed';
 
 export interface MemorialActivityLogInput {
   memorialId: string;

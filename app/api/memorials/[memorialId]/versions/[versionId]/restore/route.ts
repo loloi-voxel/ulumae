@@ -8,6 +8,7 @@ import {
 } from '@/lib/versioningServer';
 import { hasPermission, resolveArchivePermissionContext } from '@/lib/archivePermissions';
 import { getSupabaseAdmin } from '@/lib/apiAuth';
+import { assertMemorialWritable } from '@/lib/sealService';
 
 function buildMemorialData(record: any): MemorialData {
     return {
@@ -56,6 +57,8 @@ export async function POST(
                 { status: 403 }
             );
         }
+
+        await assertMemorialWritable(supabaseAdmin, memorialId);
 
         const { data: memorial, error: memorialError } = await supabaseAdmin
             .from('memorials')
