@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { Plus, Edit, Trash2, FileEdit, RefreshCcw, AlertTriangle, Shield } from 'lucide-react';
+import { Plus, Edit, Trash2, FileEdit, RefreshCcw, AlertTriangle, Shield, Eye } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Memorial } from '@/lib/supabase';
 import { createClient } from '@/utils/supabase/client';
@@ -267,21 +267,30 @@ export default function DraftDashboard({ params }: { params: Promise<{ userId: s
                                     <p className="text-xs text-warm-dark/40 mb-4">
                                         Last edited: {new Date(memorial.updated_at).toLocaleDateString()}
                                     </p>
-                                    <div className="flex gap-2">
+                                    <div className="space-y-2">
+                                        <div className="flex gap-2">
+                                            <Link
+                                                href={`/create?id=${memorial.id}&mode=draft`}
+                                                className="flex-1 py-2 px-3 bg-warm-dark/10 hover:bg-warm-dark/20 text-warm-dark rounded-none font-medium text-center text-sm"
+                                            >
+                                                <Edit size={16} className="inline mr-1" />Edit
+                                            </Link>
+                                            <button
+                                                onClick={() => softDeleteMemorial(memorial.id)}
+                                                aria-label="Delete archive"
+                                                className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-none"
+                                                title="Delete archive"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                         <Link
-                                            href={`/create?id=${memorial.id}&mode=draft`}
-                                            className="flex-1 py-2 px-3 bg-warm-dark/10 hover:bg-warm-dark/20 text-warm-dark rounded-none font-medium text-center text-sm"
+                                            href={`/person/${memorial.id}`}
+                                            className="flex w-full items-center justify-center gap-2 py-2 px-3 bg-surface-mid rounded-none font-medium text-center text-sm text-warm-dark hover:bg-surface-high transition-colors"
                                         >
-                                            <Edit size={16} className="inline mr-1" />Edit
+                                            <Eye size={16} />
+                                            Visit the Archive
                                         </Link>
-                                        <button
-                                            onClick={() => softDeleteMemorial(memorial.id)}
-                                            aria-label="Delete archive"
-                                            className="py-2 px-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-none"
-                                            title="Delete archive"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
                                     </div>
                                 </div>
                             </div>
