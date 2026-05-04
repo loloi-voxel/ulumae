@@ -6,6 +6,7 @@ import {
   decodeSessionIdFromAccessToken,
   getTwoFactorEnforcementStatus,
 } from '@/lib/security/twoFactor';
+import { normalizeRelativePath } from '@/lib/inviteFlow';
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -50,10 +51,14 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && (pathname === '/login' || pathname === '/signup')) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
-    url.search = '';
-    return NextResponse.redirect(url);
+    const next = normalizeRelativePath(request.nextUrl.searchParams.get('next'));
+    const isAuthDestination =
+      next === '/login' ||
+      next === '/signup' ||
+      next.startsWith('/login?') ||
+      next.startsWith('/signup?');
+    const destination = next !== '/' && !isAuthDestination ? next : '/dashboard';
+    return NextResponse.redirect(new URL(destination, request.url));
   }
 
   if (user && (isProtectedRoute || isTwoFactorRoute)) {

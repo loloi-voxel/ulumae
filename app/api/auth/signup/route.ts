@@ -26,7 +26,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Password must be at least 6 characters.' }, { status: 400 });
     }
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim() || request.nextUrl.origin;
+    // Use the exact origin the user is currently visiting so the email
+    // confirmation returns to the same host (localhost vs LAN IP vs prod).
+    const baseUrl = request.nextUrl.origin || process.env.NEXT_PUBLIC_BASE_URL?.trim();
     const redirectTo = `${baseUrl}/auth/callback?next=${encodeURIComponent(next)}`;
     const admin = getSupabaseAdmin();
 
@@ -46,9 +48,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const confirmationLink = `${baseUrl}/auth/callback?token_hash=${encodeURIComponent(
-      data.properties.hashed_token
-    )}&type=${encodeURIComponent(data.properties.verification_type)}&next=${encodeURIComponent(next)}`;
+    const confirmationLink = data.properties.action_link;
 
     try {
       await sendEmail({

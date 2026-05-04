@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { ArrowLeft, Mail, Lock, Loader2 } from 'lucide-react';
@@ -22,6 +22,50 @@ function LoginForm() {
       : null
   );
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const hash = window.location.hash.startsWith('#')
+      ? window.location.hash.slice(1)
+      : window.location.hash;
+
+    if (!hash) return;
+
+    const params = new URLSearchParams(hash);
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+
+    if (!accessToken || !refreshToken) return;
+
+    let cancelled = false;
+
+    const restoreSessionFromHash = async () => {
+      setLoading(true);
+      setError(null);
+
+      const supabase = createClient();
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+
+      if (cancelled) return;
+
+      if (sessionError) {
+        setError(sessionError.message || 'Authentication failed. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      router.replace(next);
+      router.refresh();
+    };
+
+    restoreSessionFromHash();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [next, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

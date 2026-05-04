@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FileEdit, User, Users, Sparkles, Check, ArrowLeft, ChevronDown } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { getPlanDashboardPath, useAuth } from '@/components/providers/AuthProvider';
 import { DRAFT_MEDIA_LIMIT, DRAFT_VIDEO_LIMIT, PLAN_PRICES_USD } from '@/lib/constants';
@@ -72,6 +72,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
 export default function ChoicePricingPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const auth = useAuth();
     const userId = auth.user?.id || null;
     const ready = !auth.loading;
@@ -82,6 +83,7 @@ export default function ChoicePricingPage() {
         auth.plan === 'concierge'
             ? 'Concierge'
             : auth.plan.charAt(0).toUpperCase() + auth.plan.slice(1);
+    const previewIntent = searchParams.get('intent') === 'draft-preview';
 
     const requireAuth = (nextPath: string): boolean => {
         if (userId) return true;
@@ -89,8 +91,24 @@ export default function ChoicePricingPage() {
         return false;
     };
 
+    useEffect(() => {
+        if (!previewIntent || !ready || !userId) return;
+
+        if (hasPaidPlan) {
+            router.replace(currentDashboardPath);
+            return;
+        }
+
+        router.replace(`/dashboard/draft/${userId}`);
+    }, [previewIntent, ready, userId, hasPaidPlan, currentDashboardPath, router]);
+
     const handleDraftStart = () => {
-        if (!requireAuth('/choice-pricing')) return;
+        if (hasPaidPlan && userId) {
+            router.replace(currentDashboardPath);
+            return;
+        }
+
+        if (!requireAuth('/choice-pricing?intent=draft-preview')) return;
         router.replace(`/dashboard/draft/${userId}`);
     };
 

@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { normalizeRelativePath } from '@/lib/inviteFlow';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -58,10 +59,14 @@ export async function updateSession(request: NextRequest) {
     (request.nextUrl.pathname === '/login' ||
       request.nextUrl.pathname === '/signup')
   ) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
-    url.search = '';
-    return NextResponse.redirect(url);
+    const next = normalizeRelativePath(request.nextUrl.searchParams.get('next'));
+    const isAuthDestination =
+      next === '/login' ||
+      next === '/signup' ||
+      next.startsWith('/login?') ||
+      next.startsWith('/signup?');
+    const destination = next !== '/' && !isAuthDestination ? next : '/dashboard';
+    return NextResponse.redirect(new URL(destination, request.url));
   }
 
   // Prevent browser caching of state-critical pages
