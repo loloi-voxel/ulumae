@@ -39,7 +39,7 @@ async function deriveAesKey(password: string, salt: Uint8Array) {
     {
       name: 'PBKDF2',
       hash: 'SHA-256',
-      salt,
+      salt: new Uint8Array(salt),
       iterations: SEAL_ENCRYPTION_ITERATIONS,
     },
     keyMaterial,
@@ -66,7 +66,7 @@ export async function encryptSealPayload(
       iv,
     },
     key,
-    plainBytes
+    new Uint8Array(plainBytes),
   );
 
   return {

@@ -53,7 +53,7 @@ export async function GET(
       range,
     });
 
-    return new NextResponse(object.bytes, {
+    return new NextResponse(Buffer.from(object.bytes), {
       status: object.contentRange ? 206 : 200,
       headers: {
         'Accept-Ranges': 'bytes',

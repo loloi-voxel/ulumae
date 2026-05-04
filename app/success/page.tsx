@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -51,6 +51,14 @@ function buildGatewayUrl(payload: CertificatePayload) {
 }
 
 export default function SuccessPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <SuccessContent />
+    </Suspense>
+  );
+}
+
+function SuccessContent() {
     const auth = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();

@@ -6,7 +6,7 @@ import { Shield, ArrowRight, ArrowLeft, Clock, Globe, Lock, Users, HardDrive, Pe
 import { useAuth } from '@/components/providers/AuthProvider';
 import { PLAN_PRICES_USD } from '@/lib/constants';
 import ArweaveEducation from '@/components/ArweaveEducation';
-import { estimateStorageCost } from '@/lib/arweave/arweaveService';
+import { estimateStorageCost } from '@/lib/arweave/storageEstimate'
 
 export default function PreservationGatePage() {
     return (

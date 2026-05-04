@@ -15,7 +15,7 @@ export const memorialSealRequested = inngest.createFunction(
         selectedAssetIds: data.selectedAssetIds,
         ownerEmail: data.ownerEmail,
         certificatePassword: data.certificatePassword,
-        jobId: event.id,
+        jobId: event.id ?? '',
       });
     });
   }

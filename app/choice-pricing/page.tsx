@@ -70,7 +70,18 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
     );
 }
 
+import { Suspense } from 'react';
+
 export default function ChoicePricingPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <ChoicePricingContent />
+    </Suspense>
+  );
+}
+
+function ChoicePricingContent() {
+
     const router = useRouter();
     const searchParams = useSearchParams();
     const auth = useAuth();
