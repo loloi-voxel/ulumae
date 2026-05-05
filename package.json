@@ -21,6 +21,7 @@
     "@stripe/stripe-js": "^8.7.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.93.1",
+    "@vercel/analytics": "^2.0.1",
     "@xyflow/react": "^12.10.0",
     "browser-fs-access": "^0.38.0",
     "inngest": "^3.35.1",
