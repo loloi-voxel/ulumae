@@ -4,6 +4,7 @@ import './globals.css';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 import MfaChallengeGate from '@/components/MfaChallengeGate';
 import { Toaster } from 'react-hot-toast';
+import { Analytics } from '@vercel/analytics/next';
 
 export const metadata: Metadata = {
   title: 'ULUMAE — Every life, an indelible mark',
@@ -40,6 +41,7 @@ export default function RootLayout({
           <Footer />
           <Toaster position="bottom-right" />
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
