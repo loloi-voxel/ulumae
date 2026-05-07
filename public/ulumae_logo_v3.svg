@@ -1,0 +1,33 @@
+<svg width="100%" viewBox="0 0 680 320" role="img" style="" xmlns="http://www.w3.org/2000/svg"><defs><mask id="imagine-text-gaps-tnvpbv" maskUnits="userSpaceOnUse"><rect x="0" y="0" width="680" height="320" fill="white"/><rect x="-183.5625" y="82" width="367.125" height="63.20000076293945" fill="black" rx="2"/><rect x="-150.34375" y="147.1999969482422" width="300.6875" height="15.199999809265137" fill="black" rx="2"/></mask></defs>
+<title style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Logo ULUMAE — monogramme moderne minimaliste</title>
+<desc style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Logo ULUMAE avec lettre U stylisée formant une flamme, typographie espacée et ligne dorée</desc>
+
+
+
+<g transform="translate(340, 160)" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">
+
+  <!-- Symbole U stylisé — forme architecturale -->
+  <!-- Jambe gauche -->
+  <rect x="-72" y="-90" width="22" height="110" rx="2" fill="#2e241c" style="fill:rgb(46, 36, 28);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <!-- Jambe droite -->
+  <rect x="50" y="-90" width="22" height="110" rx="2" fill="#2e241c" style="fill:rgb(46, 36, 28);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <!-- Base arrondie -->
+  <path d="M -72 20 Q -72 70 0 70 Q 72 70 72 20 L 50 20 Q 50 52 0 52 Q -50 52 -50 20 Z" fill="#2e241c" style="fill:rgb(46, 36, 28);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- Flamme à l'intérieur du U -->
+  <path d="M 0 -20 C -10 -2 -18 18 -12 36 C -7 48 0 54 0 54 C 0 54 7 48 12 36 C 18 18 10 -2 0 -20 Z" fill="#89b896" style="fill:rgb(137, 184, 150);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <path d="M 0 -4 C -5 8 -10 22 -6 34 C -3 42 0 46 0 46 C 0 46 3 42 6 34 C 10 22 5 8 0 -4 Z" fill="#b57745" style="fill:rgb(181, 119, 69);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <path d="M 0 10 C -2 18 -5 28 -2 36 C 0 40 0 43 0 43 C 0 43 0 40 2 36 C 5 28 2 18 0 10 Z" fill="#f8f3ec" style="fill:rgb(248, 243, 236);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- Ligne dorée horizontale -->
+  <line x1="-200" y1="95" x2="200" y2="95" stroke="#b57745" stroke-width="1" mask="url(#imagine-text-gaps-tnvpbv)" style="fill:rgb(0, 0, 0);stroke:rgb(181, 119, 69);color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+  <line x1="-200" y1="99" x2="200" y2="99" stroke="#89b896" stroke-width="0.4" mask="url(#imagine-text-gaps-tnvpbv)" style="fill:rgb(0, 0, 0);stroke:rgb(137, 184, 150);color:rgb(255, 255, 255);stroke-width:0.4px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+
+  <!-- Texte ULUMAE -->
+  <text x="0" y="132" text-anchor="middle" font-family="'Cormorant Garamond', Georgia, serif" font-size="52" font-weight="300" letter-spacing="22" fill="#2e241c" style="fill:rgb(46, 36, 28);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Cormorant Garamond&quot;, Georgia, serif;font-size:52px;font-weight:300;text-anchor:middle;dominant-baseline:auto">ULUMAE</text>
+
+  <!-- Sous-titre -->
+  <text x="0" y="158" text-anchor="middle" font-family="'Cormorant Garamond', Georgia, serif" font-size="10" letter-spacing="6" fill="#89b896" style="fill:rgb(137, 184, 150);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Cormorant Garamond&quot;, Georgia, serif;font-size:10px;font-weight:400;text-anchor:middle;dominant-baseline:auto">PERMANENT · PRESERVATION</text>
+
+</g>
+</svg>

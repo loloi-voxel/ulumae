@@ -43,9 +43,12 @@ export default function LandingPage() {
         <div className="min-h-screen bg-surface-low text-warm-dark font-serif">
             <nav className="sticky top-0 z-50 bg-surface-low/95 backdrop-blur-sm border-b border-warm-border/30">
                 <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-                    <span className="font-sans font-bold text-lg tracking-[0.08em] text-warm-dark uppercase">
-                        ULUMAE - Every life, an indelible mark
-                    </span>
+                    <img
+                        src="/ulumae_logo_v3.svg"
+                        alt="ULUMAE"
+                        height={45}
+                        style={{ display: 'block' }}
+                    />
                     <div className="flex items-center gap-3">
                         <Link
                             href="/choice-pricing"
