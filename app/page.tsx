@@ -80,7 +80,7 @@ export default function LandingPage() {
                         backed by technology designed to last centuries.
                     </p>
                     <p className="text-xs text-warm-outline mt-4 font-sans">
-                        No account required to begin. Free to build. Pay only to preserve permanently.
+                        Free to begin. Free to build. Pay only to preserve permanently.
                     </p>
                 </div>
             </section>
@@ -269,7 +269,7 @@ export default function LandingPage() {
                         <ArrowRight size={18} />
                     </Link>
                     <p className="text-xs text-warm-outline font-sans mt-4">
-                        Free to build. No account required. Pay only when you&apos;re ready to preserve.
+                        Free to build. Free to begin. Pay only when you&apos;re ready to preserve.
                     </p>
                 </div>
             </section>
