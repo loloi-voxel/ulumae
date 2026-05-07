@@ -42,22 +42,22 @@ export default function LandingPage() {
     return (
         <div className="min-h-screen bg-surface-low text-warm-dark font-serif">
             <nav className="sticky top-0 z-50 bg-surface-low/95 backdrop-blur-sm border-b border-warm-border/30">
-                <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+                <div className="max-w-6xl mx-auto px-4 md:px-6 py-3 md:py-4 flex items-center justify-between gap-2">
                     <img
                         src="/ulumae_logo_v3.svg"
                         alt="ULUMAE"
-                        style={{ height: '65px', width: 'auto', display: 'block' }}
+                        style={{ height: '45px', width: 'auto', display: 'block', flexShrink: 0 }}
                     />
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1 md:gap-3">
                         <Link
                             href="/choice-pricing"
-                            className="px-5 py-2.5 text-sm font-sans font-medium text-warm-muted hover:text-warm-dark transition-all"
+                            className="px-3 md:px-5 py-2 md:py-2.5 text-sm font-sans font-medium text-warm-muted hover:text-warm-dark transition-all whitespace-nowrap"
                         >
                             Pricing
                         </Link>
                         <Link
                             href="/login"
-                            className="px-5 py-2.5 text-sm font-sans font-medium text-warm-dark border border-warm-border/30 rounded-lg hover:bg-surface-mid transition-all"
+                            className="px-3 md:px-5 py-2 md:py-2.5 text-xs md:text-sm font-sans font-medium text-warm-dark border border-warm-border/30 rounded-lg hover:bg-surface-mid transition-all whitespace-nowrap"
                         >
                             Sign in / Sign up
                         </Link>
@@ -88,7 +88,7 @@ export default function LandingPage() {
             <div className="border-t border-warm-border/30" />
 
             <section className="py-20 md:py-24 px-6 bg-surface-low">
-                <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-16 items-center">
+                <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-10 md:gap-16 items-center">
                     <div>
                         <span className="inline-block text-xs font-sans tracking-widest uppercase text-warm-outline border border-warm-border/30 rounded-full px-4 py-1.5 mb-6 bg-surface-mid/50">
                             What it is
@@ -108,14 +108,14 @@ export default function LandingPage() {
                             independent gateways. No single point of failure.
                         </p>
                     </div>
-                    <div className="bg-gradient-to-br from-olive/10 via-warm-brown/5 to-plum/10 rounded-xl h-80 border border-warm-border/30 p-10 flex flex-col justify-between">
+                    <div className="bg-gradient-to-br from-olive/10 via-warm-brown/5 to-plum/10 rounded-xl min-h-64 md:h-80 border border-warm-border/30 p-6 md:p-10 flex flex-col justify-between">
                         <div>
                             <p className="text-sm text-warm-outline font-sans tracking-wide uppercase mb-3">What families preserve here</p>
                             <h3 className="text-2xl md:text-3xl font-light text-warm-dark leading-tight">
                                 A life, not just a timeline.
                             </h3>
                         </div>
-                        <div className="space-y-4">
+                        <div className="space-y-4 mt-4 md:mt-0">
                             <p className="text-sm text-warm-muted font-sans leading-relaxed">
                                 Biographies, turning points, photographs, voice, video, witness memories, and the relationships that give a person their place in a family story.
                             </p>
