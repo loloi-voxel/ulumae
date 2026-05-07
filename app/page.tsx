@@ -46,8 +46,7 @@ export default function LandingPage() {
                     <img
                         src="/ulumae_logo_v3.svg"
                         alt="ULUMAE"
-                        height={45}
-                        style={{ display: 'block' }}
+                        style={{ height: '36px', width: 'auto', display: 'block' }}
                     />
                     <div className="flex items-center gap-3">
                         <Link
