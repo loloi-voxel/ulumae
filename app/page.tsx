@@ -243,10 +243,6 @@ export default function LandingPage() {
                         question="Is my data private?"
                         answer="All memorial data is encrypted with AES-256-GCM before leaving your browser. Only you and your designated successors hold the keys. Not even ULUMAE can read your content."
                     />
-                    <FAQItem
-                        question="Can I edit after preservation?"
-                        answer="Yes, you can update your memorial at any time. Each update creates a new version on Arweave. Previous versions remain accessible for the complete historical record."
-                    />
                 </div>
             </section>
 
